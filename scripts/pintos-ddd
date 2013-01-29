@@ -1,5 +1,7 @@
 #! /bin/sh
 
+cd ../src/threads/build
+
 # Path to GDB macros file.  Customize for your site.
 GDBMACROS=/vol/lab/secondyear/lib/gdb-macros
 
