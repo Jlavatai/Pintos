@@ -11,7 +11,8 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,       /* About to be destroyed. */
+    THREAD_SLEEP        /* Sleeping thread. */
   };
 
 /* Thread identifier type.
@@ -90,7 +91,6 @@ struct thread
     int priority;                       /* Priority. */
     int waitTicks;                      /* How many ticks this thread is to sleep for */
     struct list_elem allelem;           /* List element for all threads list. */
-    struct list_elem sleepelem;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

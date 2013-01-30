@@ -246,15 +246,22 @@ thread_block (void)
 void
 thread_sleep (int ticks) 
 {
-  intr_disable ();
   struct thread * t = thread_current ();
   t->waitTicks = ticks;
 
-  // Insert the thread into the sleeping list
-  list_push_back(&sleeping_list, &t->sleepelem);
+  // We might have called thread_sleep() on an already sleeping thread.
+  if (t->status == THREAD_SLEEP) {
+    return;
+  }
 
-  // Block this thread and let someone else run
-  thread_block();
+  enum intr_level old_level = intr_disable ();
+  ASSERT (!intr_context ());
+  list_push_back(&sleeping_list, &t->elem);
+  
+  struct thread *cur = thread_current ();
+  cur->status = THREAD_SLEEP;
+  schedule();
+  intr_set_level (old_level);
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -353,16 +360,25 @@ thread_yield (void)
 
 void thread_sleep_ticker (void) {
   struct list_elem *e;
-  for (e = list_begin (&sleeping_list); e != list_end(&sleeping_list);
-       e = list_next(e))
+
+  // We don't call list_next() in the for loop because if we call list_remove(), it'll point to the
+  // next element in the list anyway. Only call list_next() if we don't remove an element from the list. 
+  for (e = list_begin (&sleeping_list); e != list_end(&sleeping_list);)
     {
-      struct thread *t = list_entry (e, struct thread, sleepelem);
-      ASSERT(t->status == THREAD_BLOCKED);
+      struct thread *t = list_entry (e, struct thread, elem);
       if (--(t->waitTicks) <= 0) {
-        // Remove thread from the sleep list
+        // Remove thread from the sleep list; e will now point to the next element in the list.
         e = list_remove(e);
-        // Unblock the thread
-        thread_unblock(t);
+        enum intr_level old_level = intr_disable ();
+
+        ASSERT(t->status == THREAD_SLEEP);
+        list_push_back (&ready_list, &t->elem);
+        t->status = THREAD_READY;
+        intr_set_level (old_level);
+      }
+      else {
+        // If the thread's still sleeping, move onto the next element.
+        e = list_next(e);
       }
     }
 }
