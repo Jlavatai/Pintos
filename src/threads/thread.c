@@ -368,6 +368,23 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
+/*Sets the priority of the threat acceptor to the value new priority*/
+void
+thread_donate_priority(int new_priority, struct thread *acceptor ) 
+{
+  ASSERT(is_thread(acceptor));
+  ASSERT(new_priority > acceptor->orig_priority); //Just to be sure, will be deleted
+
+  acceptor->priority = new_priority;
+}
+
+/*Restores orig_priority as the current priority*/
+void
+thread_restore_priority(void)
+{
+  thread_current()->priority = thread_current()->orig_priority;
+}
+
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
@@ -485,6 +502,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->orig_priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();

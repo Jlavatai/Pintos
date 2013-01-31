@@ -71,7 +71,6 @@ sema_down (struct semaphore *sema)
 
   while (sema->value == 0) 
     {
-     // list_push_back (&sema->waiters, &thread_current ()->elem);
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, 
                               &has_higher_priority, NULL);
       thread_block ();
@@ -202,11 +201,22 @@ void
 lock_acquire (struct lock *lock)
 {
 
-  //add also the thread that tried to acquire
-  //which is current thread
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
+
+  //If the lock is not available, check if my priority is  
+  //higher. If it is, donate my priority to the thread which
+  //is holding the lock, then do sema down.
+  
+  if(!lock_available(lock)){
+    int acq_priority = thread_current()->priority;
+    int holder_priority = lock->holder->priority;
+
+    if(acq_priority > holder_priority){
+      thread_donate_priority(acq_priority, lock->holder);
+    }
+  } 
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
@@ -243,8 +253,13 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  thread_restore_priority();
+
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
+  //Restore actual priority
+  //(or get the next available priority)
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -257,6 +272,16 @@ lock_held_by_current_thread (const struct lock *lock)
 
   return lock->holder == thread_current ();
 }
+
+/*Retruns true if the lock is not held by any thread.
+  False otherwise. */
+bool
+lock_available(const struct lock *lock) 
+{
+  ASSERT (lock != NULL)
+
+  return lock->holder == NULL;
+}
 
 /* One semaphore in a list. */
 struct semaphore_elem 
@@ -264,6 +289,8 @@ struct semaphore_elem
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
   };
+
+
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
