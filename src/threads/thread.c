@@ -252,15 +252,16 @@ thread_unblock (struct thread *t)
   
   t->status = THREAD_READY;
   
-   if(new_pri > running_pri) {
+   if( thread_current () != idle_thread && 
+                        new_pri > running_pri) {
   	 list_push_front(&ready_list, &t->elem);
-  	// thread_yield();
+  	 thread_yield();
   	 goto reenable_interrupts;
    } 
   
   list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
                        NULL);
-reenable_interrupts:
+  reenable_interrupts:
   intr_set_level (old_level);
 }
 
