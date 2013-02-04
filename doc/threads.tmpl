@@ -30,10 +30,17 @@ Alex Rozanski <anr11@imperial.ac.uk>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Added to enum thread_status:
+
+THREAD_SLEEP        /* Sleeping thread. */
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
+
+timer_sleep() calls out to a new method we implemented, thread_sleep().
+This adds the current thread to a list of sleeping threads which we maintain.
 
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
