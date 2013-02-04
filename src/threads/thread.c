@@ -252,16 +252,15 @@ thread_unblock (struct thread *t)
   
   t->status = THREAD_READY;
   
-   if( thread_current () != idle_thread && 
+  if( thread_current () != idle_thread && 
                         new_pri > running_pri) {
-  	 list_push_front(&ready_list, &t->elem);
-  	 thread_yield();
-  	 goto reenable_interrupts;
-   } 
-  
-  list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
-                       NULL);
-  reenable_interrupts:
+    list_push_front(&ready_list, &t->elem);
+    thread_yield();
+  } 
+  else {
+    list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
+                         NULL);
+  }
   intr_set_level (old_level);
 }
 
@@ -358,7 +357,10 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  // If thread priority increases, don't yield, else yield
   thread_current ()->priority = new_priority;
+  thread_current ()->major_priority = new_priority;
+  thread_yield();  
 }
 
 /* Returns the current thread's priority. */
@@ -373,16 +375,16 @@ void
 thread_donate_priority(int new_priority, struct thread *acceptor ) 
 {
   ASSERT(is_thread(acceptor));
-  ASSERT(new_priority > acceptor->orig_priority); //Just to be sure, will be deleted
+  ASSERT(new_priority > acceptor->major_priority); //Just to be sure, will be deleted
 
   acceptor->priority = new_priority;
 }
 
-/*Restores orig_priority as the current priority*/
+/*Restores major_priority as the current priority*/
 void
 thread_restore_priority(void)
 {
-  thread_current()->priority = thread_current()->orig_priority;
+  thread_current()->priority = thread_current()->major_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -502,7 +504,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->orig_priority = priority;
+  t->major_priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
