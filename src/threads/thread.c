@@ -29,10 +29,11 @@ static struct list ready_list;
 static struct list all_list;
 
 /* List of processes currently sleeping. Processes in this list 
-   have state set to THREAD_BLOCKED. Each timer interrupt, this
+   have state set to THREAD_SLEEP. Each timer interrupt, this
    is decremented until it reaches 0, upon which they are taken 
    out of the sleeping list. */
 static struct list sleeping_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -54,6 +55,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
+static long long current_tick;  /* # of timer ticks we've been running for so far. */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -97,7 +99,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  // Sleeping List (added)
+
   list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
@@ -132,6 +134,8 @@ thread_tick (void)
   struct thread *t = thread_current ();
 
   /* Update statistics. */
+  current_tick++;
+
   if (t == idle_thread)
     idle_ticks++;
 #ifdef USERPROG
@@ -246,22 +250,31 @@ thread_block (void)
 void
 thread_sleep (int ticks) 
 {
-  struct thread * t = thread_current ();
-  t->waitTicks = ticks;
+  enum intr_level old_level;
+  struct thread *t = thread_current ();
+  struct thread *cur = NULL;
 
-  // We might have called thread_sleep() on an already sleeping thread.
-  if (t->status == THREAD_SLEEP) {
-    return;
-  }
+  // We store an absolute tick number which the thread should sleep until.
+  t->wakeup_tick = current_tick + ticks;
 
-  enum intr_level old_level = intr_disable ();
+  ASSERT(t->status != THREAD_SLEEP);
+
+  old_level = intr_disable ();
   ASSERT (!intr_context ());
-  list_push_back(&sleeping_list, &t->elem);
+  list_insert_ordered(&sleeping_list, &t->elem, &sleep_list_less_func, NULL);
   
-  struct thread *cur = thread_current ();
+  cur = thread_current ();
   cur->status = THREAD_SLEEP;
   schedule();
   intr_set_level (old_level);
+}
+
+bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+
+  return a->wakeup_tick < b->wakeup_tick;
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -359,28 +372,22 @@ thread_yield (void)
 }
 
 void thread_sleep_ticker (void) {
-  struct list_elem *e;
+  struct list_elem *e = NULL;
+  struct thread *t = NULL;
 
-  // We don't call list_next() in the for loop because if we call list_remove(), it'll point to the
-  // next element in the list anyway. Only call list_next() if we don't remove an element from the list. 
-  for (e = list_begin (&sleeping_list); e != list_end(&sleeping_list);)
-    {
-      struct thread *t = list_entry (e, struct thread, elem);
-      if (--(t->waitTicks) <= 0) {
-        // Remove thread from the sleep list; e will now point to the next element in the list.
-        e = list_remove(e);
-        enum intr_level old_level = intr_disable ();
+  e = list_begin (&sleeping_list);
 
-        ASSERT(t->status == THREAD_SLEEP);
-        list_push_back (&ready_list, &t->elem);
-        t->status = THREAD_READY;
-        intr_set_level (old_level);
-      }
-      else {
-        // If the thread's still sleeping, move onto the next element.
-        e = list_next(e);
-      }
-    }
+  while ((t = list_entry(e, struct thread, elem))->wakeup_tick >= current_tick) {
+    e = list_remove(e);
+
+    enum intr_level old_level = intr_disable ();
+
+    ASSERT(t->status == THREAD_SLEEP);
+    list_push_back (&ready_list, &t->elem);
+    t->status = THREAD_READY;
+
+    intr_set_level (old_level);
+  }
 }
 
 /* Invoke function 'func' on all threads in a given list, passing along 'aux'.
