@@ -87,8 +87,7 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Current Priority. */
-    int major_priority;                  /* the original priority the thread was initialized with*/
+    struct list priority_list;          /* Ordered Priority List with top element as current priority */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -101,6 +100,12 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+  };
+
+  struct priority_elem  { 
+    tid_t tid;
+    int priority;
+    struct list_elem elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -132,6 +137,8 @@ typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
+int thread_explicit_get_priority (struct thread *);
+
 void thread_set_priority (int);
 void thread_donate_priority(int, struct thread *);
 void thread_restore_priority(void);

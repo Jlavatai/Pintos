@@ -210,8 +210,8 @@ lock_acquire (struct lock *lock)
   //is holding the lock, then do sema down.
   
   if(!lock_available(lock)){
-    int acq_priority = thread_current()->priority;
-    int holder_priority = lock->holder->priority;
+    int acq_priority = thread_get_priority();
+    int holder_priority = thread_explicit_get_priority(lock->holder);
 
     if(acq_priority > holder_priority){
       thread_donate_priority(acq_priority, lock->holder);
