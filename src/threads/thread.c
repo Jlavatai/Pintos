@@ -390,13 +390,12 @@ void thread_sleep_ticker (void) {
 
     e = list_remove(e);
 
-    enum intr_level old_level = intr_disable ();
-
+    // We won't be pre-empted here because we're already in the timer interrupt
+    // handler.
     ASSERT(t->status == THREAD_SLEEP);
+
     list_push_back (&ready_list, &t->elem);
     t->status = THREAD_READY;
-
-    intr_set_level (old_level);
   }
 }
 
