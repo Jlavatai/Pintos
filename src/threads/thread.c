@@ -55,7 +55,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
-static long long current_tick;  /* # of timer ticks we've been running for so far. */
+static long long current_tick = 0;  /* # of timer ticks we've been running for so far. */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -377,9 +377,17 @@ void thread_sleep_ticker (void) {
   struct list_elem *e = NULL;
   struct thread *t = NULL;
 
-  e = list_begin (&sleeping_list);
+  e = list_begin(&sleeping_list);
+  
+  while(e != list_end(&sleeping_list))
+  {
+    t = list_entry(e, struct thread, elem);
 
-  while ((t = list_entry(e, struct thread, elem))->wakeup_tick >= current_tick) {
+    // Since the list is ordered, if the thread's wakeup tick is greater than
+    // this tick, then there are no more threads to wake up.
+    if (t->wakeup_tick > current_tick)
+      return;
+
     e = list_remove(e);
 
     enum intr_level old_level = intr_disable ();
