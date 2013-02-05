@@ -78,6 +78,8 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -197,8 +199,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  // Initialise wait Timer to 0
-  t->waitTicks = 0;
+  // Initialise timer sleep member to 0
+  t->wakeup_tick = 0;
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -269,12 +271,12 @@ thread_sleep (int ticks)
   intr_set_level (old_level);
 }
 
-bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux)
+bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   struct thread *thread_a = list_entry(a, struct thread, elem);
   struct thread *thread_b = list_entry(b, struct thread, elem);
 
-  return a->wakeup_tick < b->wakeup_tick;
+  return thread_a->wakeup_tick < thread_b->wakeup_tick;
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
