@@ -46,8 +46,6 @@ Added to thread.c:
    out of the sleeping list. */
 static struct list sleeping_list;
 
-static long long current_tick = 0;  /* # of timer ticks we've been running for so far. */
-
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
@@ -70,15 +68,6 @@ Furthermore, because the tick which we want the thread to wake up on is stored a
 an absolute value rather than a relative number of ticks to sleep for, we don't
 need to update any sleep state in the timer interrupt handler for the sleeping
 threads.
-
-We have added an extra global variable in thread.c, current_tick, which maintains
-the number of ticks that pintos has been running for. This allows us to make the
-absolute tick value comparison with sleeping threads, to determine whether they need
-to be woken up. The value of current_tick is equivalent to the combined values of
-idle_ticks, kernel_ticks and user_ticks. However, incrementing current_tick by one
-in the timer interrupt handler requires only one add operation, rather than the
-two add operations it would require to sum the three tick values to generate an
-absolute tick value, which minimises time spent in the interrupt handler.
 
 ---- SYNCHRONIZATION ----
 
