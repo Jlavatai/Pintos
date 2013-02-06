@@ -34,6 +34,20 @@ Added to enum thread_status:
 
 THREAD_SLEEP        /* Sleeping thread. */
 
+Added to struct thread:
+
+long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
+
+Added to thread.c:
+
+/* List of processes currently sleeping. Processes in this list 
+   have state set to THREAD_SLEEP. Each timer interrupt, this
+   is decremented until it reaches 0, upon which they are taken 
+   out of the sleeping list. */
+static struct list sleeping_list;
+
+static long long current_tick = 0;  /* # of timer ticks we've been running for so far. */
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
