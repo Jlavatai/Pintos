@@ -89,7 +89,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int waitTicks;                      /* How many ticks this thread is to sleep for */
+    long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
     struct list_elem allelem;           /* List element for all threads list. */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
