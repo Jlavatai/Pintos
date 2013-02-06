@@ -59,20 +59,26 @@ This adds the current thread to a list of sleeping threads which we maintain.
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
 
-The list of sleeping threads we maintain is ordered by the wakeup_tick member which we added to
-struct thread. This is an absolute tick value that the thread should sleep until, which is set when
-timer_sleep() is invoked. When we iterate over the sleeping threads in thread_sleep_ticker() (which is
-called from the timer interrupt handler) we can stop iteration once we hit a thread whose wakeup_tick
-value is later than the current tick we're on, because of this ordering.
+The list of sleeping threads we maintain is ordered by the wakeup_tick member
+which we added to struct thread. This is an absolute tick value that the thread 
+should sleep until, which is set when timer_sleep() is invoked. When we iterate
+over the sleeping threads in thread_sleep_ticker() (which is called from the
+timer interrupt handler) we can stop iteration once we hit a thread whose
+wakeup_tick value is later than the current tick we're on, because of this ordering.
 
-Furthermore, because the tick which we want the thread to wake up on is stored as an absolute value rather
-than a relative number of ticks to sleep for, we don't need to update any sleep state in the timer interrupt
-handler for the sleeping threads.
+Furthermore, because the tick which we want the thread to wake up on is stored as
+an absolute value rather than a relative number of ticks to sleep for, we don't
+need to update any sleep state in the timer interrupt handler for the sleeping
+threads.
 
-We have added an extra global variable in thread.c, current_tick, which maintains the number of ticks that
-pintos has been running for. This allows us to make the absolute tick value comparison with sleeping threads, to
-determine whether they need to be woken up. The value of current_tick is equivalent to the combined values of idle_ticks, kernel_ticks and user_ticks. However, incrementing current_tick by one in the timer interrupt handler requires only one add operation, rather than the two add operations it would require to sum the three tick values to generate an absolute
-tick value, which minimises time spent in the interrupt handler.
+We have added an extra global variable in thread.c, current_tick, which maintains
+the number of ticks that pintos has been running for. This allows us to make the
+absolute tick value comparison with sleeping threads, to determine whether they need
+to be woken up. The value of current_tick is equivalent to the combined values of
+idle_ticks, kernel_ticks and user_ticks. However, incrementing current_tick by one
+in the timer interrupt handler requires only one add operation, rather than the
+two add operations it would require to sum the three tick values to generate an
+absolute tick value, which minimises time spent in the interrupt handler.
 
 ---- SYNCHRONIZATION ----
 
@@ -86,6 +92,16 @@ tick value, which minimises time spent in the interrupt handler.
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+We chose this design because it does a fairly low amount of processing in the
+timer interrupt handler. As this is called every tick, this is important. Our
+initial design used an unordered list of sleeping threads, and each thread
+stored the number of ticks to sleep for. In the timer interrupt handler we
+would decrement the number of ticks each thread in the sleeping queue was
+sleeping for, and then wake up the thread when this count hit zero. This was
+really inefficient because we were not just iterating over every sleeping
+thread at every tick, but we were also modifying the state of every thread
+at every tick.
 
              PRIORITY SCHEDULING
              ===================
