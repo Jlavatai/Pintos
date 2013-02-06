@@ -252,23 +252,21 @@ thread_block (void)
 void
 thread_sleep (int ticks) 
 {
-  enum intr_level old_level;
-  struct thread *t = thread_current ();
+  ASSERT (!intr_context ());
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  struct thread *t   = thread_current ();
   struct thread *cur = NULL;
 
   // We store an absolute tick number which the thread should sleep until.
   t->wakeup_tick = current_tick + ticks;
 
   ASSERT(t->status != THREAD_SLEEP);
-
-  old_level = intr_disable ();
-  ASSERT (!intr_context ());
   list_insert_ordered(&sleeping_list, &t->elem, &sleep_list_less_func, NULL);
   
   cur = thread_current ();
   cur->status = THREAD_SLEEP;
   schedule();
-  intr_set_level (old_level);
 }
 
 bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
