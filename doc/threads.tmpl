@@ -85,23 +85,26 @@ absolute tick value, which minimises time spent in the interrupt handler.
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
-For the critical section in thread_sleep() (which is called in timer_sleep(), we
-disable interrupts as we modify the sleeping list and then schedule another
-thread. Since interrupts are disabled for this small section, we won't be pre-empted
-by another thread, so sleeping a thread and then scheduling another is an atomic
-operation.
+We disable interrupts in timer_sleep() before calling thread_sleep() (which is the
+critical section where we modify the sleeping list and then schedule another
+thread). Since interrupts are disabled for this small section, we won't be
+pre-empted by another thread, so sleeping a thread and then scheduling another
+is an atomic operation.
 
-We switch to another thread when the current thread sleeps by calling schedule(),
-so although we could use a synchronisation primitive like a semaphore to enforce
-the critical section, schedule() asserts that interrupts are disabled, so it makes
-the most sense to disable interrupts for this critical section as they need to be off
-for schedule() anyway.
+We switch to another thread when the current thread sleeps by calling
+schedule(), so although we could use a synchronisation primitive like a
+semaphore to enforce invocation of thread_sleep() as a critical section,
+schedule() asserts that interrupts are disabled, so it makes the most sense to
+disable interrupts for this critical section as they need to be off for
+schedule() anyway.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
 
-As we disable interrupts in timer_sleep() for the critical section, this ensures that
-timer interrupts aren't handled in this section.
+As we disable interrupts before calling thread_sleep() from timer_sleep(), this
+ensures that timer interrupts aren't handled during the invocation of this
+function which prevents race conditions occuring between multiple threads where
+we may wake up sleeping threads and modify the sleep list.
 
 ---- RATIONALE ----
 
