@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -55,7 +56,6 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
-static long long current_tick = 0;  /* # of timer ticks we've been running for so far. */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -136,7 +136,6 @@ thread_tick (void)
   struct thread *t = thread_current ();
 
   /* Update statistics. */
-  current_tick++;
 
   if (t == idle_thread)
     idle_ticks++;
@@ -259,7 +258,7 @@ thread_sleep (int ticks)
   struct thread *cur = NULL;
 
   // We store an absolute tick number which the thread should sleep until.
-  t->wakeup_tick = current_tick + ticks;
+  t->wakeup_tick = timer_tick () + ticks;
 
   ASSERT(t->status != THREAD_SLEEP);
   list_insert_ordered(&sleeping_list, &t->elem, &sleep_list_less_func, NULL);
@@ -376,6 +375,8 @@ void thread_sleep_ticker (void) {
   struct thread *t = NULL;
 
   e = list_begin(&sleeping_list);
+
+  int64_t current_tick = timer_tick ();
   
   while(e != list_end(&sleeping_list))
   {
