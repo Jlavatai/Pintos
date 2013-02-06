@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -90,6 +91,17 @@ static struct list mlfqs_thread_queues[MLFQS_NUM_THREAD_QUEUES];
 /* # of timer ticks until we have to recompute the thread priorities */
 static long long mlfqs_recompute_ticks;
 static int mlfqs_load_avg;                /* The system load average. */
+
+static void thread_mlfqs_init (void);
+static void thread_mlfqs_recompute_load_avg (void);
+static void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
+static void thread_mlfqs_recompute_all_priorities (void);
+static void thread_mlfqs_recompute_all_recent_cpu (void);
+static void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
+static int thread_mlfqs_get_nice (struct thread *t);
+static int thread_mlfqs_get_recent_cpu (struct thread *t);
+
+
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -504,7 +516,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  return thread_mlfqs_get_recent_cpu (thread_current (), NULL);
+  return thread_mlfqs_get_recent_cpu (thread_current ());
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -718,7 +730,8 @@ thread_mlfqs_init(void)
 
   mlfqs_load_avg = 0;
 
-  for (unsigned int i = 0; i < MLFQS_NUM_THREAD_QUEUES; ++i) {
+  unsigned int i;
+  for (i = 0; i < MLFQS_NUM_THREAD_QUEUES; ++i) {
     list_init(&mlfqs_thread_queues[i]);
   }
 }
@@ -761,7 +774,7 @@ thread_mlfqs_recompute_all_recent_cpu(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  thread_foreachinlist (&ready_list, &thread_mlfqs_recompute_cpu, NULL);
+  thread_foreachinlist (&ready_list, &thread_mlfqs_recompute_recent_cpu, NULL);
 }
 
 static void
