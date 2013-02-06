@@ -80,6 +80,9 @@ static tid_t allocate_tid (void);
 
 bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux);
 
+/* For the MLFQ Scheduler. */
+static struct list mlfqs_thread_queues[MLFQS_NUM_THREAD_QUEUES];
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -103,6 +106,10 @@ thread_init (void)
   list_init (&all_list);
 
   list_init (&sleeping_list);
+
+  if (thread_mlfqs) {
+    thread_mlfqs_init();
+  }
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -673,6 +680,16 @@ allocate_tid (void)
 
   return tid;
 }
+
+/* Initialises the multilevel feedback queue scheduler. */
+static void 
+thread_mlfqs_init(void)
+{
+  for (unsigned int i = 0; i < MLFQS_NUM_THREAD_QUEUES; ++i) {
+    list_init(&mlfqs_thread_queues[i]);
+  }
+}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
