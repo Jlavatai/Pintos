@@ -95,6 +95,7 @@ struct thread
     long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
     struct list_elem allelem;           /* List element for all threads list. */
     int nice;                           /* The nice value used for the mlfq scheduler. */
+    int recent_cpu;                     /* The recent CPU value used by the mlfq scheduler. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
