@@ -196,6 +196,20 @@ ticks   A   B   C   A   B   C   to run
 >> data type and/or a set of functions or macros to manipulate
 >> fixed-point numbers, why did you do so?  If not, why not?
 
+At the beginning, the fixed-point representation was implemented storing the
+actual value of the number in a struct, and using several functions to 
+perform the necessary operations. Even if the implementation was correct, 
+it was judged not efficient by the members of the group: having to call
+a function only to perform a mathematic operation was cause of a huge 
+time loss, especially considering that each second, the kernel needs to 
+recompute the priority of each thread. Moreover, the memory usage due to
+representing the number with a struct could be easily avoided. In the end, 
+we decided to define fixed_point as a typedef of an int32_t, and then define
+a series of inline functions to actually implement the methods needed to perform
+the operations. This strategy was preferred to impementing macros because inline
+functions are more pratical when dealing with adding assertions or bits of codes.   
+
+
                SURVEY QUESTIONS
                ================
 
