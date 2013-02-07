@@ -448,7 +448,7 @@ thread_explicit_get_priority (struct thread *t)
   if (!list_empty(&t->lock_list)) {
     struct list_elem *e = list_begin (&t->lock_list);
     struct lock *l = list_entry(e, struct lock, elem);
-    return *l->priority;
+    return *l->semaphore.priority;
   }
   else {
     return t->priority;
@@ -465,8 +465,8 @@ thread_donate_priority_lock(struct thread *acceptor, struct lock* lock)
   list_insert_ordered(&acceptor->lock_list, &lock->elem, &lock_has_higher_priority, NULL);
   // If the acceptor is blocked, find out what by, and donate to that lock's priority if required
   if (acceptor->status == THREAD_BLOCKED) {
-      if (acceptor->blocker && *acceptor->blocker->priority < *lock->priority) {
-        acceptor->blocker->priority = lock->priority;
+      if (acceptor->blocker && *acceptor->blocker->semaphore.priority < *lock->semaphore.priority) {
+        acceptor->blocker->semaphore.priority = lock->semaphore.priority;
       }
   }
 }
