@@ -256,13 +256,12 @@ thread_unblock (struct thread *t)
                         new_pri > running_pri) {
   	 list_push_front(&ready_list, &t->elem);
   	 thread_yield();
-  	 goto reenable_interrupts;
    } 
-  
-  list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
+   else   
+     list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
                        NULL);
-  reenable_interrupts:
-  intr_set_level (old_level);
+  
+    intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
