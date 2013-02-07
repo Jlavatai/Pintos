@@ -248,12 +248,13 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   
   int running_pri = thread_get_priority();
-  int new_pri = t->priority;
+  int new_pri = thread_explicit_get_priority(t);
   
   t->status = THREAD_READY;
   
-   if( thread_current () != idle_thread && 
+  if( thread_current () != idle_thread && 
                         new_pri > running_pri) {
+    
   	 list_push_front(&ready_list, &t->elem);
   	 thread_yield();
    } 
@@ -357,14 +358,27 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  // Set the back of the priority queue (original priority) to the new priority
+  struct list_elem *e = list_end (&thread_current()->priority_list);
+  struct priority_elem *p = list_entry(e, struct priority_elem, elem);
+  p->priority = new_priority;
+  thread_yield();  
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_explicit_get_priority(thread_current());
+}
+
+/* Returns the given thread's priority. */
+int
+thread_explicit_get_priority (struct thread *t)
+{
+  struct list_elem *e = list_begin (&t->priority_list);
+  struct priority_elem *p = list_entry(e, struct priority_elem, elem);
+  return p->priority;
 }
 
 /*Sets the priority of the threat acceptor to the value new priority*/
@@ -372,16 +386,32 @@ void
 thread_donate_priority(int new_priority, struct thread *acceptor ) 
 {
   ASSERT(is_thread(acceptor));
-  ASSERT(new_priority > acceptor->orig_priority); //Just to be sure, will be deleted
 
-  acceptor->priority = new_priority;
+  struct list_elem *e = list_begin (&acceptor->priority_list);
+  struct priority_elem *p = list_entry(e, struct priority_elem, elem);
+  // Allocate a new frame to hold this priority/tid in
+  struct priority_elem *priority_new = alloc_frame(acceptor,
+                                                   sizeof(struct priority_elem));
+  // Set its value
+  priority_new->priority = new_priority;
+  priority_new->tid      = acceptor->tid;
+  // Push this to the front of the acceptor's priority list
+  list_push_front(&acceptor->priority_list, &priority_new->elem);
 }
 
-/*Restores orig_priority as the current priority*/
+/* Removes the thread's priority that is associated with the current thread's tid
+  from the thread's priority list*/
 void
 thread_restore_priority(void)
 {
-  thread_current()->priority = thread_current()->orig_priority;
+  struct list_elem *e;
+  // Remove all donated priorities
+  for (e =  list_begin (&thread_current()->priority_list);
+       e != list_end (&thread_current()->priority_list);
+       e =  list_next (e)) {
+    // TODO: Deallocate memory associated, currently leaks (!!!!)
+    list_remove(e);
+  }
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -496,13 +526,23 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
+
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
-  t->orig_priority = priority;
+  list_init(&t->priority_list);
+
   t->magic = THREAD_MAGIC;
+  // Magic must be set before we allocate memory on the thread's internal heap
+  // Allocate initial priority
+  struct priority_elem *priority_head = alloc_frame(t,
+                                          sizeof(struct priority_elem));
+  // Set its value
+  priority_head->priority = priority;
+  priority_head->tid = 0;
+  // Push this to the thread's priority list
+  list_push_front(&t->priority_list, &priority_head->elem);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -623,13 +663,21 @@ allocate_tid (void)
 	has higher priority than the thread elem2 refers to. */
 bool
 has_higher_priority (const struct list_elem *elem1,
-					 const struct list_elem *elem2, 
+                     const struct list_elem *elem2, 
                      void *aux UNUSED) 
 {
 	struct thread *thread1 = list_entry(elem1, struct thread, elem);
+  int priority1 = list_entry(
+                    list_begin(&thread1->priority_list),
+                    struct priority_elem,
+                    elem)->priority;
 	struct thread *thread2 = list_entry(elem2, struct thread, elem);
+  int priority2 = list_entry(
+                    list_begin(&thread2->priority_list),
+                    struct priority_elem,
+                    elem)->priority;
 	
-	return thread1->priority > thread2->priority;
+	return priority1 > priority2;
 }
 
 
