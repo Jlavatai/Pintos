@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -24,6 +25,8 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+/* Utility Preproccesor Directives */
 
 /* A kernel thread or user process.
 
@@ -88,8 +91,9 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    struct list priority_list;          /* Ordered Priority List with top element as current priority */
+    struct list lock_list;              /* Ordered List of the thread's held locks, with highest priority first */
     int waitTicks;                      /* How many ticks this thread is to sleep for */
+    int priority;
 
     struct list_elem allelem;           /* List element for all threads list. */
     /* Shared between thread.c and synch.c. */
@@ -104,11 +108,6 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-  struct priority_elem  { 
-    tid_t tid;
-    int priority;
-    struct list_elem elem;
-  };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -147,8 +146,9 @@ int thread_get_priority (void);
 int thread_explicit_get_priority (struct thread *);
 
 void thread_set_priority (int);
-void thread_donate_priority(int, struct thread *);
-void thread_restore_priority(void);
+
+void thread_donate_priority_lock(struct thread *to, struct lock* lock);
+void thread_restore_priority_lock(struct lock* lock);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

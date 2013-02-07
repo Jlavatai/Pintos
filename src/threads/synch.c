@@ -184,7 +184,7 @@ void
 lock_init (struct lock *lock)
 {
   ASSERT (lock != NULL);
-
+  lock->priority = NULL;
   lock->holder = NULL;
   sema_init (&lock->semaphore, 1);
 }
@@ -200,7 +200,7 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
-
+  bool donation_flag = false;
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
@@ -213,11 +213,15 @@ lock_acquire (struct lock *lock)
     int acq_priority = thread_get_priority();
     int holder_priority = thread_explicit_get_priority(lock->holder);
 
-    if(acq_priority > holder_priority){
-      thread_donate_priority(acq_priority, lock->holder);
+    if(acq_priority > holder_priority) {
+      if (lock->priority == NULL) {
+        donation_flag = true;
+      }
+      lock->priority = &thread_current()->priority; // Ptr so it updates on thread set priority
+      if (donation_flag)
+        thread_donate_priority_lock(lock->holder, lock);    
     }
   } 
-
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 }
@@ -237,8 +241,10 @@ lock_try_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   success = sema_try_down (&lock->semaphore);
-  if (success)
+  if (success) {
     lock->holder = thread_current ();
+    lock->priority = &lock->holder->priority;
+  }
   return success;
 }
 
@@ -252,9 +258,10 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
-  thread_restore_priority();
-
+  if (lock->priority != NULL) {
+    thread_restore_priority_lock(lock);
+  }
+  lock->priority = NULL;
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 
@@ -282,7 +289,21 @@ lock_available(const struct lock *lock)
 
   return lock->holder == NULL;
 }
-
+
+bool lock_has_higher_priority(const struct list_elem *elem1,
+                              const struct list_elem *elem2, 
+                              void *aux UNUSED)
+{
+  struct lock *lock1 = list_entry(elem1, struct lock, elem);
+  int priority1 = *lock1->priority;
+  struct lock *lock2 = list_entry(elem2, struct lock, elem);
+  int priority2 = *lock2->priority;
+  
+  return priority1 > priority2;
+
+}
+
+
 /* One semaphore in a list. */
 struct semaphore_elem 
   {
