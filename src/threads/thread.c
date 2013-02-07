@@ -291,14 +291,15 @@ thread_unblock (struct thread *t)
   
   if( thread_current () != idle_thread && 
                         new_pri > running_pri) {
-    list_push_front(&ready_list, &t->elem);
-    thread_yield();
-  } 
-  else {
-    list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
-                         NULL);
-  }
-  intr_set_level (old_level);
+    
+  	 list_push_front(&ready_list, &t->elem);
+  	 thread_yield();
+   } 
+   else   
+     list_insert_ordered (&ready_list, &t->elem, &has_higher_priority,
+                       NULL);
+  
+    intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
