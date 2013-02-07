@@ -115,12 +115,16 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
 
-   sema->value++;
+  sema->value++;
 
   if (!list_empty (&sema->waiters))
+  {
+    //TODO: Event based reordering of waiter list, as opposed to blanket rule
+    list_sort (&sema->waiters,
+                has_higher_priority, NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
- 
+  }
 
   intr_set_level (old_level);
 }
