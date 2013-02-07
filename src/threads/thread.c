@@ -744,7 +744,10 @@ thread_mlfqs_recompute_load_avg(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  mlfqs_load_avg = (59 / 60) * mlfqs_load_avg + (1 / 60) * list_size (&ready_list);
+  fixed_point first_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(59), INT_TO_FIX(60)), mlfqs_load_avg); 
+  fixed_point second_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(1), INT_TO_FIX(60)), list_size (&ready_list)); 
+
+  mlfqs_load_avg = FIX_TO_INT_R_NEAR(ADD_FIXED(first_sum, second_sum));
 }
 
 static void
@@ -784,7 +787,9 @@ thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
 
   int load_avg = thread_get_load_avg ();
 
-  t->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * t->recent_cpu + thread_mlfqs_get_nice (t);
+  fixed_point coefficient = DIV_FIXED(INT_TO_FIX(2 * load_avg), INT_TO_FIX((2 * load_avg) + 1));
+
+  t->recent_cpu = ADD_FIXED_INT(MUL_FIXED(coefficient, t->recent_cpu), thread_mlfqs_get_nice (t));
 }
 
 static int
@@ -800,7 +805,7 @@ thread_mlfqs_get_recent_cpu(struct thread *t)
 {
   ASSERT(thread_mlfqs);
 
-  return 100 * t->recent_cpu;
+  return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(t->recent_cpu, 100));
 }
 
 
