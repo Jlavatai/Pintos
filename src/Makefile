@@ -1,8 +1,7 @@
 BUILD_SUBDIRS = threads userprog vm filesys
 
 all::
-	@echo "Run 'make' in subdirectories: $(BUILD_SUBDIRS)."
-	@echo "This top-level make has only 'clean' targets."
+	make -C threads
 
 CLEAN_SUBDIRS = $(BUILD_SUBDIRS) examples utils
 

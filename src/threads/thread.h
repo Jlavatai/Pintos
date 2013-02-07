@@ -11,7 +11,8 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,       /* About to be destroyed. */
+    THREAD_SLEEP        /* Sleeping thread. */
   };
 
 /* Thread identifier type.
@@ -88,8 +89,9 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     struct list priority_list;          /* Ordered Priority List with top element as current priority */
-    struct list_elem allelem;           /* List element for all threads list. */
+    int waitTicks;                      /* How many ticks this thread is to sleep for */
 
+    struct list_elem allelem;           /* List element for all threads list. */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -125,16 +127,21 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 void thread_block (void);
 void thread_unblock (struct thread *);
 
+
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_sleep (int);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
+void thread_foreachinlist (struct list * thread_list, thread_action_func *func, void *aux);
+
+void thread_sleep_ticker (void);
 
 int thread_get_priority (void);
 int thread_explicit_get_priority (struct thread *);

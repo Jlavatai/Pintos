@@ -28,6 +28,11 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List of processes currently sleeping. Processes in this list 
+   have state set to THREAD_BLOCKED. Each timer interrupt, this
+   is decremented until it reaches 0, upon which they are taken 
+   out of the sleeping list. */
+static struct list sleeping_list;
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -93,6 +98,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  // Sleeping List (added)
+  list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -134,8 +141,11 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+  /* Update wait ticker*/
+    thread_sleep_ticker();
 
   /* Enforce preemption. */
+
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 }
@@ -184,6 +194,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  // Initialise wait Timer to 0
+  t->waitTicks = 0;
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -227,6 +239,30 @@ thread_block (void)
 
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
+}
+
+/* Puts the current thread to sleep for a given integer ticks. It will not be
+   scheduled until the given ticks has elapsed, as measured by thread_tick()
+   */
+void
+thread_sleep (int ticks) 
+{
+  struct thread * t = thread_current ();
+  t->waitTicks = ticks;
+
+  // We might have called thread_sleep() on an already sleeping thread.
+  if (t->status == THREAD_SLEEP) {
+    return;
+  }
+
+  enum intr_level old_level = intr_disable ();
+  ASSERT (!intr_context ());
+  list_push_back(&sleeping_list, &t->elem);
+  
+  struct thread *cur = thread_current ();
+  cur->status = THREAD_SLEEP;
+  schedule();
+  intr_set_level (old_level);
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -336,21 +372,56 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
-/* Invoke function 'func' on all threads, passing along 'aux'.
+void thread_sleep_ticker (void) {
+  struct list_elem *e;
+
+  // We don't call list_next() in the for loop because if we call list_remove(), it'll point to the
+  // next element in the list anyway. Only call list_next() if we don't remove an element from the list. 
+  for (e = list_begin (&sleeping_list); e != list_end(&sleeping_list);)
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (--(t->waitTicks) <= 0) {
+        // Remove thread from the sleep list; e will now point to the next element in the list.
+        e = list_remove(e);
+        enum intr_level old_level = intr_disable ();
+
+        ASSERT(t->status == THREAD_SLEEP);
+        list_push_back (&ready_list, &t->elem);
+        t->status = THREAD_READY;
+        intr_set_level (old_level);
+      }
+      else {
+        // If the thread's still sleeping, move onto the next element.
+        e = list_next(e);
+      }
+    }
+}
+
+/* Invoke function 'func' on all threads in a given list, passing along 'aux'.
    This function must be called with interrupts off. */
 void
-thread_foreach (thread_action_func *func, void *aux)
+thread_foreachinlist (struct list * thread_list, thread_action_func *func,
+                      void *aux)
 {
   struct list_elem *e;
 
   ASSERT (intr_get_level () == INTR_OFF);
 
-  for (e = list_begin (&all_list); e != list_end (&all_list);
+  for (e = list_begin (thread_list); e != list_end (thread_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, allelem);
       func (t, aux);
     }
+}
+
+
+/* Invoke function 'func' on all threads, passing along 'aux'.
+   This function must be called with interrupts off. */
+void
+thread_foreach (thread_action_func *func, void *aux)
+{
+  thread_foreachinlist(&all_list, func, aux);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
