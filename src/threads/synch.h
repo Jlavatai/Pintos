@@ -20,6 +20,7 @@ void sema_self_test (void);
 /* Lock. */
 struct lock 
   {
+    bool   donated_flag;
     int   *priority;              /* How high a priority this lock is for the holder */
     struct list_elem elem;      /* The reference to the lock the holder has */             
     struct thread *holder;      /* Thread holding lock (for debugging). */

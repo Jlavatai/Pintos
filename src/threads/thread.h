@@ -95,6 +95,8 @@ struct thread
     int waitTicks;                      /* How many ticks this thread is to sleep for */
     int priority;
 
+    struct lock *blocker;               /* Each thread knows of the lock that's blocking it*/
+
     struct list_elem allelem;           /* List element for all threads list. */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

@@ -463,6 +463,12 @@ thread_donate_priority_lock(struct thread *acceptor, struct lock* lock)
   ASSERT(is_thread(acceptor));
   // Push this into the acceptors lock list, ordered by priority
   list_insert_ordered(&acceptor->lock_list, &lock->elem, &lock_has_higher_priority, NULL);
+  // If the acceptor is blocked, find out what by, and donate to that lock's priority if required
+  if (acceptor->status == THREAD_BLOCKED) {
+      if (acceptor->blocker && *acceptor->blocker->priority < *lock->priority) {
+        acceptor->blocker->priority = lock->priority;
+      }
+  }
 }
 
 /* Removes the thread's priority that is associated with the given lock

@@ -45,7 +45,6 @@ void
 sema_init (struct semaphore *sema, unsigned value) 
 {
   ASSERT (sema != NULL);
-
   sema->value = value;
   list_init (&sema->waiters);
 }
@@ -65,14 +64,12 @@ sema_down (struct semaphore *sema)
   ASSERT (sema != NULL);
   ASSERT (!intr_context ());
 
-
-
   old_level = intr_disable ();
 
   while (sema->value == 0) 
     {
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, 
-                              &has_higher_priority, NULL);
+                             &has_higher_priority, NULL);
       thread_block ();
     }
   sema->value--;
@@ -186,6 +183,7 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
   lock->priority = NULL;
   lock->holder = NULL;
+  lock->donated_flag = false;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -200,7 +198,6 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
-  bool donation_flag = false;
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
@@ -214,15 +211,18 @@ lock_acquire (struct lock *lock)
     int holder_priority = thread_explicit_get_priority(lock->holder);
 
     if(acq_priority > holder_priority) {
-      if (lock->priority == NULL) {
-        donation_flag = true;
-      }
       lock->priority = &thread_current()->priority; // Ptr so it updates on thread set priority
-      if (donation_flag)
-        thread_donate_priority_lock(lock->holder, lock);    
+      if (!lock->donated_flag) {
+        thread_donate_priority_lock(lock->holder, lock);
+        lock->donated_flag = true;
+      }
     }
-  } 
+    thread_current()->blocker = lock;
+  }
+
   sema_down (&lock->semaphore);
+  thread_current()->blocker = NULL;
+  lock->priority = &thread_current()->priority;
   lock->holder = thread_current ();
 }
 
@@ -258,8 +258,9 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-  if (lock->priority != NULL) {
+  if (lock->donated_flag) {
     thread_restore_priority_lock(lock);
+    lock->donated_flag = false;
   }
   lock->priority = NULL;
   lock->holder = NULL;
