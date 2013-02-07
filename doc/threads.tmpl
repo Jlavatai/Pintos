@@ -8,9 +8,9 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Francesco Di Mauro <fd1011@imperial.ac.uk>
+Thomas Rooney <tr111@imperial.ac.uk>
+Alex Rozanski <anr11@imperial.ac.uk>
 
 ---- PRELIMINARIES ----
 
@@ -30,26 +30,85 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Added to enum thread_status:
+
+THREAD_SLEEP        /* Sleeping thread. */
+
+Added to struct thread:
+
+long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
+
+Added to thread.c:
+
+/* List of processes currently sleeping. Processes in this list 
+   have state set to THREAD_SLEEP. Each timer interrupt, this
+   is decremented until it reaches 0, upon which they are taken 
+   out of the sleeping list. */
+static struct list sleeping_list;
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+timer_sleep() calls out to a new method we implemented, thread_sleep().
+This adds the current thread to a list of sleeping threads which we maintain.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+The list of sleeping threads we maintain is ordered by the wakeup_tick member
+which we added to struct thread. This is an absolute tick value that the thread 
+should sleep until, which is set when timer_sleep() is invoked. When we iterate
+over the sleeping threads in thread_sleep_ticker() (which is called from the
+timer interrupt handler) we can stop iteration once we hit a thread whose
+wakeup_tick value is later than the current tick we're on, because of this ordering.
+
+Furthermore, because the tick which we want the thread to wake up on is stored as
+an absolute value rather than a relative number of ticks to sleep for, we don't
+need to update any sleep state in the timer interrupt handler for the sleeping
+threads.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+We disable interrupts in timer_sleep() before calling thread_sleep() (which is the
+critical section where we modify the sleeping list and then schedule another
+thread). Since interrupts are disabled for this small section, we won't be
+pre-empted by another thread, so sleeping a thread and then scheduling another
+is an atomic operation.
+
+We switch to another thread when the current thread sleeps by calling
+schedule(), so although we could use a synchronisation primitive like a
+semaphore to enforce invocation of thread_sleep() as a critical section,
+schedule() asserts that interrupts are disabled, so it makes the most sense to
+disable interrupts for this critical section as they need to be off for
+schedule() anyway.
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+As we disable interrupts before calling thread_sleep() from timer_sleep(), this
+ensures that timer interrupts aren't handled during the invocation of this
+function which prevents race conditions occuring between multiple threads where
+we may wake up sleeping threads and modify the sleep list.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+We chose this design because it does a fairly low amount of processing in the
+timer interrupt handler. As this is called every tick, this is important. Our
+initial design used an unordered list of sleeping threads, and each thread
+stored the number of ticks to sleep for. In the timer interrupt handler we
+would decrement the number of ticks each thread in the sleeping queue was
+sleeping for, and then wake up the thread when this count hit zero. This was
+really inefficient because we were not just iterating over every sleeping
+thread at every tick, but we were also modifying the state of every thread
+at every tick.
 
              PRIORITY SCHEDULING
              ===================
