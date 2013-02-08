@@ -92,10 +92,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     struct list lock_list;              /* Ordered List of the thread's held locks, with highest priority first */
-    int waitTicks;                      /* How many ticks this thread is to sleep for */
     int priority;
 
     struct lock *blocker;               /* Each thread knows of the lock that's blocking it*/
+
+    long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
 
     struct list_elem allelem;           /* List element for all threads list. */
     /* Shared between thread.c and synch.c. */
