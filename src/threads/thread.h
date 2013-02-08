@@ -26,7 +26,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-/* Utility Preproccesor Directives */
+/* For the MLFQ Scheduler. */
+#define MLFQS_NUM_THREAD_QUEUES 64
 
 /* A kernel thread or user process.
 
@@ -99,6 +100,9 @@ struct thread
     long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
 
     struct list_elem allelem;           /* List element for all threads list. */
+    int nice;                           /* The nice value used for the mlfq scheduler. */
+    int recent_cpu;                     /* The recent CPU value used by the mlfq scheduler. */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

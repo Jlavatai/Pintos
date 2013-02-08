@@ -53,9 +53,12 @@ struct kernel_thread_frame
   };
 
 /* Statistics. */
-static long long idle_ticks;    /* # of timer ticks spent idle. */
-static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
-static long long user_ticks;    /* # of timer ticks in user programs. */
+
+static long long idle_ticks;          /* # of timer ticks spent idle. */
+static long long kernel_ticks;        /* # of timer ticks in kernel threads. */
+static long long user_ticks;          /* # of timer ticks in user programs. */
+static long long current_tick = 0;    /* # of timer ticks we've been running for so far. */
+
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -81,6 +84,28 @@ bool has_higher_priority(const struct list_elem *, const struct list_elem *, voi
 
 bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux);
 
+/* For the MLFQ Scheduler. */
+
+/* # of ticks we recompute the priorities after */
+#define MLFQS_RECOMPUTE_INTERVAL 4
+
+static struct list mlfqs_thread_queues[MLFQS_NUM_THREAD_QUEUES];
+
+/* # of timer ticks until we have to recompute the thread priorities */
+static long long mlfqs_recompute_ticks;
+static int mlfqs_load_avg;                /* The system load average. */
+
+static void thread_mlfqs_init (void);
+static void thread_mlfqs_recompute_load_avg (void);
+static void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
+static void thread_mlfqs_recompute_all_priorities (void);
+static void thread_mlfqs_recompute_all_recent_cpu (void);
+static void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
+static int thread_mlfqs_get_nice (struct thread *t);
+static int thread_mlfqs_get_recent_cpu (struct thread *t);
+
+
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -105,11 +130,18 @@ thread_init (void)
 
   list_init (&sleeping_list);
 
+  if (thread_mlfqs) {
+    thread_mlfqs_init();
+  }
+
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  if (thread_mlfqs)
+    initial_thread->recent_cpu = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -148,6 +180,19 @@ thread_tick (void)
     kernel_ticks++;
   /* Update wait ticker*/
     thread_sleep_ticker();
+
+  if (thread_mlfqs) {
+    t->recent_cpu++;
+
+    if (timer_ticks () % TIMER_FREQ == 0) {
+      thread_mlfqs_recompute_load_avg ();
+      thread_mlfqs_recompute_all_recent_cpu ();
+    }
+
+    if (++mlfqs_recompute_ticks == MLFQS_RECOMPUTE_INTERVAL) {
+      thread_mlfqs_recompute_all_priorities ();
+    }
+  }
 
   /* Enforce preemption. */
 
@@ -222,6 +267,12 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+  if (thread_mlfqs) {
+    /* The new thread's recent_cpu value is inherited from the current
+       thread's recent_cpu value. */
+    t->recent_cpu = thread_get_recent_cpu ();
+  }
 
   intr_set_level (old_level);
 
@@ -504,17 +555,16 @@ thread_restore_priority_lock(struct lock* lock)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
-  /* Not yet implemented. */
+  thread_current ()->nice = nice;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_mlfqs_get_nice (thread_current ());
 }
 
 /* Returns 100 times the system load average. */
@@ -529,8 +579,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_mlfqs_get_recent_cpu (thread_current ());
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -757,7 +806,87 @@ has_higher_priority (const struct list_elem *elem1,
 	return priority1 > priority2;
 }
 
-
+/* Initialises the multilevel feedback queue scheduler. */
+static void 
+thread_mlfqs_init(void)
+{
+  ASSERT(thread_mlfqs);
+
+  mlfqs_load_avg = 0;
+
+  unsigned int i;
+  for (i = 0; i < MLFQS_NUM_THREAD_QUEUES; ++i) {
+    list_init(&mlfqs_thread_queues[i]);
+  }
+}
+
+static void
+thread_mlfqs_recompute_load_avg(void)
+{
+  ASSERT(thread_mlfqs);
+
+  /* This method should only be called from the timer interrupt handler. */
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  mlfqs_load_avg = (59 / 60) * mlfqs_load_avg + (1 / 60) * list_size (&ready_list);
+}
+
+static void
+thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
+{
+  ASSERT(thread_mlfqs);
+
+  t->priority = PRI_MAX - (thread_mlfqs_get_recent_cpu (t) / 4) - (thread_mlfqs_get_nice (t) * 2);
+}
+
+static void
+thread_mlfqs_recompute_all_priorities(void)
+{
+  ASSERT(thread_mlfqs);
+
+  /* This method should only be called from the timer interrupt handler. */
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  thread_foreachinlist (&ready_list, &thread_mlfqs_recompute_priority, NULL);
+}
+
+static void
+thread_mlfqs_recompute_all_recent_cpu(void)
+{
+  ASSERT(thread_mlfqs);
+
+  /* This method should only be called from the timer interrupt handler. */
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  thread_foreachinlist (&ready_list, &thread_mlfqs_recompute_recent_cpu, NULL);
+}
+
+static void
+thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
+{
+  ASSERT(thread_mlfqs);
+
+  int load_avg = thread_get_load_avg ();
+
+  t->recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * t->recent_cpu + thread_mlfqs_get_nice (t);
+}
+
+static int
+thread_mlfqs_get_nice(struct thread *t)
+{
+  ASSERT(thread_mlfqs);
+
+  return t->nice;
+}
+
+static int
+thread_mlfqs_get_recent_cpu(struct thread *t)
+{
+  ASSERT(thread_mlfqs);
+
+  return 100 * t->recent_cpu;
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
