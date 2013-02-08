@@ -395,7 +395,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) {
-    //TODO: Event Based resorting, 
+    // TODO: Event Based resorting, 
     list_sort (&cond->waiters,
             sema_has_higher_priority, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),

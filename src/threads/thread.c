@@ -456,6 +456,19 @@ thread_explicit_get_priority (struct thread *t)
 }
 
 
+void thread_donate_priority_lock_rec(struct thread *acceptor, struct lock* lock)
+{
+  // If the acceptor is blocked, find out what by, and donate to that lock's priority if required
+  if (acceptor->status == THREAD_BLOCKED) {
+    if (acceptor->blocker && *acceptor->blocker->semaphore.priority < *lock->semaphore.priority) {
+      acceptor->blocker->semaphore.priority = lock->semaphore.priority;
+      if (acceptor->blocker->holder->blocker) {
+        thread_donate_priority_lock_rec(acceptor->blocker->holder, lock);
+      }
+    }
+  }  
+}
+
 /*Sets the priority of the threat acceptor to the value new priority*/
 void
 thread_donate_priority_lock(struct thread *acceptor, struct lock* lock) 
@@ -463,12 +476,7 @@ thread_donate_priority_lock(struct thread *acceptor, struct lock* lock)
   ASSERT(is_thread(acceptor));
   // Push this into the acceptors lock list, ordered by priority
   list_insert_ordered(&acceptor->lock_list, &lock->elem, &lock_has_higher_priority, NULL);
-  // If the acceptor is blocked, find out what by, and donate to that lock's priority if required
-  if (acceptor->status == THREAD_BLOCKED) {
-      if (acceptor->blocker && *acceptor->blocker->semaphore.priority < *lock->semaphore.priority) {
-        acceptor->blocker->semaphore.priority = lock->semaphore.priority;
-      }
-  }
+  thread_donate_priority_lock_rec(acceptor, lock);
 }
 
 /* Removes the thread's priority that is associated with the given lock
