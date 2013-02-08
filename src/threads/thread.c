@@ -87,20 +87,24 @@ bool sleep_list_less_func(const struct list_elem *a, const struct list_elem *b, 
 /* # of ticks we recompute the priorities after */
 #define MLFQS_RECOMPUTE_INTERVAL 4
 
-static struct list mlfqs_thread_queues[MLFQS_NUM_THREAD_QUEUES];
+static struct list thread_mlfqs_queue;
 
 /* # of timer ticks until we have to recompute the thread priorities */
 static long long mlfqs_recompute_ticks;
-static int mlfqs_load_avg;                /* The system load average. */
+static fixed_point thread_mlfqs_load_avg;         /* The system load average. */
 
 static void thread_mlfqs_init (void);
-static void thread_mlfqs_recompute_load_avg (void);
+void thread_mlfqs_recompute_load_avg (void);
+static int thread_mlfqs_get_load_avg (void);
 static void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
 static void thread_mlfqs_recompute_all_priorities (void);
 static void thread_mlfqs_recompute_all_recent_cpu (void);
 static void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
 static int thread_mlfqs_get_nice (struct thread *t);
 static int thread_mlfqs_get_recent_cpu (struct thread *t);
+static bool thread_mlfqs_less_function(const struct list_elem *a,
+                                       const struct list_elem *b,
+                                       void *aux);
 
 
 
@@ -429,7 +433,10 @@ static void
 thread_enqueue (struct thread *t)
 {
   if (thread_mlfqs) {
-    list_push_back (&mlfqs_thread_queues[t->priority], &t->elem);
+    list_insert_ordered (&thread_mlfqs_queue,
+                         &t->elem,
+                         &thread_mlfqs_less_function,
+                         NULL);
   } else {
     list_push_back (&ready_list, &t->elem);
   }
@@ -524,8 +531,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_mlfqs_get_load_avg ();
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -650,17 +656,10 @@ static struct thread *
 next_thread_to_run (void) 
 {
   if (thread_mlfqs) {
-    unsigned int i;
-
-    for (i = MLFQS_NUM_THREAD_QUEUES; i --> 0;) {
-      struct list *queue = &mlfqs_thread_queues[i];
-
-      if (!list_empty(queue)) {
-        return list_entry (list_pop_front (queue), struct thread, elem);
-      }
-    }
-
-    return idle_thread;
+    if (list_empty (&thread_mlfqs_queue))
+      return idle_thread;
+    else
+      return list_entry (list_pop_front (&thread_mlfqs_queue), struct thread, elem);
   }
 
   if (list_empty (&ready_list))
@@ -758,15 +757,12 @@ thread_mlfqs_init(void)
 {
   ASSERT(thread_mlfqs);
 
-  mlfqs_load_avg = 0;
+  thread_mlfqs_load_avg = INT_TO_FIX (0);
 
-  unsigned int i;
-  for (i = 0; i < MLFQS_NUM_THREAD_QUEUES; ++i) {
-    list_init(&mlfqs_thread_queues[i]);
-  }
+  list_init (&thread_mlfqs_queue);
 }
 
-static void
+void
 thread_mlfqs_recompute_load_avg(void)
 {
   ASSERT(thread_mlfqs);
@@ -774,10 +770,21 @@ thread_mlfqs_recompute_load_avg(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  fixed_point first_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(59), INT_TO_FIX(60)), mlfqs_load_avg); 
-  fixed_point second_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(1), INT_TO_FIX(60)), list_size (&ready_list)); 
+  fixed_point first_sum = MUL_FIXED(DIV_FIXED(INT_TO_FIX(59), INT_TO_FIX(60)), thread_mlfqs_load_avg); 
 
-  mlfqs_load_avg = FIX_TO_INT_R_NEAR(ADD_FIXED(first_sum, second_sum));
+  int num_threads = list_size (&thread_mlfqs_queue);
+  if (running_thread () != idle_thread)
+    num_threads++;
+
+  fixed_point second_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(1), INT_TO_FIX(60)), num_threads); 
+
+  thread_mlfqs_load_avg = ADD_FIXED(first_sum, second_sum);
+}
+
+static int
+thread_mlfqs_get_load_avg (void)
+{
+  return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(thread_mlfqs_load_avg, 100));
 }
 
 static void
@@ -787,10 +794,15 @@ thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
 
   ASSERT(thread_mlfqs);
 
-  t->priority = PRI_MAX - (thread_mlfqs_get_recent_cpu (t) / 4) - (thread_mlfqs_get_nice (t) * 2);
+  t->priority = PRI_MAX
+                - (thread_mlfqs_get_recent_cpu (t) / 4)
+                - (thread_mlfqs_get_nice (t) * 2);
 
   list_remove (&t->elem);
-  list_push_back (&mlfqs_thread_queues[t->priority], &t->elem);
+  list_insert_ordered (&thread_mlfqs_queue,
+                       &t->elem,
+                       &thread_mlfqs_less_function,
+                       NULL);
 }
 
 static void
@@ -841,6 +853,17 @@ thread_mlfqs_get_recent_cpu(struct thread *t)
   ASSERT(thread_mlfqs);
 
   return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(t->recent_cpu, 100));
+}
+
+static bool
+thread_mlfqs_less_function(const struct list_elem *a,
+                           const struct list_elem *b,
+                           void *aux UNUSED)
+{
+  struct thread *thread_a = list_entry (a, struct thread, elem);
+  struct thread *thread_b = list_entry (b, struct thread, elem);
+
+  return thread_a->priority > thread_b->priority;
 }
 
 
