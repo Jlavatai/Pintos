@@ -74,6 +74,7 @@ static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
+static void thread_enqueue (struct thread *t);
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
@@ -343,8 +344,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
-  t->status = THREAD_READY;
+
+  thread_enqueue(t);
+
   intr_set_level (old_level);
 }
 
@@ -413,11 +415,26 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+
+  if (cur != idle_thread) {
+    thread_enqueue (cur);
+  }
+
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+static void
+thread_enqueue (struct thread *t)
+{
+  if (thread_mlfqs) {
+    list_push_back (&mlfqs_thread_queues[t->priority], &t->elem);
+  } else {
+    list_push_back (&ready_list, &t->elem);
+  }
+
+  t->status = THREAD_READY;
 }
 
 void thread_sleep_ticker (void) {
@@ -441,8 +458,7 @@ void thread_sleep_ticker (void) {
     // handler.
     ASSERT(t->status == THREAD_SLEEP);
 
-    list_push_back (&ready_list, &t->elem);
-    t->status = THREAD_READY;
+    thread_enqueue(t);
   }
 }
 
@@ -633,6 +649,20 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+  if (thread_mlfqs) {
+    unsigned int i;
+
+    for (i = MLFQS_NUM_THREAD_QUEUES; i --> 0;) {
+      struct list *queue = &mlfqs_thread_queues[i];
+
+      if (!list_empty(queue)) {
+        return list_entry (list_pop_front (queue), struct thread, elem);
+      }
+    }
+
+    return idle_thread;
+  }
+
   if (list_empty (&ready_list))
     return idle_thread;
   else
@@ -753,9 +783,14 @@ thread_mlfqs_recompute_load_avg(void)
 static void
 thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
 {
+  return;
+
   ASSERT(thread_mlfqs);
 
   t->priority = PRI_MAX - (thread_mlfqs_get_recent_cpu (t) / 4) - (thread_mlfqs_get_nice (t) * 2);
+
+  list_remove (&t->elem);
+  list_push_back (&mlfqs_thread_queues[t->priority], &t->elem);
 }
 
 static void
