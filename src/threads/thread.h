@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 #include "threads/fixed-point.h"
 
@@ -93,8 +94,13 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    struct list lock_list;              /* Ordered List of the thread's held locks, with highest priority first */
+    int priority;
+
+    struct lock *blocker;               /* Each thread knows of the lock that's blocking it*/
+
     long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
+
     struct list_elem allelem;           /* List element for all threads list. */
     int nice;                           /* The nice value used for the mlfq scheduler. */
     fixed_point recent_cpu;             /* The recent CPU value used by the mlfq scheduler. */
@@ -110,6 +116,7 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -145,11 +152,18 @@ void thread_foreachinlist (struct list * thread_list, thread_action_func *func, 
 void thread_sleep_ticker (void);
 
 int thread_get_priority (void);
+int thread_explicit_get_priority (struct thread *);
+
 void thread_set_priority (int);
+
+void thread_donate_priority_lock(struct thread *to, struct lock* lock);
+void thread_restore_priority_lock(struct lock* lock);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool has_higher_priority(const struct list_elem *, const struct list_elem *, void *);
 
 #endif /* threads/thread.h */
