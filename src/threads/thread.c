@@ -146,8 +146,9 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 
-  if (thread_mlfqs)
-    initial_thread->recent_cpu = 0;
+  if (thread_mlfqs) {
+    initial_thread->nice = 0;
+  }
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -188,8 +189,10 @@ thread_tick (void)
     thread_sleep_ticker();
 
   if (thread_mlfqs) {
-    t->recent_cpu++;
+    if (t != idle_thread)
+      t->recent_cpu++;
 
+    // Recompute the load_avg first as this is depended on by recent_cpu.
     if (timer_ticks () % TIMER_FREQ == 0) {
       thread_mlfqs_recompute_load_avg ();
       thread_mlfqs_recompute_all_recent_cpu ();
@@ -197,6 +200,7 @@ thread_tick (void)
 
     if (++mlfqs_recompute_ticks == MLFQS_RECOMPUTE_INTERVAL) {
       thread_mlfqs_recompute_all_priorities ();
+      mlfqs_recompute_ticks = 0;
     }
   }
 
@@ -275,9 +279,7 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   if (thread_mlfqs) {
-    /* The new thread's recent_cpu value is inherited from the current
-       thread's recent_cpu value. */
-    t->recent_cpu = thread_get_recent_cpu ();
+    t->nice = thread_get_nice ();
   }
 
   intr_set_level (old_level);
@@ -587,7 +589,22 @@ thread_restore_priority_lock(struct lock* lock)
 void
 thread_set_nice (int nice) 
 {
-  thread_current ()->nice = nice;
+  ASSERT (thread_mlfqs);
+
+  struct thread *t = thread_current ();
+  t->nice = nice;
+
+  thread_mlfqs_recompute_priority (t, NULL);
+
+  // Yield if our priority is now not the highest.
+  if (!list_empty (&thread_mlfqs_queue)) {
+    int highest_priority = list_entry (list_front (&thread_mlfqs_queue),
+                                       struct thread,
+                                       elem)->priority;
+
+    if (thread_get_priority () < highest_priority)
+      thread_yield ();
+  }
 }
 
 /* Returns the current thread's nice value. */
@@ -701,7 +718,10 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->lock_list);
 
   // Set Priority
-  t->priority = priority;
+  if (thread_mlfqs)
+    thread_mlfqs_recompute_priority (t, NULL);
+  else
+    t->priority = priority;
 
   t->magic = THREAD_MAGIC;
 
@@ -881,19 +901,11 @@ thread_mlfqs_get_load_avg (void)
 static void
 thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
 {
-  return;
-
   ASSERT(thread_mlfqs);
 
   t->priority = PRI_MAX
                 - (thread_mlfqs_get_recent_cpu (t) / 4)
                 - (thread_mlfqs_get_nice (t) * 2);
-
-  list_remove (&t->elem);
-  list_insert_ordered (&thread_mlfqs_queue,
-                       &t->elem,
-                       &thread_mlfqs_less_function,
-                       NULL);
 }
 
 static void
@@ -904,7 +916,8 @@ thread_mlfqs_recompute_all_priorities(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  thread_foreachinlist (&ready_list, &thread_mlfqs_recompute_priority, NULL);
+  thread_foreach (&thread_mlfqs_recompute_priority, NULL);
+  list_sort (&thread_mlfqs_queue, &thread_mlfqs_recompute_priority, NULL);
 }
 
 static void
@@ -915,7 +928,7 @@ thread_mlfqs_recompute_all_recent_cpu(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  thread_foreachinlist (&ready_list, &thread_mlfqs_recompute_recent_cpu, NULL);
+  thread_foreach (&thread_mlfqs_recompute_recent_cpu, NULL);
 }
 
 static void
@@ -956,6 +969,22 @@ thread_mlfqs_less_function(const struct list_elem *a,
 
   return thread_a->priority > thread_b->priority;
 }
+
+void
+thread_mlfqs_print_threads(void)
+{
+  struct list_elem *e;
+
+  printf ("current thread %p: p %d\n", thread_current (), thread_current ()->priority);
+
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+    struct thread *t = list_entry (e, struct thread, elem);
+
+    printf ("thread %p: p %d\n", t, t->priority);
+  }
+
+  printf ("\n");
+ }
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
