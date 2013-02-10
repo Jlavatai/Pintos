@@ -1,0 +1,79 @@
+\documentclass[a4wide, 11pt]{article}
+\usepackage{a4, fullpage}
+\newcommand{\tab}{\hspace*{2em}}
+\newcommand{\tx}{\texttt}
+
+\begin{document}
+
+\title{OS211 \\ Task1: Threads \\ Design Document}
+\author{Francesco Di Mauro, Thomas Rooney, Alex Rozanski}
+\maketitle
+
+
+\section{Alarm Clock}
+\subsection{Data Structures}
+
+Added to enum \texttt{thread\_status}: \\
+\tab \tab \texttt{THREAD\_SLEEP} \\ \\
+\tab \tab Member of the \texttt{enum thread\_status}, representing a sleeping thread.
+\\\\
+Added to \texttt{struct\_thread}: \\
+\tab\tab \texttt{vlong long wakeup\_tick} \\
+\tab\tab If a thread is is sleeping, this the tick it's going to be woken up on.
+\\\\
+Added to \texttt{thread.c} as a global variable: \\
+\tab\tab \texttt{static struct list sleeping\_list} \\
+\tab\tab Ordered list of processes currently sleeping.\\ 
+\tab\tab Processes in this list 
+   have state set to \texttt{THREAD\_SLEEP}. \\
+\tab\tab This list is ordered suck that the head
+   is the next thread to be woken up.
+
+\subsection{Algorithms}
+\subsubsection{A2}
+The first operation that the function \texttt{timer\_sleep} carries out is disabling the interrupts, then it calls out to the new method \texttt{thread\_sleep()}. This function calculates the tick the thread needs to be woken up on, sets the status of the thread to \texttt{THREAD\_SLEEP}, then adds it to the sleeping list. Finally, \texttt{thread\_sleep()} will call \texttt{schedule}, in order to choose a different thread to run. When returning from \texttt{thread\_sleep()}, the interrupts will be re-enabled. Putting a thread to sleep should be an atomic operation because it accesses the kernel's thread structure: if an interrupt occurs while writing to the sleeping threads list, this will cause a fatal exception. 
+
+\subsubsection{A3}
+
+The list of sleeping threads is ordered by the \tx{wakeup\_tick} member
+which has been added to \tx{struct thread}. This is an absolute tick value that the thread 
+should sleep until, which is set when \tx{timer\_sleep()} is invoked. Thanks to this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
+timer interrupt handler) we can stop iteration as soon as a thread whose
+\tx{wakeup\_tick} value is later than the current tick is found.
+\\
+Furthermore, because the tick which we want the thread to wake up on is stored as
+an absolute value rather than a relative number of ticks to sleep for, we don't
+need to update any sleep state in the timer interrupt handler for the sleeping
+threads.
+
+\emph{Add example with values?}
+
+\subsection{Synchronization}
+
+We chose this design because allows the system to perform a fairly low amount of processing in the
+timer interrupt handler. As tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our
+initial design used an unordered list of sleeping threads, and each thread
+stored the number of ticks to sleep for. In the timer interrupt handler we
+would decrement the number of ticks each thread in the sleeping queue was
+sleeping for, and then wake up the thread when this count hit zero. This implementation was
+really inefficient because at every tick we were not just iterating over every sleeping
+thread , but also modifying the state of every thread.
+
+\section{Advance Scheduler}
+\subsection{Data Structures}
+
+Added to \tx{struct thread}: \\
+\tab\tab \tx{int recent\_cpu;} \\
+\tab\tab An exponentially weighted moving average of the CPU time received by each thread.
+\\\\
+Added to \tx{thread.c}: \\
+\tab\tab \tx{\#define MLFQS\_RECOMPUTE\_INTERVAL 4} \\
+\tab\tab Amount of clock ticks after which the priorities of the threads will be recomputed.
+\\\\
+\tab\tab \tx{static long long mlfqs\_recompute\_ticks} \\
+\tab\tab Number of ticks until the thread priorities will be recomputed.
+\\\\
+\tab\tab \tx{static int mlfqs\_load\_avg}\\
+\tab\tab The system's load average, an estimate of the number of threads ready to be run in the \\
+\tab\tab past minute.
+\end{document}

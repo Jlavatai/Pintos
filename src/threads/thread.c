@@ -29,10 +29,9 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-/* List of processes currently sleeping. Processes in this list 
-   have state set to THREAD_SLEEP. Each timer interrupt, this
-   is decremented until it reaches 0, upon which they are taken 
-   out of the sleeping list. */
+/* Ordered list of processes currently sleeping. Processes in this list 
+   have state set to THREAD_SLEEP. This list is ordered suck that the head
+   is the next thread to be woken up.*/
 static struct list sleeping_list;
 
 /* Idle thread. */
@@ -57,7 +56,7 @@ struct kernel_thread_frame
 static long long idle_ticks;          /* # of timer ticks spent idle. */
 static long long kernel_ticks;        /* # of timer ticks in kernel threads. */
 static long long user_ticks;          /* # of timer ticks in user programs. */
-static long long current_tick = 0;    /* # of timer ticks we've been running for so far. */
+
 
 
 /* Scheduling. */
@@ -88,14 +87,14 @@ void thread_donate_priority_lock_rec(struct thread *acceptor, struct lock* lock)
 
 /* For the MLFQ Scheduler. */
 
-/* # of ticks we recompute the priorities after */
+/* # of ticks after which priorities are recomputed*/
 #define MLFQS_RECOMPUTE_INTERVAL 4
 
 static struct list thread_mlfqs_queue;
 
-/* # of timer ticks until we have to recompute the thread priorities */
+/* # of timer ticks until the thread priorities will be recomputed*/
 static long long mlfqs_recompute_ticks;
-static fixed_point thread_mlfqs_load_avg;         /* The system load average. */
+static fixed_point thread_mlfqs_load_avg;        /* The system load average. */
 
 static void thread_mlfqs_init (void);
 void thread_mlfqs_recompute_load_avg (void);
