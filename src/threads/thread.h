@@ -26,9 +26,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-/* For the MLFQ Scheduler. */
-#define MLFQS_NUM_THREAD_QUEUES 64
-
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -154,8 +151,9 @@ int thread_explicit_get_priority (struct thread *);
 
 void thread_set_priority (int);
 
-void thread_donate_priority_lock(struct thread *to, struct lock* lock);
-void thread_restore_priority_lock(struct lock* lock);
+void thread_donate_priority_lock(struct thread *, struct lock *);
+void thread_donate_priority_lock_rec(struct thread *, struct lock *);
+void thread_restore_priority_lock(struct lock *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

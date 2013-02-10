@@ -154,6 +154,14 @@ at every tick.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+
+/* # of timer ticks until we have to recompute the thread priorities */
+static long long mlfqs_recompute_ticks;
+static int mlfqs_load_avg;   
+
+int nice;                           /* The nice value used for the mlfq scheduler. */
+    int recent_cpu;                     /* The recent CPU value used by the mlfq scheduler. */
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -164,10 +172,10 @@ at every tick.
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
+ 0      0   0   0  63  62  61      A
+ 4      1   1   2  63  62  61      A  
+ 8      2   1   4  63  62  54      A
+12      3   2   5  
 16
 20
 24
