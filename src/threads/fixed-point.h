@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-// #include <float.h> // TO BE REMOVED
 
 #define F  (1 << 14) 
 
@@ -27,17 +26,5 @@ extern inline fixed_point MUL_FIXED (fixed_point n1, fixed_point n2);
 extern inline fixed_point MUL_FIXED_INT (fixed_point n1, int n2);
 extern inline fixed_point DIV_FIXED (fixed_point n1, fixed_point n2);
 extern inline fixed_point DIV_FIXED_INT (fixed_point n1, int n2);
-
-/* For testing */
-
-// void print_fixed_point(fixed_point value)
-// {
-// 	int32_t int_part = (value & INTEGER_MASK) >> 14;
-// 	int frac_part = (value & FRACTION_MASK);
-// 	printf("INT: %d\n", int_part);
-// 	double f = (float) frac_part / (float)F;
-// 	printf("VAL: %f\n", int_part + f);
-// }
-
 
 #endif

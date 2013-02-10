@@ -56,4 +56,4 @@ inline fixed_point DIV_FIXED (fixed_point n1, fixed_point n2)
 inline fixed_point DIV_FIXED_INT (fixed_point n1, int n2) 
 {
 	return n1 / n2;
-} 
+}
