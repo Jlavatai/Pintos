@@ -1,6 +1,7 @@
 \documentclass[a4wide, 11pt]{article}
 \usepackage{a4, fullpage}
 \newcommand{\tab}{\hspace*{2em}}
+\usepackage[margin=2cm]{geometry}
 \newcommand{\tx}{\texttt}
 
 \begin{document}
@@ -59,7 +60,7 @@ sleeping for, and then wake up the thread when this count hit zero. This impleme
 really inefficient because at every tick we were not just iterating over every sleeping
 thread , but also modifying the state of every thread.
 
-\section{Advance Scheduler}
+\section{Advanced Scheduler}
 \subsection{Data Structures}
 
 Added to \tx{struct thread}: \\
@@ -69,6 +70,9 @@ Added to \tx{struct thread}: \\
 Added to \tx{thread.c}: \\
 \tab\tab \tx{\#define MLFQS\_RECOMPUTE\_INTERVAL 4} \\
 \tab\tab Amount of clock ticks after which the priorities of the threads will be recomputed.
+\\\\
+\tab\tab \tx{static struct list thread\_mlfqs\_queue}\\
+\tab\tab Queue of the ready to run threads used by the mlfqs scheduler.
 \\\\
 \tab\tab \tx{static long long mlfqs\_recompute\_ticks} \\
 \tab\tab Number of ticks until the thread priorities will be recomputed.
