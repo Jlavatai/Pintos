@@ -450,10 +450,15 @@ thread_enqueue (struct thread *t)
   t->status = THREAD_READY;
 
   if (thread_mlfqs) {
+    int running_pri = thread_get_priority();
+
     list_insert_ordered (&thread_mlfqs_queue,
                          &t->elem,
                          &thread_mlfqs_less_function,
                          NULL);
+
+    if (t->priority > running_pri)
+        thread_yield ();
   } else {
     int running_pri = thread_get_priority();
     int new_pri = thread_explicit_get_priority(t);
