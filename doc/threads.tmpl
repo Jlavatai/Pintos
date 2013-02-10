@@ -275,6 +275,8 @@ Should High priority thread (H) call lock_acquire(B), which is held by thread M,
         |     priority pointer.
         └---(Recursion Step on M = M->blocker->holder)
 
+At the end of this logical sequence, the data structure would be so:
+
 - Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
 ---------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
 ---------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
@@ -282,9 +284,31 @@ Should High priority thread (H) call lock_acquire(B), which is held by thread M,
 --------------------------------------------------------------------------------
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 
+Nested donation is handled via the recursive step.
 
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+Considering the case where data structure is as such:
+
+--------------------------------------------------------------------------------
+- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
+---------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
+---------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
+---------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
+--------------------------------------------------------------------------------
+-thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+
+Should lock_release(A), be called by Thread L:
+  (1) Since A's priority has been been donated to L
+    (2) thread_restore_priority_lock(A) is called
+      (3) list_remove(A->elem) is called to remove A from L's lock_list
+  (4) The lock's priority is set to NULL
+  (5) The lock's holder is set to NULL
+  (6) sema_up(A->semaphore) is called
+    (7)  The list of waiters is ensured sorted by descending priority
+    (8)  The top priority waiter is popped off the list
+    (9)  This waiter is unblocked
 
 
 

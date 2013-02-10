@@ -119,7 +119,7 @@ sema_up (struct semaphore *sema)
 
   if (!list_empty (&sema->waiters))
   {
-    //TODO: Event based reordering of waiter list, as opposed to blanket rule
+    //TODO: Event based reordering of waiter list, as opposed to blanket sort
     list_sort (&sema->waiters,
                 has_higher_priority, NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
