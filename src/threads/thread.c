@@ -98,7 +98,6 @@ static long long mlfqs_recompute_ticks;
 static fixed_point thread_mlfqs_load_avg;         /* The system load average. */
 
 static void thread_mlfqs_init (void);
-int thread_mlfqs_get_load_avg (void);
 void thread_mlfqs_recompute_load_avg (void);
 static void thread_mlfqs_recompute_all_priorities (void);
 void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
@@ -620,14 +619,16 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return thread_mlfqs_get_load_avg ();
+  return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(thread_mlfqs_load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  return thread_mlfqs_get_recent_cpu (thread_current ());
+  struct thread *t = running_thread ();
+
+  return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(t->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -895,12 +896,6 @@ thread_mlfqs_recompute_load_avg(void)
   thread_mlfqs_load_avg = ADD_FIXED(first_sum, second_sum);
 }
 
-int
-thread_mlfqs_get_load_avg (void)
-{
-  return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(thread_mlfqs_load_avg, 100));
-}
-
 void
 thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
 {
@@ -954,10 +949,7 @@ thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
 {
   ASSERT(thread_mlfqs);
 
-  int load_avg = thread_get_load_avg ();
   fixed_point twice_load_avg = MUL_FIXED_INT(thread_mlfqs_load_avg, 2);
-
-
   fixed_point coefficient = DIV_FIXED(twice_load_avg, ADD_FIXED_INT(twice_load_avg, 1));
 
   t->recent_cpu = ADD_FIXED_INT(MUL_FIXED(coefficient, t->recent_cpu), thread_mlfqs_get_nice (t));
@@ -976,7 +968,7 @@ thread_mlfqs_get_recent_cpu(struct thread *t)
 {
   ASSERT(thread_mlfqs);
 
-  return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(t->recent_cpu, 100));
+  return FIX_TO_INT_R_NEAR(t->recent_cpu);
 }
 
 static bool
