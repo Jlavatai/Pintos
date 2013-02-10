@@ -119,7 +119,7 @@ sema_up (struct semaphore *sema)
 
   if (!list_empty (&sema->waiters))
   {
-    //TODO: Event based reordering of waiter list, as opposed to blanket rule
+    //TODO: Event based reordering of waiter list, as opposed to blanket sort
     list_sort (&sema->waiters,
                 has_higher_priority, NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
@@ -269,9 +269,6 @@ lock_release (struct lock *lock)
   lock->semaphore.priority = NULL;
   lock->holder = NULL;
   sema_up (&lock->semaphore);
-
-  //Restore actual priority
-  //(or get the next available priority)
 }
 
 /* Returns true if the current thread holds LOCK, false
