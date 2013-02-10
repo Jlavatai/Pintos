@@ -98,14 +98,14 @@ static long long mlfqs_recompute_ticks;
 static fixed_point thread_mlfqs_load_avg;         /* The system load average. */
 
 static void thread_mlfqs_init (void);
+int thread_mlfqs_get_load_avg (void);
 void thread_mlfqs_recompute_load_avg (void);
-static int thread_mlfqs_get_load_avg (void);
-static void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
 static void thread_mlfqs_recompute_all_priorities (void);
-static void thread_mlfqs_recompute_all_recent_cpu (void);
-static void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
-static int thread_mlfqs_get_nice (struct thread *t);
+void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
 static int thread_mlfqs_get_recent_cpu (struct thread *t);
+void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
+static void thread_mlfqs_recompute_all_recent_cpu (void);
+static int thread_mlfqs_get_nice (struct thread *t);
 static bool thread_mlfqs_less_function(const struct list_elem *a,
                                        const struct list_elem *b,
                                        void *aux);
@@ -148,6 +148,7 @@ thread_init (void)
 
   if (thread_mlfqs) {
     initial_thread->nice = 0;
+    initial_thread->recent_cpu = INT_TO_FIX(0);
   }
 }
 
@@ -190,7 +191,7 @@ thread_tick (void)
 
   if (thread_mlfqs) {
     if (t != idle_thread)
-      t->recent_cpu++;
+      t->recent_cpu = ADD_FIXED_INT(t->recent_cpu, 1);
 
     // Recompute the load_avg first as this is depended on by recent_cpu.
     if (timer_ticks () % TIMER_FREQ == 0) {
@@ -595,6 +596,7 @@ thread_set_nice (int nice)
   t->nice = nice;
 
   thread_mlfqs_recompute_priority (t, NULL);
+  list_sort (&thread_mlfqs_queue, &thread_mlfqs_less_function, NULL);
 
   // Yield if our priority is now not the highest.
   if (!list_empty (&thread_mlfqs_queue)) {
@@ -862,6 +864,7 @@ has_higher_priority (const struct list_elem *elem1,
 	return priority1 > priority2;
 }
 
+
 /* Initialises the multilevel feedback queue scheduler. */
 static void 
 thread_mlfqs_init(void)
@@ -892,20 +895,28 @@ thread_mlfqs_recompute_load_avg(void)
   thread_mlfqs_load_avg = ADD_FIXED(first_sum, second_sum);
 }
 
-static int
+int
 thread_mlfqs_get_load_avg (void)
 {
   return FIX_TO_INT_R_NEAR(MUL_FIXED_INT(thread_mlfqs_load_avg, 100));
 }
 
-static void
+void
 thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
 {
   ASSERT(thread_mlfqs);
 
-  t->priority = PRI_MAX
-                - (thread_mlfqs_get_recent_cpu (t) / 4)
-                - (thread_mlfqs_get_nice (t) * 2);
+  int new_priority = PRI_MAX
+                     - (thread_mlfqs_get_recent_cpu (t) / 4)
+                     - (thread_mlfqs_get_nice (t) * 2);
+
+  if (new_priority > PRI_MAX)
+    new_priority = PRI_MAX;
+
+  if (new_priority < PRI_MIN)
+    new_priority = PRI_MIN;
+
+  t->priority = new_priority;
 }
 
 static void
@@ -916,8 +927,15 @@ thread_mlfqs_recompute_all_priorities(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  thread_foreach (&thread_mlfqs_recompute_priority, NULL);
-  list_sort (&thread_mlfqs_queue, &thread_mlfqs_recompute_priority, NULL);
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
+  {
+    struct thread *t = list_entry (e, struct thread, allelem);
+    thread_mlfqs_recompute_priority (t, NULL);
+  }
+
+  list_sort (&thread_mlfqs_queue, &thread_mlfqs_less_function, NULL);
 }
 
 static void
@@ -931,14 +949,16 @@ thread_mlfqs_recompute_all_recent_cpu(void)
   thread_foreach (&thread_mlfqs_recompute_recent_cpu, NULL);
 }
 
-static void
+void
 thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
 {
   ASSERT(thread_mlfqs);
 
   int load_avg = thread_get_load_avg ();
+  fixed_point twice_load_avg = MUL_FIXED_INT(thread_mlfqs_load_avg, 2);
 
-  fixed_point coefficient = DIV_FIXED(INT_TO_FIX(2 * load_avg), INT_TO_FIX((2 * load_avg) + 1));
+
+  fixed_point coefficient = DIV_FIXED(twice_load_avg, ADD_FIXED_INT(twice_load_avg, 1));
 
   t->recent_cpu = ADD_FIXED_INT(MUL_FIXED(coefficient, t->recent_cpu), thread_mlfqs_get_nice (t));
 }
@@ -977,7 +997,7 @@ thread_mlfqs_print_threads(void)
 
   printf ("current thread %p: p %d\n", thread_current (), thread_current ()->priority);
 
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+  for (e = list_begin (&thread_mlfqs_queue); e != list_end (&thread_mlfqs_queue); e = list_next (e)) {
     struct thread *t = list_entry (e, struct thread, elem);
 
     printf ("thread %p: p %d\n", t, t->priority);
