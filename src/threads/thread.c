@@ -457,8 +457,12 @@ thread_enqueue (struct thread *t)
                          &thread_mlfqs_less_function,
                          NULL);
 
-    if (t->priority > running_pri)
+    if (t->priority > running_pri) {
+      if (intr_context())
+        intr_yield_on_return ();
+      else
         thread_yield ();
+    }
   } else {
     int running_pri = thread_get_priority();
     int new_pri = thread_explicit_get_priority(t);
@@ -926,15 +930,8 @@ thread_mlfqs_recompute_all_priorities(void)
 
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
-
-  struct list_elem *e;
-
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
-  {
-    struct thread *t = list_entry (e, struct thread, allelem);
-    thread_mlfqs_recompute_priority (t, NULL);
-  }
-
+  
+  thread_foreach (&thread_mlfqs_recompute_priority, NULL);
   list_sort (&thread_mlfqs_queue, &thread_mlfqs_less_function, NULL);
 }
 
