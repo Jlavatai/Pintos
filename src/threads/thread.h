@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "synch.h"
 
+#include "threads/fixed-point.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -98,7 +100,7 @@ struct thread
 
     struct list_elem allelem;           /* List element for all threads list. */
     int nice;                           /* The nice value used for the mlfq scheduler. */
-    int recent_cpu;                     /* The recent CPU value used by the mlfq scheduler. */
+    fixed_point recent_cpu;             /* The recent CPU value used by the mlfq scheduler. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -161,5 +163,7 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 bool has_higher_priority(const struct list_elem *, const struct list_elem *, void *);
+
+void thread_mlfqs_print_threads(void);
 
 #endif /* threads/thread.h */
