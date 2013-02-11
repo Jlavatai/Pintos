@@ -332,13 +332,27 @@ Should lock_release(A), be called by Thread L:
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-
 /* # of timer ticks until we have to recompute the thread priorities */
 static long long mlfqs_recompute_ticks;
-static int mlfqs_load_avg;   
 
-int nice;                           /* The nice value used for the mlfq scheduler. */
-    int recent_cpu;                     /* The recent CPU value used by the mlfq scheduler. */
+Added as a static variable to thread.c:
+
+/* The queue used for the mlfqs scheduler. */
+static struct list thread_mlfqs_queue;
+
+/* # of timer ticks until the thread priorities will be recomputed. */
+static long long mlfqs_recompute_ticks;
+
+/* The system load average. */
+static fixed_point thread_mlfqs_load_avg;
+
+Added to struct thread:
+
+/* The nice value used for the mlfq scheduler. */
+int nice;
+
+/* The recent CPU value used by the mlfq scheduler. */
+int recent_cpu;
 
 ---- ALGORITHMS ----
 

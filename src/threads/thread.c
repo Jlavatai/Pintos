@@ -90,9 +90,10 @@ void thread_donate_priority_lock_rec(struct thread *acceptor, struct lock* lock)
 /* # of ticks after which priorities are recomputed*/
 #define MLFQS_RECOMPUTE_INTERVAL 4
 
+/* The queue used for the mlfqs scheduler. */
 static struct list thread_mlfqs_queue;
 
-/* # of timer ticks until the thread priorities will be recomputed*/
+/* # of timer ticks until the thread priorities will be recomputed. */
 static long long mlfqs_recompute_ticks;
 static fixed_point thread_mlfqs_load_avg;        /* The system load average. */
 
