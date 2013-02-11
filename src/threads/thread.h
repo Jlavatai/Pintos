@@ -166,6 +166,4 @@ int thread_get_load_avg (void);
 
 bool has_higher_priority(const struct list_elem *, const struct list_elem *, void *);
 
-void thread_mlfqs_print_threads(void);
-
 #endif /* threads/thread.h */
