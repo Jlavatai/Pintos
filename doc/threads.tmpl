@@ -185,7 +185,7 @@ logic recurses, updating the blocking locks in a chain.
 
 --------------------------------------------------------------------------------
 --------------------------------- ASCII Diagram: -------------------------------
------------------------------------------------------------------------------------ Initial Setup: -------------------------------------------------------------
+--------------------------------- Initial Setup: -------------------------------
 --------------------------------------------------------------------------------
 - Locks: |     A     |     B     |- Threads: |    L     |    M     |    H     |-
 ---------|pri:NULL   |pri:NULL   |-----------|pri: 1    |pri: 2    |pri: 3    |-
@@ -364,26 +364,34 @@ int recent_cpu;
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0      0   0   0  63  62  61      A
- 4      1   1   2  63  62  61      A  
- 8      2   1   4  63  62  54      A
-12      3   2   5  
-16
-20
-24
-28
-32
-36
+ 0      0   0   0  63  61  59      A
+ 4      4   0   0  62  61  59      A  
+ 8      8   0   0  61  61  59      B
+12      8   4   0  61  60  59      A
+16      12  4   0  60  60  59      B
+20      12  8   0  60  59  59      A     
+24      16  8   0  59  59  59      C
+28      16  8   4  59  59  58      B 
+32      16  12  4  59  58  58      A        
+36      20  12  4  58  58  58      C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behaviour of your scheduler?
 
+The only possible ambiguity is the coiche of which thread to run when
+two or more thread have the same priority. However the specification
+says that if there is more than one thread with the same priority, 
+the scheduler must go through them following a "round robin" order.
+In our implementation, when a thread yields, it is put back into the 
+list of ready threads, and we took care of inserting after all the threads 
+with the same priority. 
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
 ---- RATIONALE ----
-
+l
 >> C5: Briefly critique your design, pointing out advantages and
 >> disadvantages in your design choices.  If you were to have extra
 >> time to work on this part of the task, how might you choose to
