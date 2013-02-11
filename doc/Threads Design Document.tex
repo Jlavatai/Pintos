@@ -255,7 +255,7 @@ The way this potential race condition is avoided in our implementation is via on
 
 \section{Advanced Scheduler}
 \subsection{Data Structures}
-\subsubsection{C1}\tx{int *priority}
+\subsubsection{C1}
 
 Added to \tx{struct thread}: \\
 \tab\tab \tx{int recent\_cpu;} \\
@@ -299,6 +299,14 @@ The specification does not clearly express whether the calculation of the priori
 \subsubsection{C4}
 
 \subsubsection{C5}
+
+One advantage of our implementation of the advanced scheduler is that we have only used one list to implement the 64 queues used by the scheduler. The list is ordered descending by priority, so we can always pick the thread with the highest priority to run by looking at the head of this list. This gives us a time complexity of $O(1)$ for choosing the next thread to run, as opposed to $O(n)$ if we used 64 separate lists (we'd have to do a search from the list for priority $63$ downwards).
+
+However, in our implementation queuing threads is more expensive, as we call \texttt{list\_insert\_ordered()} on the single list rather than if we had 64 lists where we would simply call \texttt{list\_push\_back()} on the list for the queue with the appropriate priority. We also have to call \texttt{list\_sort()} on the list when we recompute priorities rather than if we had 64 lists where we'd just the threads whose priorities have changed between lists, which will be more expensive if only a few thread's priorities have changed.
+\\ \\
+One refinement we could make to our current design is recomputing all thread priorities and all \textit{recent\_cpu} values at the same time every second if the number of ticks per second is a multiple of the thread priority recompilation interval.
+
+As the current number of ticks per second (100 ticks) is a multiple of the tick interval for which we recompute all priorities (4 ticks), when we recompute all \textit{recent\_cpu} values every second, we could recompute all the thread priorities at the same time, as both processes require that we loop over the list of all threads; performing these two steps together and iterating over the list once would be more efficient, and would improve our implementation as we want to reduce the time spent in the timer interrupt handler.
 
 \subsubsection{C6}
 
