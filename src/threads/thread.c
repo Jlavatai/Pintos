@@ -186,14 +186,14 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
-  /* Update wait ticker*/
+
     thread_sleep_ticker();
 
   if (thread_mlfqs) {
     if (t != idle_thread)
       t->recent_cpu = ADD_FIXED_INT(t->recent_cpu, 1);
 
-    // Recompute the load_avg first as this is depended on by recent_cpu.
+    /* Recompute the load_avg first as this is depended on by recent_cpu. */
     if (timer_ticks () % TIMER_FREQ == 0) {
       thread_mlfqs_recompute_load_avg ();
       thread_mlfqs_recompute_all_recent_cpu ();
@@ -206,7 +206,6 @@ thread_tick (void)
   }
 
   /* Enforce preemption. */
-
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 }
@@ -887,6 +886,7 @@ thread_mlfqs_init(void)
   list_init (&thread_mlfqs_queue);
 }
 
+/* Recomputes the system load average. */
 static void
 thread_mlfqs_recompute_load_avg(void)
 {
@@ -895,16 +895,25 @@ thread_mlfqs_recompute_load_avg(void)
   /* This method should only be called from the timer interrupt handler. */
   ASSERT (intr_get_level () == INTR_OFF);
 
-  fixed_point first_sum = MUL_FIXED(DIV_FIXED(INT_TO_FIX(59), INT_TO_FIX(60)), thread_mlfqs_load_avg); 
+  fixed_point first_sum = MUL_FIXED(DIV_FIXED(INT_TO_FIX(59),
+                                              INT_TO_FIX(60)),
+                                              thread_mlfqs_load_avg);
 
   int num_threads = list_size (&thread_mlfqs_queue);
   if (running_thread () != idle_thread)
     num_threads++;
 
-  fixed_point second_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(1), INT_TO_FIX(60)), num_threads); 
+  fixed_point second_sum = MUL_FIXED_INT(DIV_FIXED(INT_TO_FIX(1),
+                                                   INT_TO_FIX(60)),
+                                                   num_threads); 
 
   thread_mlfqs_load_avg = ADD_FIXED(first_sum, second_sum);
 }
+
+/* Recomputes the priority of thread t. The second parameter aux is
+   included so that this function can be used as a parameter to
+   thread_foreach() or thread_foreachinlist(), which expects a pointer to
+   a function with return type void and arguments (struct thread*, void*). */
 
 static void
 thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
@@ -924,6 +933,7 @@ thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
   t->priority = new_priority;
 }
 
+/* Recomputes the priorities of all threads. */
 static void
 thread_mlfqs_recompute_all_priorities(void)
 {
@@ -936,6 +946,7 @@ thread_mlfqs_recompute_all_priorities(void)
   list_sort (&thread_mlfqs_queue, &thread_mlfqs_less_function, NULL);
 }
 
+/* Recomputes the recent_cpu values of all threads. */
 static void
 thread_mlfqs_recompute_all_recent_cpu(void)
 {
@@ -947,6 +958,10 @@ thread_mlfqs_recompute_all_recent_cpu(void)
   thread_foreach (&thread_mlfqs_recompute_recent_cpu, NULL);
 }
 
+/* Recomputes the recent_cpu value of thread t. The second parameter aux is
+   included so that this function can be used as a parameter to
+   thread_foreach() or thread_foreachinlist(), which expects a pointer to
+   a function with return type void and arguments (struct thread*, void*). */
 static void
 thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
 {
@@ -958,6 +973,7 @@ thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
   t->recent_cpu = ADD_FIXED_INT(MUL_FIXED(coefficient, t->recent_cpu), thread_mlfqs_get_nice (t));
 }
 
+/* Simple wrapper around the nice member of t. */
 static int
 thread_mlfqs_get_nice(struct thread *t)
 {
@@ -966,6 +982,7 @@ thread_mlfqs_get_nice(struct thread *t)
   return t->nice;
 }
 
+/* Returns the recent_cpu rounded down to the nearest integer. */
 static int
 thread_mlfqs_get_recent_cpu(struct thread *t)
 {
@@ -974,6 +991,7 @@ thread_mlfqs_get_recent_cpu(struct thread *t)
   return FIX_TO_INT_R_NEAR(t->recent_cpu);
 }
 
+/* Used to sort threads by priority descending. */
 static bool
 thread_mlfqs_less_function(const struct list_elem *a,
                            const struct list_elem *b,
@@ -985,14 +1003,20 @@ thread_mlfqs_less_function(const struct list_elem *a,
   return thread_a->priority > thread_b->priority;
 }
 
+/* Function to aid debugging by printing all of the threads in
+   thread_mlfqs_queue. */
 static void
 thread_mlfqs_print_threads(void)
 {
+  ASSERT(thread_mlfqs);
+
   struct list_elem *e;
 
-  printf ("current thread %p: p %d\n", thread_current (), thread_current ()->priority);
+  printf ("current thread %p: p %d\n", thread_current (),
+                                       thread_current ()->priority);
 
-  for (e = list_begin (&thread_mlfqs_queue); e != list_end (&thread_mlfqs_queue); e = list_next (e)) {
+  for (e = list_begin (&thread_mlfqs_queue);
+       e != list_end (&thread_mlfqs_queue); e = list_next (e)) {
     struct thread *t = list_entry (e, struct thread, elem);
 
     printf ("thread %p: p %d\n", t, t->priority);
