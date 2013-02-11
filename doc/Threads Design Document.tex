@@ -97,6 +97,34 @@ Added to \tx{struct semaphore}:
 \newpage
 
 \subsubsection{B2}
+
+Priority Donation is controlled via each thread containing a list
+of pointers to the locks it currently holds, should those locks also have been donated to. The logic behind donation requires that the lock is only donated to and added to this list when the donation priority is greater than the thread's current priority. As such, the thread's current priority is determined in two checks:
+\\\\
+If the lock\_list is empty, the thread's priority is determined via
+\tx{thread->priority}.
+\\
+Else, the thread's priority is determined by the head of the lock list's 
+priority.
+\\\\
+The lock's priority is held in the lock's semaphore. This priority is updated 
+to the greatest priority of all the thread's currently waiting on the semaphore.
+ As this priority is held in a pointer, an update to the pointer's location to 
+a higher priority thread iterates through into the scheduling logic. However, 
+the lock is only donated once, on the first instance of the priority donation. 
+After this, only its priority pointer updates should a higher priority thread 
+attempt to acquire.
+
+Whenever a higher priority thread tries to acquire a lock, the lock pointer is 
+`donated' to the lock holder. It is inserted in an ordered way (via descending 
+priority) to the thread's lock list.
+
+Should the lock holder, currently be blocked, and the thread's blocking-lock's 
+holder be lower priority, then the currently blocking-lock has its priority
+pointer updated to point to the thread which has this higher priority. This 
+logic recurses, updating the blocking locks in a chain.
+
+
 \begin{verbatim}
                                 +----------------+
                                 - ASCII Diagram: -
