@@ -228,9 +228,32 @@ Should lock\_release(A), be called by Thread L:
     (9)  This waiter is unblocked
 \end{verbatim}
 
+\subsubsection{B6}
+Consider an implementation where the \tx{struct thread} has two integers representing the base priority and the donated priority. The function \tx{set\_priority} could recompute the base priority or set the base priority and recompute the donated priority to be the max of the two values and yield. Suppose that another thread donates its own priority while this re-computation is taking place. This thread may read the old value of donated priority, and write to the new value such that the donated priority is lower than the base priority as shown in the diagram below:
+\begin{verbatim}
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 7
+
+        But Consider: Thread B donating to thread A whilst set_pri is computing: 
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 6
+                      ^                        ^
+                      | Read 5                 | Write 6
+                      + 5 < 6 -----------------+
+        Thread B     donate(A)
+        pri: 6
+        dpri: 6 
+\end{verbatim}    
+
+The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which happen between processor instructions) can not cause a problem.
+
 \section{Advanced Scheduler}
 \subsection{Data Structures}
-\subsubsection{C1}
+\subsubsection{C1}\tx{int *priority}
 
 Added to \tx{struct thread}: \\
 \tab\tab \tx{int recent\_cpu;} \\

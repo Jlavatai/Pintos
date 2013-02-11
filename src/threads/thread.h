@@ -8,6 +8,8 @@
 
 #include "threads/fixed-point.h"
 
+#define MAX(A, B) (A > B ? A : B)
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
