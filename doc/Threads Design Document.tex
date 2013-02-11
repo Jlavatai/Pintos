@@ -208,12 +208,12 @@ Nested donation is handled via the recursive step.
 Considering the case where data structure is as such:
 
 \begin{verbatim}
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
-                                              ---------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
@@ -276,20 +276,22 @@ Added to \tx{thread.c}: \\
 \tab\tab past minute.
 \newpage
 \subsubsection{C2}
-\begin{verbatim}
-timer  recent_cpu    priority   thread
-ticks   A   B   C   A   B   C   to run
------  --  --  --  --  --  --   ------
- 0      0   0   0  63  61  59      A
- 4      4   0   0  62  61  59      A  
- 8      8   0   0  61  61  59      B
-12      8   4   0  61  60  59      A
-16      12  4   0  60  60  59      B
-20      12  8   0  60  59  59      A     
-24      16  8   0  59  59  59      C
-28      16  8   4  59  59  58      B 
-32      16  12  4  59  58  58      A        
-36      20  12  4  58  58  58      C
+\begin{verbatim}     
+                     +------------------------------------------+
+                     | timer  recent_cpu    priority   thread   | 
+                     | ticks   A   B   C   A   B   C   to run   |  
+                     | -----  --  --  --  --  --  --   ------   |  
+                     |  0      0   0   0  63  61  59      A     |
+                     |  4      4   0   0  62  61  59      A     |  
+                     |  8      8   0   0  61  61  59      B     |
+                     | 12      8   4   0  61  60  59      A     |
+                     | 16      12  4   0  60  60  59      B     |
+                     | 20      12  8   0  60  59  59      A     |     
+                     | 24      16  8   0  59  59  59      C     |
+                     | 28      16  8   4  59  59  58      B     | 
+                     | 32      16  12  4  59  58  58      A     |        
+                     | 36      20  12  4  58  58  58      C     |
+                     +------------------------------------------+
 \end{verbatim}
 
 \subsubsection{C3}

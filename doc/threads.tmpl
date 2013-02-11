@@ -323,8 +323,8 @@ the base priority and the donated priority. Set priority could recompute the
 base priority or set the base priority and recompute the donated priority to be 
 the max of the two values and yield. Suppose that another thread donates its 
 own priority while this recomputation is taking place. This thread may read the 
-old value of donated priority, and write to the new value such that the donated 
-priority is lower than the base priority.
+old value of donated priority, and writes to the new value such that the 
+donated priority is lower than the base priority.
 
         Thread A        set_pri(7)
         pri: 2     | pri:7  | pri: 7           | pri: 7
@@ -343,16 +343,21 @@ priority is lower than the base priority.
         pri: 6
         dpri: 6 
                 
-
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
 
-This design was chosen due to a simpleness of implementation that should avoid the major problems associated with priority donation, such as that given above. In order to minimise the memory and processing footprint of this design, we extensively used pointers such that data need only be updated once. 
+This design was chosen due to a simpleness of implementation that should avoid 
+the major problems associated with priority donation, such as that given above. 
+In order to minimise the memory and processing footprint of this design, we 
+extensively used pointers such that data need only be updated once. 
 
-Initially we considered the two integer implementation with base priority and donated priority. We decided against using this design due to the processing overhead during multiple priority donation. We theorised that the donated priority would have to be recomputed significantly often, whereas pointers to locks need only be inserted (in an ordered way (expensive when a thread holds many locks)) or removed from the list. 
-
-
+Initially we considered the two integer implementation with base priority and 
+donated priority. We decided against using this design due to the processing 
+overhead during multiple priority donation. We theorised that the donated 
+priority would have to be recomputed significantly often, whereas pointers to 
+locks need only be inserted (in an ordered way (expensive when a thread holds 
+many locks)) or removed from the list. 
 
               ADVANCED SCHEDULER
               ==================
