@@ -70,59 +70,45 @@ sleeping for, and then wake up the thread when this count hit zero. This impleme
 
 Added to \tx{struct thread}: \\\\
 \tab\tab \tx{struct list lock\_list}:\\
-\tab\tab This is an ordered list of the thread's held locks, with highest priority first. \\
+\tab\tab An ordered list of the thread's held locks, with highest priority first. \\
 \tab\tab They are only added when they have also been donated to.
 \\\\
  \tab\tab   \tx{int priority}:\\
- \tab\tab This contains the thread's default, non-donated-to, priority.
+ \tab\tab Contains the thread's default, non-donated-to, priority.
 \\\\
 \tab\tab \tx{struct lock *blocker}:\\
-\tab\tab This is a pointer to the lock that is currently blocking it, or NULL \\
-\tab\tab should the thread not be currently blocked by a lock.
+\tab\tab A pointer to the lock that is currently blocking the thread, or \texttt{NULL} \\
+\tab\tab if the thread is not currently blocked by a lock.
     \\\\    
 Added to \tx{struct lock}:
 \\\\
 \tab\tab bool \tx{donated\_flag}:\\
-\tab\tab This is a flag indicating whether the lock has donated its priority to its holder, or not.
+\tab\tab A flag indicating whether the lock has donated its priority to its holder, or not.
 \\\\
 \tab\tab \tx{struct list\_elem elem}:\\
-\tab\tab This is a \tx{list\_elem} structure such that the lock can be tracked via the pintos list structure -\\
-\tab\tab meaning a thread can know which locks it currently holds.
+\tab\tab A \tx{list\_elem} structure such that the lock can be added to a list. \\
 \\\\
 Added to \tx{struct semaphore}:
   \\\\  
 \tab\tab \tx{int *priority}:\\
-\tab\tab This is a pointer to a thread's priority value, this is initially the thread that holds it,\\
-\tab\tab but is updated to the greatest priority of the thread's currently in it's wait queue.
+\tab\tab A pointer to a thread's priority value. This initially points to the priority of the thread\\
+\tab\tab that holds the semaphore.
 \newpage
 
 \subsubsection{B2}
 
-Priority Donation is controlled via each thread containing a list
-of pointers to the locks it currently holds, should those locks also have been donated to. The logic behind donation requires that the lock is only donated to and added to this list when the donation priority is greater than the thread's current priority. As such, the thread's current priority is determined in two checks:
-\\\\
-If the lock\_list is empty, the thread's priority is determined via
-\tx{thread->priority}.
-\\
-Else, the thread's priority is determined by the head of the lock list's 
-priority.
-\\\\
-The lock's priority is held in the lock's semaphore. This priority is updated 
-to the greatest priority of all the thread's currently waiting on the semaphore.
- As this priority is held in a pointer, an update to the pointer's location to 
-a higher priority thread iterates through into the scheduling logic. However, 
-the lock is only donated once, on the first instance of the priority donation. 
-After this, only its priority pointer updates should a higher priority thread 
-attempt to acquire.
+Priority donation is controlled by each thread containing a list of pointers to the locks it currently holds, if those locks also have been donated to. The logic behind donation requires that the lock is only donated to and added to this list when the donation priority is greater than the thread's current priority. As such, the thread's current priority is determined through one of two ways:
 
-Whenever a higher priority thread tries to acquire a lock, the lock pointer is 
-`donated' to the lock holder. It is inserted in an ordered way (via descending 
-priority) to the thread's lock list.
+\begin{enumerate}
+\item If \tx{lock\_list} is empty, the thread's priority is determined by \tx{thread->priority}.
+\item Otherwise, the thread's priority is determined by the priority pointed to by the lock at the head of the \tx{lock\_list}.
+\end{enumerate}
 
-Should the lock holder, currently be blocked, and the thread's blocking-lock's 
-holder be lower priority, then the currently blocking-lock has its priority
-pointer updated to point to the thread which has this higher priority. This 
-logic recurses, updating the blocking locks in a chain.
+The lock's priority is held in the lock's semaphore. This priority is updated to the greatest priority of all the threads currently waiting on the semaphore. As this priority is held in a pointer, an update to the pointer's location to a higher priority thread passes through into the scheduling logic. However, the lock is only donated once, on the first instance of the priority donation. After this, only its priority pointer updates should a higher priority thread attempt to acquire.
+
+Whenever a higher priority thread tries to acquire a lock, the lock pointer is `donated' to the lock holder. It is inserted in an ordered way (by priority, descending) to the thread's lock list.
+
+If the lock holder is currently blocked, and the thread's blocking-lock's holder has a lower priority, then the currently blocking-lock has its priority pointer updated to point to the thread which has this higher priority. This logic recurses, updating the blocking locks in a chain.
 
 
 \begin{verbatim}
@@ -293,7 +279,7 @@ Consider an implementation where the \tx{struct thread} has two integers represe
         dpri: 6 
 \end{verbatim}    
 
-The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which happen between processor instructions) can not cause a problem.
+The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which can only happen between processor instructions) can not cause a problem.
 
 In this implementation the way it could be easily avoided would be to use a static, kernel-space lock that is only acquired and released in \tx{thread\_set\_priority} and \tx{thread\_donate}. This would lock execution of setting priority and donating priority such that they could never execute at the same time, and synchronisation race conditions, such as that shown above, could never occur.
 
@@ -304,7 +290,7 @@ the major problems associated with priority donation, such as that given above.
 In order to minimise the memory and processing footprint of this design, we 
 extensively used pointers such that data need only be updated once. 
 \\\\
-Initially we considered the two integer implementation with base priority and donated priority being integer members. We decided against using this design due to the processing overhead during multiple priority donation. We theorised that the donated priority would have to be recomputed significantly often, whereas pointers to locks need only be inserted in the correct order or removed from the list. 
+Initially we considered a two-integer implementation with base priority and donated priority being integer members. We decided against using this design due to the processing overhead during multiple priority donation. We theorised that the donated priority would have to be recomputed significantly often, whereas pointers to locks need only be inserted in the correct order or removed from the list. 
 
 \section{Advanced Scheduler}
 \subsection{Data Structures}
@@ -369,6 +355,6 @@ As the current number of ticks per second (100 ticks) is a multiple of the tick 
 
 \subsubsection{C6}
 
-Our initial fixed-point implementation consisted of a struct containing a number used for the fixed-point number representation, and several functions to perform the necessary fixed-point operations using this struct. Even if the implementation was correct, we deemed it inefficient: calling a function to perform simple mathematical operations was a significant overhead, especially considering that the kernel needs to recompute the priority of all the threads every second. In the end, we created a \tx{fixed\_point} typedef to an \tx{int32\_t}, and then defined a series of inline functions which actually implement the methods needed to perform the fixed-point operations. We chose inline functions over macros because inline functions are more practical when dealing with adding assertions.
+Our initial fixed-point implementation consisted of a struct containing a number used for the fixed-point number representation, and several functions to perform the necessary fixed-point operations using this struct. Even if the implementation was correct, we deemed it inefficient: calling a function to perform simple mathematical operations was a significant overhead, especially considering that the kernel needs to recompute the priority of all the threads every second. In the end, we created a \tx{fixed\_point} typedef to an \tx{int32\_t}, and then defined a series of inline functions which actually implement the methods needed to perform the fixed-point operations. We chose inline functions over macros because inline functions are more practical when debugging, for example.
 
 \end{document}
