@@ -228,7 +228,7 @@ logic recurses, updating the blocking locks in a chain.
 ---------|holder:NULL|holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
 ---------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
 --------------------------------------------------------------------------------
--thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+-thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
 -- Thread M: lock_acquire(a) completes -----------------------------------------
 --------------------------------------------------------------------------------
@@ -309,6 +309,17 @@ Should lock_release(A), be called by Thread L:
     (7)  The list of waiters is ensured sorted by descending priority
     (8)  The top priority waiter is popped off the list
     (9)  This waiter is unblocked
+
+The Datastructure, after this process, is such:
+
+--------------------------------------------------------------------------------
+- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
+---------|pri: NULL  |pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
+---------|holder:NULL|holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
+---------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
+--------------------------------------------------------------------------------
+-thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+
 
 ---- SYNCHRONIZATION ----
 
