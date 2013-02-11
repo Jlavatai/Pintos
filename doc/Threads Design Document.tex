@@ -39,7 +39,7 @@ which has been added to \tx{struct thread}. This is an absolute tick value that 
 should sleep until, which is set when \tx{timer\_sleep()} is invoked. Thanks to this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
 timer interrupt handler) we can stop iteration as soon as a thread whose
 \tx{wakeup\_tick} value is later than the current tick is found.
-\\
+
 Furthermore, because the tick which we want the thread to wake up on is stored as
 an absolute value rather than a relative number of ticks to sleep for, we don't
 need to update any sleep state in the timer interrupt handler for the sleeping
@@ -47,16 +47,16 @@ threads.
 
 \emph{Add example with values?}
 
-\subsection{Synchronization}
+\subsubsection{A4}
+We disable interrupts in \texttt{timer\_sleep()} before calling \texttt{thread\_sleep()} (which is the critical section where we modify the sleeping list and then schedule another thread). Since interrupts are disabled for this small section, we won't be pre-empted by another thread, so sleeping a thread and then scheduling  another is an atomic operation.
 
-We chose this design because allows the system to perform a fairly low amount of processing in the
-timer interrupt handler. As tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our
-initial design used an unordered list of sleeping threads, and each thread
-stored the number of ticks to sleep for. In the timer interrupt handler we
-would decrement the number of ticks each thread in the sleeping queue was
-sleeping for, and then wake up the thread when this count hit zero. This implementation was
-really inefficient because at every tick we were not just iterating over every sleeping
-thread , but also modifying the state of every thread.
+We switch to another thread when the current thread sleeps by calling \texttt{schedule()}, so although we could use a synchronisation primitive such as a semaphore to enforce invocation of \texttt{thread\_sleep()} as a critical section, \texttt{schedule()} asserts that interrupts are disabled, so it makes the most sense to disable interrupts for this critical section as they need to be off for \texttt{schedule()} anyway.
+
+\subsubsection{A5}
+As we disable interrupts before calling \texttt{thread\_sleep()} from \texttt{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This prevents race conditions occurring between multiple threads where we may wake up sleeping threads and modify the list of sleeping threads.
+
+\subsubsection{A6}
+We chose this design because allows the system to perform a fairly low amount of processing in the timer interrupt handler. As \tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our initial design used an unordered list of sleeping threads, and each thread stored the number of ticks to sleep for. In the timer interrupt handler we would decrement the number of ticks each thread in the sleeping queue was sleeping for, and then wake up the thread when this count hit zero. This implementation was really inefficient because at every tick we were not just iterating over all the sleeping thread, but also modifying the state of each thread.
 
 \section{Priority Scheduling}
 \subsection{Data Structures}
