@@ -310,8 +310,6 @@ Should lock_release(A), be called by Thread L:
     (8)  The top priority waiter is popped off the list
     (9)  This waiter is unblocked
 
-
-
 ---- SYNCHRONIZATION ----
 
 >> B6: Describe a potential race in thread_set_priority() and explain
@@ -339,11 +337,13 @@ and the donated pri. Set priority could recompute the base pri or set the base p
                 
 
 
+---- RATIONALE ----
+
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
-
 This design was chosen due to a simpleness of implementation that should avoid the major problems associated with priority donation, such as that given above. In order to minimise the memory and processing footprint of this design, we extensively used pointers such that data need only be updated once. 
 
+=======
 
 
               ADVANCED SCHEDULER
