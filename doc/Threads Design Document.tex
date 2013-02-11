@@ -37,8 +37,7 @@ When a sleeping thread returns from \texttt{thread\_sleep()} after being woken u
 The list of sleeping threads is ordered by the \tx{wakeup\_tick} member
 which has been added to \tx{struct thread}. This is an absolute tick value that the thread 
 should sleep until, which is set when \tx{timer\_sleep()} is invoked. Thanks to this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
-timer interrupt handler) we can stop iteration as soon as a thread whose
-\tx{wakeup\_tick} value is later than the current tick is found.
+timer interrupt handler) we can stop iteration as soon as a thread whose \tx{wakeup\_tick} value is no later than the current tick is found.
 
 Furthermore, because the tick which we want the thread to wake up on is stored as
 an absolute value rather than a relative number of ticks to sleep for, we don't
@@ -47,16 +46,24 @@ threads.
 
 \emph{Add example with values?}
 
+\subsection{Synchronization}
 \subsubsection{A4}
-We disable interrupts in \texttt{timer\_sleep()} before calling \texttt{thread\_sleep()} (which is the critical section where we modify the sleeping list and then schedule another thread). Since interrupts are disabled for this small section, we won't be pre-empted by another thread, so sleeping a thread and then scheduling  another is an atomic operation.
+The function \tx{timer\_sleep()} disables interrupts before calling \tx{thread\_sleep()} (which is the critical section where we modify the sleeping list and then schedule 
+another thread). Since interrupts are disabled for this small section, we won't 
+be pre-empted by another thread, so sleeping a thread and then scheduling 
+another is an atomic operation.
 
-We switch to another thread when the current thread sleeps by calling \texttt{schedule()}, so although we could use a synchronisation primitive such as a semaphore to enforce invocation of \texttt{thread\_sleep()} as a critical section, \texttt{schedule()} asserts that interrupts are disabled, so it makes the most sense to disable interrupts for this critical section as they need to be off for \texttt{schedule()} anyway.
+After making the current thread sleep, another thread is run by calling \tx{schedule()}. Therefore, although we could use a synchronisation primitive like a semaphore to enforce invocation of \tx{thread\_sleep()} as a critical section, \tx{schedule()} asserts that interrupts are disabled, so it makes the most sense to disable interrupts for this critical section as they need to be off for \tx{schedule()} anyway.
 
 \subsubsection{A5}
-As we disable interrupts before calling \texttt{thread\_sleep()} from \texttt{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This prevents race conditions occurring between multiple threads where we may wake up sleeping threads and modify the list of sleeping threads.
+As we disable interrupts before calling \tx{thread\_sleep()} from \tx{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This operation prevents race conditions occurring between multiple threads where
+we may wake up sleeping threads and modify the sleep list.
 
-\subsubsection{A6}
-We chose this design because allows the system to perform a fairly low amount of processing in the timer interrupt handler. As \tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our initial design used an unordered list of sleeping threads, and each thread stored the number of ticks to sleep for. In the timer interrupt handler we would decrement the number of ticks each thread in the sleeping queue was sleeping for, and then wake up the thread when this count hit zero. This implementation was really inefficient because at every tick we were not just iterating over all the sleeping thread, but also modifying the state of each thread.
+\section{Rationale}
+This design was preferred because allows the system to perform a fairly low amount of processing in the timer interrupt handler. As tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our initial design used an unordered list of sleeping threads, and each thread stored the number of ticks to sleep for. In the timer interrupt handler we would decrement the number of ticks each thread in the sleeping queue was
+sleeping for, and then wake up the thread when this count hit zero. This implementation was really inefficient and time consuming because at every tick we were not just iterating over every sleeping thread , but also modifying the state of every thread.
+\newpage
+
 
 \section{Priority Scheduling}
 \subsection{Data Structures}
@@ -223,9 +230,32 @@ Should lock\_release(A), be called by Thread L:
     (9)  This waiter is unblocked
 \end{verbatim}
 
+\subsubsection{B6}
+Consider an implementation where the \tx{struct thread} has two integers representing the base priority and the donated priority. The function \tx{set\_priority} could recompute the base priority or set the base priority and recompute the donated priority to be the max of the two values and yield. Suppose that another thread donates its own priority while this re-computation is taking place. This thread may read the old value of donated priority, and write to the new value such that the donated priority is lower than the base priority as shown in the diagram below:
+\begin{verbatim}
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 7
+
+        But Consider: Thread B donating to thread A whilst set_pri is computing: 
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 6
+                      ^                        ^
+                      | Read 5                 | Write 6
+                      + 5 < 6 -----------------+
+        Thread B     donate(A)
+        pri: 6
+        dpri: 6 
+\end{verbatim}    
+
+The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which happen between processor instructions) can not cause a problem.
+
 \section{Advanced Scheduler}
 \subsection{Data Structures}
-\subsubsection{C1}
+\subsubsection{C1}\tx{int *priority}
 
 Added to \tx{struct thread}: \\
 \tab\tab \tx{int recent\_cpu;} \\
@@ -263,7 +293,8 @@ ticks   A   B   C   A   B   C   to run
 \end{verbatim}
 
 \subsubsection{C3}
-The only possible ambiguity is the choice of which thread to run when two or more threads have the same priority. However, the specification says that if there is more than one thread with the same priority, the scheduler must go through them following a round-robin order. In our implementation, when a thread yields, it is put back into the list of ready threads, and we took care of inserting after all the threads with the same priority.
+
+The specification does not clearly express whether the calculation of the priority for each thread is carried out before or after updating the \tx{recent\_cpu} value. While fulfilling the table, we assumed that \tx{recent\_cpu} is calculated first, and then the priority is updated. Our implementation of the advances scheduler matches this behaviour.  
 
 \subsubsection{C4}
 

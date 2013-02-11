@@ -555,7 +555,7 @@ thread_explicit_get_priority (struct thread *t)
   if (!list_empty(&t->lock_list)) {
     struct list_elem *e = list_begin (&t->lock_list);
     struct lock *l = list_entry(e, struct lock, elem);
-    return *l->semaphore.priority;
+    return MAX(*l->semaphore.priority, t->priority);
   }
   else {
     return t->priority;
