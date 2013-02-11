@@ -321,7 +321,8 @@ Added to \tx{thread.c}: \\
 \tab\tab Amount of clock ticks after which the priorities of the threads will be recomputed.
 \\\\
 \tab\tab \tx{static struct list thread\_mlfqs\_queue}\\
-\tab\tab Queue of the ready to run threads used by the mlfqs scheduler.
+\tab\tab A list of ready-to-run threads used by the mlfqs scheduler. By ordering the elements, simulates\\
+\tab\tab the 64 queues used by the scheduler.
 \\\\
 \tab\tab \tx{static long long mlfqs\_recompute\_ticks} \\
 \tab\tab Number of ticks until the thread priorities will be recomputed.
