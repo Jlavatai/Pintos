@@ -143,7 +143,7 @@ Added to \tx{struct semaphore}:
          |holder:NULL|holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
          +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
                                              +--------------------------------+
--thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+-thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
    Thread M: lock_acquire(a) completes
          +-----------------------+           +--------------------------------+
@@ -208,12 +208,12 @@ Nested donation is handled via the recursive step.
 Considering the case where data structure is as such:
 
 \begin{verbatim}
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
-                                              ---------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
@@ -228,6 +228,18 @@ Should lock\_release(A), be called by Thread L:
     (7)  The list of waiters is ensured sorted by descending priority
     (8)  The top priority waiter is popped off the list
     (9)  This waiter is unblocked
+\end{verbatim}
+
+At the end of this process, the data structure would be as such:
+
+\begin{verbatim}
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: NULL  |pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder:NULL|holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
+-thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
 \subsubsection{B6}
@@ -253,6 +265,20 @@ Consider an implementation where the \tx{struct thread} has two integers represe
 
 The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which happen between processor instructions) can not cause a problem.
 
+\subsubsection{B7} 
+
+This design was chosen due to a simpleness of implementation that should avoid 
+the major problems associated with priority donation, such as that given above. 
+In order to minimise the memory and processing footprint of this design, we 
+extensively used pointers such that data need only be updated once. 
+\\\\
+Initially we considered the two integer implementation with base priority and 
+donated priority. We decided against using this design due to the processing 
+overhead during multiple priority donation. We theorised that the donated 
+priority would have to be recomputed significantly often, whereas pointers to 
+locks need only be inserted (in an ordered way (expensive when a thread holds 
+many locks)) or removed from the list. 
+
 \section{Advanced Scheduler}
 \subsection{Data Structures}
 \subsubsection{C1}
@@ -276,20 +302,22 @@ Added to \tx{thread.c}: \\
 \tab\tab past minute.
 \newpage
 \subsubsection{C2}
-\begin{verbatim}
-timer  recent_cpu    priority   thread
-ticks   A   B   C   A   B   C   to run
------  --  --  --  --  --  --   ------
- 0      0   0   0  63  61  59      A
- 4      4   0   0  62  61  59      A  
- 8      8   0   0  61  61  59      B
-12      8   4   0  61  60  59      A
-16      12  4   0  60  60  59      B
-20      12  8   0  60  59  59      A     
-24      16  8   0  59  59  59      C
-28      16  8   4  59  59  58      B 
-32      16  12  4  59  58  58      A        
-36      20  12  4  58  58  58      C
+\begin{verbatim}     
+                     +------------------------------------------+
+                     | timer  recent_cpu    priority   thread   | 
+                     | ticks   A   B   C   A   B   C   to run   |  
+                     | -----  --  --  --  --  --  --   ------   |  
+                     |  0      0   0   0  63  61  59      A     |
+                     |  4      4   0   0  62  61  59      A     |  
+                     |  8      8   0   0  61  61  59      B     |
+                     | 12      8   4   0  61  60  59      A     |
+                     | 16      12  4   0  60  60  59      B     |
+                     | 20      12  8   0  60  59  59      A     |     
+                     | 24      16  8   0  59  59  59      C     |
+                     | 28      16  8   4  59  59  58      B     | 
+                     | 32      16  12  4  59  58  58      A     |        
+                     | 36      20  12  4  58  58  58      C     |
+                     +------------------------------------------+
 \end{verbatim}
 
 \subsubsection{C3}
