@@ -38,13 +38,11 @@ When a sleeping thread returns from \texttt{thread\_sleep()} after being woken u
 
 The list of sleeping threads is ordered by the \tx{wakeup\_tick} member
 which has been added to \tx{struct thread}. This is an absolute tick value that the thread 
-should sleep until, which is set when \tx{timer\_sleep()} is invoked. Thanks to this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
-timer interrupt handler) we can stop iteration as soon as a thread whose \tx{wakeup\_tick} value is no later than the current tick is found.
+should sleep until, which is set when \tx{timer\_sleep()} is invoked. Because of this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
+timer interrupt handler) we can stop iteration as soon as we reach a thread whose \tx{wakeup\_tick} value is no later than the current tick, which in most cases is just going to be the first or second element in the list.
 
-Furthermore, because the tick which we want the thread to wake up on is stored as
-an absolute value rather than a relative number of ticks to sleep for, we don't
-need to update any sleep state in the timer interrupt handler for the sleeping
-threads.
+Furthermore, because the tick which we want the thread to wake up on is stored as an absolute value rather than a relative number of ticks to sleep for, we don't
+need to update any sleep state in the timer interrupt handler for the sleeping threads.
 
 \subsection{Synchronization}
 \subsubsection{A4}
@@ -53,11 +51,10 @@ another thread). Since interrupts are disabled for this small section, we won't
 be pre-empted by another thread, so sleeping a thread and then scheduling 
 another is an atomic operation.
 
-After making the current thread sleep, another thread is run by calling \tx{schedule()}. Therefore, although we could use a synchronisation primitive like a semaphore to enforce invocation of \tx{thread\_sleep()} as a critical section, \tx{schedule()} asserts that interrupts are disabled, so it makes the most sense to disable interrupts for this critical section as they need to be off for \tx{schedule()} anyway.
+After making the current thread sleep, another thread is run by calling \tx{schedule()}. Therefore, although we could use a synchronisation primitive like a semaphore to enforce invocation of \tx{thread\_sleep()} as a critical section, \tx{schedule()} asserts that interrupts are disabled, so it makes the most sense to disable interrupts for this critical section as they need to be disabled for \tx{schedule()} anyway.
 
 \subsubsection{A5}
-As we disable interrupts before calling \tx{thread\_sleep()} from \tx{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This operation prevents race conditions occurring between multiple threads where
-we may wake up sleeping threads and modify the sleep list.
+As we disable interrupts before calling \tx{thread\_sleep()} from \tx{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This operation prevents race conditions occurring between multiple threads which call \texttt{timer\_sleep()}.
 
 \subsection{Rationale}
 \subsubsection{A6}
