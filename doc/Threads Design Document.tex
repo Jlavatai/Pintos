@@ -326,6 +326,8 @@ The specification does not clearly express whether the calculation of the priori
 
 \subsubsection{C4}
 
+Scheduling has been split between \texttt{thread\_tick()} which is called from the timer interrupt handler, and \texttt{next\_thread\_to\_run()}, which is called outside of an interrupt handler. The majority of the scheduling processing is done in the timer interrupt handler, which is where we may recalculate thread priorities, \textit{recent\_cpu} values and the system load average, and update the list which stores the next thread to run. As such, most of the code is in \texttt{thread\_tick()} and there is little in \texttt{next\_thread\_to\_run()}. This negatively impacts our performance as \texttt{thread\_tick()} is called every tick, and although we may not do recalculations every tick, we check whether we have to perform recalculations on every tick.
+
 \subsubsection{C5}
 
 One advantage of our implementation of the advanced scheduler is that we have only used one list to implement the 64 queues used by the scheduler. The list is ordered descending by priority, so we can always pick the thread with the highest priority to run by looking at the head of this list. This gives us a time complexity of $O(1)$ for choosing the next thread to run, as opposed to $O(n)$ if we used 64 separate lists (we'd have to do a search from the list for priority $63$ downwards).
