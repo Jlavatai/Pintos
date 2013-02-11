@@ -98,16 +98,17 @@ static long long mlfqs_recompute_ticks;
 static fixed_point thread_mlfqs_load_avg;        /* The system load average. */
 
 static void thread_mlfqs_init (void);
-void thread_mlfqs_recompute_load_avg (void);
+static void thread_mlfqs_recompute_load_avg (void);
 static void thread_mlfqs_recompute_all_priorities (void);
-void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
+static void thread_mlfqs_recompute_priority (struct thread *t, void *aux);
 static int thread_mlfqs_get_recent_cpu (struct thread *t);
-void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
+static void thread_mlfqs_recompute_recent_cpu (struct thread *t, void *aux);
 static void thread_mlfqs_recompute_all_recent_cpu (void);
 static int thread_mlfqs_get_nice (struct thread *t);
 static bool thread_mlfqs_less_function(const struct list_elem *a,
                                        const struct list_elem *b,
                                        void *aux);
+static void thread_mlfqs_print_threads(void);
 
 
 
@@ -886,7 +887,7 @@ thread_mlfqs_init(void)
   list_init (&thread_mlfqs_queue);
 }
 
-void
+static void
 thread_mlfqs_recompute_load_avg(void)
 {
   ASSERT(thread_mlfqs);
@@ -905,7 +906,7 @@ thread_mlfqs_recompute_load_avg(void)
   thread_mlfqs_load_avg = ADD_FIXED(first_sum, second_sum);
 }
 
-void
+static void
 thread_mlfqs_recompute_priority(struct thread *t, void *aux UNUSED)
 {
   ASSERT(thread_mlfqs);
@@ -946,7 +947,7 @@ thread_mlfqs_recompute_all_recent_cpu(void)
   thread_foreach (&thread_mlfqs_recompute_recent_cpu, NULL);
 }
 
-void
+static void
 thread_mlfqs_recompute_recent_cpu(struct thread *t, void *aux UNUSED)
 {
   ASSERT(thread_mlfqs);
@@ -984,7 +985,7 @@ thread_mlfqs_less_function(const struct list_elem *a,
   return thread_a->priority > thread_b->priority;
 }
 
-void
+static void
 thread_mlfqs_print_threads(void)
 {
   struct list_elem *e;
