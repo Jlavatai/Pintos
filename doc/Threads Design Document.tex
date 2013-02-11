@@ -15,24 +15,22 @@
 \subsection{Data Structures}
 
 Added to enum \texttt{thread\_status}: \\
-\tab \tab \texttt{THREAD\_SLEEP} \\ \\
-\tab \tab Member of the \texttt{enum thread\_status}, representing a sleeping thread.
+\tab \tab \texttt{THREAD\_SLEEP} \\
+\tab \tab Denotes a sleeping thread.
 \\\\
 Added to \texttt{struct\_thread}: \\
 \tab\tab \texttt{vlong long wakeup\_tick} \\
-\tab\tab If a thread is is sleeping, this the tick it's going to be woken up on.
+\tab\tab If a thread is is sleeping, this is the tick it's going to be woken up on.
 \\\\
 Added to \texttt{thread.c} as a global variable: \\
 \tab\tab \texttt{static struct list sleeping\_list} \\
-\tab\tab Ordered list of processes currently sleeping.\\ 
-\tab\tab Processes in this list 
-   have state set to \texttt{THREAD\_SLEEP}. \\
-\tab\tab This list is ordered suck that the head
-   is the next thread to be woken up.
+\tab\tab List of threads currently sleeping ordered by the tick for the thread to wake up on.
 
 \subsection{Algorithms}
 \subsubsection{A2}
-The first operation that the function \texttt{timer\_sleep} carries out is disabling the interrupts, then it calls out to the new method \texttt{thread\_sleep()}. This function calculates the tick the thread needs to be woken up on, sets the status of the thread to \texttt{THREAD\_SLEEP}, then adds it to the sleeping list. Finally, \texttt{thread\_sleep()} will call \texttt{schedule}, in order to choose a different thread to run. When returning from \texttt{thread\_sleep()}, the interrupts will be re-enabled. Putting a thread to sleep should be an atomic operation because it accesses the kernel's thread structure: if an interrupt occurs while writing to the sleeping threads list, this will cause a fatal exception. 
+The first operation that \texttt{timer\_sleep()} carries out is disabling interrupts. It then calls out to the new method \texttt{thread\_sleep()}, which calculates the tick that the thread can be woken up from, sets the status of the thread to \texttt{THREAD\_SLEEP}, then adds it to the list of sleeping threads. Finally, \texttt{thread\_sleep()} calls \texttt{schedule()} in order to schedule a different thread. Note that we don't yield here (using \texttt{thread\_yield()}) as that would add the thread to the ready list, which we don't want.
+
+When a sleeping thread returns from \texttt{thread\_sleep()} after being woken up, interrupts will be restored to their old level, which restores the correct state.
 
 \subsubsection{A3}
 
