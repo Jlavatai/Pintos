@@ -44,8 +44,6 @@ an absolute value rather than a relative number of ticks to sleep for, we don't
 need to update any sleep state in the timer interrupt handler for the sleeping
 threads.
 
-\emph{Add example with values?}
-
 \subsection{Synchronization}
 \subsubsection{A4}
 The function \tx{timer\_sleep()} disables interrupts before calling \tx{thread\_sleep()} (which is the critical section where we modify the sleeping list and then schedule 
@@ -59,9 +57,10 @@ After making the current thread sleep, another thread is run by calling \tx{sche
 As we disable interrupts before calling \tx{thread\_sleep()} from \tx{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This operation prevents race conditions occurring between multiple threads where
 we may wake up sleeping threads and modify the sleep list.
 
-\section{Rationale}
-This design was preferred because allows the system to perform a fairly low amount of processing in the timer interrupt handler. As tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our initial design used an unordered list of sleeping threads, and each thread stored the number of ticks to sleep for. In the timer interrupt handler we would decrement the number of ticks each thread in the sleeping queue was
-sleeping for, and then wake up the thread when this count hit zero. This implementation was really inefficient and time consuming because at every tick we were not just iterating over every sleeping thread , but also modifying the state of every thread.
+\subsection{Rationale}
+\subsubsection{A6}
+We chose this design because it allows the system to perform a fairly low amount of processing in the timer interrupt handler. As \tx{thread\_sleep\_ticker()} is called every tick, this is important. In our initial design we used an unordered list of sleeping threads, and each thread stored the number of ticks to sleep for. In the timer interrupt handler we would decrement the number of ticks each thread in the sleeping queue was
+sleeping for, and then wake up the thread when this count hit zero. This implementation was really inefficient because at every tick we were not just iterating over every sleeping thread, but also modifying the state of these threads.
 \newpage
 
 
