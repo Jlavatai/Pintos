@@ -316,6 +316,11 @@ Should lock_release(A), be called by Thread L:
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+<<<<<<< HEAD
+=======
+---- RATIONALE ----
+
+>>>>>>> 08143e29312584da36121d04f04889f045eebbb4
 Consider an implementation where the struct thread has two ints representing the base pri
 and the donated pri. Set priority could recompute the base pri or set the base pri and recompute the donated pri to be the max of the two values and yield. Suppose that another thread donates its own priority while this recomputation is taking place. This thread may read the old value of donated pri, and write to the new value such that the donated priority is lower than the base pri.
 
@@ -337,13 +342,13 @@ and the donated pri. Set priority could recompute the base pri or set the base p
                 
 
 
----- RATIONALE ----
-
->> B7: Why did you choose this design?  In what ways is it superior to
->> another design you considered?
-This design was chosen due to a simpleness of implementation that should avoid the major problems associated with priority donation, such as that given above. In order to minimise the memory and processing footprint of this design, we extensively used pointers such that data need only be updated once. 
 
 =======
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+
+This design was chosen due to a simpleness of implementation that should avoid the major problems associated with priority donation, such as that given above. In order to minimise the memory and processing footprint of this design, we extensively used pointers such that data need only be updated once. 
 
 
               ADVANCED SCHEDULER
