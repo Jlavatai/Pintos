@@ -442,6 +442,16 @@ with the same priority.
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
+Scheduling has been split between thread tick() which is called from the timer
+interrupt handler, and next thread to run(), which is called outside of an
+interrupt handler. The majority of the scheduling processing is done in the
+timer interrupt handler, which is where we may recalculate thread priorities,
+recent cpu values and the system load average, and update the list which stores
+the next thread to run. As such, most of the code is in thread tick() and there
+is little in next thread to run(). This negatively impacts our performance as
+thread tick() is called every tick, and although we may not do recalculations
+every tick, we check whether we have to perform recalculations on every tick.
+
 ---- RATIONALE ----
 
 >> C5: Briefly critique your design, pointing out advantages and
