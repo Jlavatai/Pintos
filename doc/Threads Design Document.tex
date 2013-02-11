@@ -34,6 +34,7 @@ The first operation that \texttt{timer\_sleep()} carries out is disabling interr
 
 When a sleeping thread returns from \texttt{thread\_sleep()} after being woken up, interrupts will be restored to their old level, which restores the correct state.
 
+\newpage
 \subsubsection{A3}
 
 The list of sleeping threads is ordered by the \tx{wakeup\_tick} member
@@ -200,7 +201,8 @@ Consider the case where there is a data structure as below:
 -thread_get_priority(L)=2 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 \end{verbatim}
 
-Should High priority thread (H) call lock\_acquire(B), which is held by thread M, the sequence of events is such:
+\newpage
+Should High priority thread (H) call \texttt{lock\_acquire(B)}, which is held by thread M, the sequence of events is such:
 \begin{verbatim}
   (1) lock_available(B) returns false
   (2) The priorities of Thread M and thread H are compared
@@ -230,6 +232,7 @@ At the end of this logical sequence, the data structure would be so:
 
 Nested donation is handled via the recursive step.
 
+\newpage
 \subsubsection{B5}
 
 Considering the case where data structure is as such:
@@ -301,12 +304,7 @@ the major problems associated with priority donation, such as that given above.
 In order to minimise the memory and processing footprint of this design, we 
 extensively used pointers such that data need only be updated once. 
 \\\\
-Initially we considered the two integer implementation with base priority and 
-donated priority being integer members . We decided against using this design due to the processing 
-overhead during multiple priority donation. We theorised that the donated 
-priority would have to be recomputed significantly often, whereas pointers to 
-locks need only be inserted (in an ordered way (expensive when a thread holds 
-many locks)) or removed from the list. 
+Initially we considered the two integer implementation with base priority and donated priority being integer members. We decided against using this design due to the processing overhead during multiple priority donation. We theorised that the donated priority would have to be recomputed significantly often, whereas pointers to locks need only be inserted in the correct order or removed from the list. 
 
 \section{Advanced Scheduler}
 \subsection{Data Structures}
@@ -330,7 +328,7 @@ Added to \tx{thread.c}: \\
 \tab\tab \tx{static int mlfqs\_load\_avg}\\
 \tab\tab The system's load average, an estimate of the number of threads ready to be run in the \\
 \tab\tab past minute.
-\newpage
+
 \subsubsection{C2}
 \begin{verbatim}     
                      +------------------------------------------+
@@ -350,6 +348,7 @@ Added to \tx{thread.c}: \\
                      +------------------------------------------+
 \end{verbatim}
 
+\newpage
 \subsubsection{C3}
 
 The specification does not clearly express whether the calculation of the priority for each thread is carried out before or after updating the \tx{recent\_cpu} value. While fulfilling the table, we assumed that \tx{recent\_cpu} is calculated first, and then the priority is updated. Our implementation of the advances scheduler matches this behaviour.  
