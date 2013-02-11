@@ -310,18 +310,20 @@ Should lock_release(A), be called by Thread L:
     (8)  The top priority waiter is popped off the list
     (9)  This waiter is unblocked
 
-
-
 ---- SYNCHRONIZATION ----
 
 >> B6: Describe a potential race in thread_set_priority() and explain
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+Speed, Works..etc
 
               ADVANCED SCHEDULER
               ==================

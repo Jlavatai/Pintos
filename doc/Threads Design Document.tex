@@ -91,62 +91,62 @@ Added to \tx{struct semaphore}:
 
 \subsubsection{B2}
 \begin{verbatim}
---------------------------------------------------------------------------------
---------------------------------- ASCII Diagram: -------------------------------
---------------------------------- Initial Setup: -------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |    M     |    H     |-
----------|pri:NULL   |pri:NULL   |-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder:NULL|holder:NULL|-----------|locks:[]  |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:0 |blocker:0 |
---------------------------------------------------------------------------------
+                                +----------------+
+                                - ASCII Diagram: -
+  Initial Setup:                +----------------+
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |    M     |    H     |
+         |pri:NULL   |pri:NULL   |           |pri: 1    |pri: 2    |pri: 3    |
+         |holder:NULL|holder:NULL|           |locks:[]  |locks:[]  |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:0 |blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=1 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 ================================================================================
--- Thread L: lock_acquire(A); ----- Thread M: lock_acquire(b) ------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |    M     |    H     |-
----------|pri: L->pri|pri: M->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[]  |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:0 |blocker:0 |-
---------------------------------------------------------------------------------
+  Thread L: lock_acquire(A);      Thread M: lock_acquire(b) 
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |    M     |    H     |
+         |pri: L->pri|pri: M->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[]  |locks:[]  |locks:[]  |
+         -------------------------           |blocker:0 |blocker:0 |blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=1 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 ================================================================================
--- Thread M: lock_acquire(a) ---------------------------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |    H     |-
----------|pri: M->pri|pri: M->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:0 |-
---------------------------------------------------------------------------------
+  Thread M: lock_acquire(a) 
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |    H     |
+         |pri: M->pri|pri: M->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[]  |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=2 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 ================================================================================
--- Thread H: lock_acquire(b) ---------------------------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+  Thread H: lock_acquire(b)
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
--- Thread L: lock_release(a) -- about to unblock Thread M: lock_acquire(a) -----
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: NULL  |pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder:NULL|holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+  Thread L: lock_release(a) -- about to unblock Thread M: lock_acquire(a) 
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: NULL  |pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder:NULL|holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
--- Thread M: lock_acquire(a) completes -----------------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |    M     |H-blocked |-
----------|pri: M->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: M  |holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:0 |blocker:&M|-
---------------------------------------------------------------------------------
+   Thread M: lock_acquire(a) completes
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |    M     |H-blocked |
+         |pri: M->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: M  |holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:0 |blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
-================================================================================
+
 --And so on and so forth -------------------------------------------------------
 \end{verbatim}
 
@@ -157,11 +157,12 @@ The waiters list for a semaphore is ordered by descending priority. When choosin
 Consider the case where there is a data structure as below:
 
 \begin{verbatim}
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |    H     |-
----------|pri: M->pri|pri: M->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:0 |-
---------------------------------------------------------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |    H     |
+         |pri: M->pri|pri: M->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[]  |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=2 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 \end{verbatim}
 
@@ -184,11 +185,12 @@ Should High priority thread (H) call lock\_acquire(B), which is held by thread M
 At the end of this logical sequence, the data structure would be so:
 
 \begin{verbatim}
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
@@ -204,7 +206,7 @@ Considering the case where data structure is as such:
 ---------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
 ---------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
 ---------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+                                              ---------------------------------
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
