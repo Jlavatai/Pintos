@@ -355,7 +355,7 @@ The specification does not clearly express whether the calculation of the priori
 
 \subsubsection{C4}
 
-Scheduling has been split between \texttt{thread\_tick()} which is called from the timer interrupt handler, and \texttt{next\_thread\_to\_run()}, which is called outside of an interrupt handler. The majority of the scheduling processing is done in the timer interrupt handler, which is where we may recalculate thread priorities, \textit{recent\_cpu} values and the system load average, and update the list which stores the next thread to run. As such, most of the code is in \texttt{thread\_tick()} and there is little in \texttt{next\_thread\_to\_run()}. This negatively impacts our performance as \texttt{thread\_tick()} is called every tick, and although we may not do recalculations every tick, we check whether we have to perform recalculations on every tick.
+Scheduling has been split between \texttt{thread\_tick()} which is called from the timer interrupt handler, and \texttt{next\_thread\_to\_run()}, which is called outside of an interrupt handler. The majority of the scheduling processing is done in the timer interrupt handler, which is where we may recalculate thread priorities, \texttt{recent\_cpu} values and the system load average, and update the list which stores the next thread to run. As such, most of the code is in \texttt{thread\_tick()} and there is little in \texttt{next\_thread\_to\_run()}. This negatively impacts our performance as \texttt{thread\_tick()} is called every tick, and although we may not do recalculations every tick, we check whether we have to perform recalculations on every tick.
 
 \subsubsection{C5}
 
@@ -363,9 +363,9 @@ One advantage of our implementation of the advanced scheduler is that we have on
 
 However, in our implementation queuing threads is more expensive, as we call \texttt{list\_insert\_ordered()} on the single list rather than if we had 64 lists where we would simply call \texttt{list\_push\_back()} on the list for the queue with the appropriate priority. We also have to call \texttt{list\_sort()} on the list when we recompute priorities rather than if we had 64 lists where we'd just the threads whose priorities have changed between lists, which will be more expensive if only a few thread's priorities have changed.
 \\ \\
-One refinement we could make to our current design is recomputing all thread priorities and all \textit{recent\_cpu} values at the same time every second if the number of ticks per second is a multiple of the thread priority recompilation interval.
+One refinement we could make to our current design is recomputing all thread priorities and all \texttt{recent\_cpu} values at the same time every second if the number of ticks per second is a multiple of the thread priority recompilation interval.
 
-As the current number of ticks per second (100 ticks) is a multiple of the tick interval for which we recompute all priorities (4 ticks), when we recompute all \textit{recent\_cpu} values every second, we could recompute all the thread priorities at the same time, as both processes require that we loop over the list of all threads; performing these two steps together and iterating over the list once would be more efficient, and would improve our implementation as we want to reduce the time spent in the timer interrupt handler.
+As the current number of ticks per second (100 ticks) is a multiple of the tick interval for which we recompute all priorities (4 ticks), when we recompute all \texttt{recent\_cpu} values every second, we could recompute all the thread priorities at the same time, as both processes require that we loop over the list of all threads; performing these two steps together and iterating over the list once would be more efficient, and would improve our implementation as we want to reduce the time spent in the timer interrupt handler.
 
 \subsubsection{C6}
 
