@@ -6,149 +6,168 @@
 
 \begin{document}
 
-\title{OS211 \\ Task1: Threads \\ Design Document}
+\title{OS 211 \\ Task1: Threads \\ Design Document}
 \author{Francesco Di Mauro, Thomas Rooney, Alex Rozanski}
+\date{\today}
 \maketitle
 
 
 \section{Alarm Clock}
 \subsection{Data Structures}
+\subsubsection{A1}
 
 Added to enum \texttt{thread\_status}: \\
-\tab \tab \texttt{THREAD\_SLEEP} \\ \\
-\tab \tab Member of the \texttt{enum thread\_status}, representing a sleeping thread.
+\tab \tab \texttt{THREAD\_SLEEP} \\
+\tab \tab Denotes a sleeping thread.
 \\\\
 Added to \texttt{struct\_thread}: \\
-\tab\tab \texttt{vlong long wakeup\_tick} \\
-\tab\tab If a thread is is sleeping, this the tick it's going to be woken up on.
+\tab\tab \texttt{long long wakeup\_tick} \\
+\tab\tab If a thread is is sleeping, this is the tick it's going to be woken up on.
 \\\\
 Added to \texttt{thread.c} as a global variable: \\
 \tab\tab \texttt{static struct list sleeping\_list} \\
-\tab\tab Ordered list of processes currently sleeping.\\ 
-\tab\tab Processes in this list 
-   have state set to \texttt{THREAD\_SLEEP}. \\
-\tab\tab This list is ordered suck that the head
-   is the next thread to be woken up.
+\tab\tab List of threads currently sleeping ordered by the tick for the thread to wake up on.
 
 \subsection{Algorithms}
 \subsubsection{A2}
-The first operation that the function \texttt{timer\_sleep} carries out is disabling the interrupts, then it calls out to the new method \texttt{thread\_sleep()}. This function calculates the tick the thread needs to be woken up on, sets the status of the thread to \texttt{THREAD\_SLEEP}, then adds it to the sleeping list. Finally, \texttt{thread\_sleep()} will call \texttt{schedule}, in order to choose a different thread to run. When returning from \texttt{thread\_sleep()}, the interrupts will be re-enabled. Putting a thread to sleep should be an atomic operation because it accesses the kernel's thread structure: if an interrupt occurs while writing to the sleeping threads list, this will cause a fatal exception. 
+The first operation that \texttt{timer\_sleep()} carries out is disabling interrupts. It then calls out to the new method \texttt{thread\_sleep()}, which calculates the tick that the thread can be woken up from, sets the status of the thread to \texttt{THREAD\_SLEEP}, then adds it to the list of sleeping threads. Finally, \texttt{thread\_sleep()} calls \texttt{schedule()} in order to schedule a different thread. Note that we don't yield here (using \texttt{thread\_yield()}) as that would add the thread to the ready list, which we don't want.
 
+When a sleeping thread returns from \texttt{thread\_sleep()} after being woken up, interrupts will be restored to their old level, which restores the correct state.
+
+\newpage
 \subsubsection{A3}
 
 The list of sleeping threads is ordered by the \tx{wakeup\_tick} member
 which has been added to \tx{struct thread}. This is an absolute tick value that the thread 
-should sleep until, which is set when \tx{timer\_sleep()} is invoked. Thanks to this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
-timer interrupt handler) we can stop iteration as soon as a thread whose
-\tx{wakeup\_tick} value is later than the current tick is found.
-\\
-Furthermore, because the tick which we want the thread to wake up on is stored as
-an absolute value rather than a relative number of ticks to sleep for, we don't
-need to update any sleep state in the timer interrupt handler for the sleeping
-threads.
+should sleep until, which is set when \tx{timer\_sleep()} is invoked. Because of this ordering, when we iterate over the sleeping threads in \tx{thread\_sleep\_ticker()} (which is called from the
+timer interrupt handler) we can stop iteration as soon as we reach a thread whose \tx{wakeup\_tick} value is no later than the current tick, which in most cases is just going to be the first or second element in the list.
 
-\emph{Add example with values?}
+Furthermore, because the tick which we want the thread to wake up on is stored as an absolute value rather than a relative number of ticks to sleep for, we don't
+need to update any sleep state in the timer interrupt handler for the sleeping threads.
 
 \subsection{Synchronization}
+\subsubsection{A4}
+The function \tx{timer\_sleep()} disables interrupts before calling \tx{thread\_sleep()} (which is the critical section where we modify the sleeping list and then schedule 
+another thread). Since interrupts are disabled for this small section, we won't 
+be pre-empted by another thread, so sleeping a thread and then scheduling 
+another is an atomic operation.
 
-We chose this design because allows the system to perform a fairly low amount of processing in the
-timer interrupt handler. As tx{thread\_sleep\_ticker()} is called every tick, this feature is crucial. Our
-initial design used an unordered list of sleeping threads, and each thread
-stored the number of ticks to sleep for. In the timer interrupt handler we
-would decrement the number of ticks each thread in the sleeping queue was
-sleeping for, and then wake up the thread when this count hit zero. This implementation was
-really inefficient because at every tick we were not just iterating over every sleeping
-thread , but also modifying the state of every thread.
+After making the current thread sleep, another thread is run by calling \tx{schedule()}. Therefore, although we could use a synchronisation primitive like a semaphore to enforce invocation of \tx{thread\_sleep()} as a critical section, \tx{schedule()} asserts that interrupts are disabled, so it makes the most sense to disable interrupts for this critical section as they need to be disabled for \tx{schedule()} anyway.
+
+\subsubsection{A5}
+As we disable interrupts before calling \tx{thread\_sleep()} from \tx{timer\_sleep()}, this ensures that timer interrupts aren't handled during the invocation of this function. This operation prevents race conditions occurring between multiple threads which call \texttt{timer\_sleep()}.
+
+\subsection{Rationale}
+\subsubsection{A6}
+We chose this design because it allows the system to perform a fairly low amount of processing in the timer interrupt handler. As \tx{thread\_sleep\_ticker()} is called every tick, this is important. In our initial design we used an unordered list of sleeping threads, and each thread stored the number of ticks to sleep for. In the timer interrupt handler we would decrement the number of ticks each thread in the sleeping queue was
+sleeping for, and then wake up the thread when this count hit zero. This implementation was really inefficient because at every tick we were not just iterating over every sleeping thread, but also modifying the state of these threads.
+\newpage
+
 
 \section{Priority Scheduling}
 \subsection{Data Structures}
+\subsubsection{B1}
 
 Added to \tx{struct thread}: \\\\
 \tab\tab \tx{struct list lock\_list}:\\
-\tab\tab This is an ordered list of the thread's held locks, with highest priority first. \\
+\tab\tab An ordered list of the thread's held locks, with highest priority first. \\
 \tab\tab They are only added when they have also been donated to.
 \\\\
  \tab\tab   \tx{int priority}:\\
- \tab\tab This contains the thread's default, non-donated-to, priority.
+ \tab\tab Contains the thread's default, non-donated-to, priority.
 \\\\
 \tab\tab \tx{struct lock *blocker}:\\
-\tab\tab This is a pointer to the lock that is currently blocking it, or NULL \\
-\tab\tab should the thread not be currently blocked by a lock.
+\tab\tab A pointer to the lock that is currently blocking the thread, or \texttt{NULL} \\
+\tab\tab if the thread is not currently blocked by a lock.
     \\\\    
 Added to \tx{struct lock}:
 \\\\
 \tab\tab bool \tx{donated\_flag}:\\
-\tab\tab This is a flag indicating whether the lock has donated its priority to its holder, or not.
+\tab\tab A flag indicating whether the lock has donated its priority to its holder, or not.
 \\\\
 \tab\tab \tx{struct list\_elem elem}:\\
-\tab\tab This is a \tx{list\_elem} structure such that the lock can be tracked via the pintos list structure -\\
-\tab\tab meaning a thread can know which locks it currently holds.
+\tab\tab A \tx{list\_elem} structure such that the lock can be added to a list. \\
 \\\\
 Added to \tx{struct semaphore}:
   \\\\  
 \tab\tab \tx{int *priority}:\\
-\tab\tab This is a pointer to a thread's priority value, this is initially the thread that holds it,\\
-\tab\tab but is updated to the greatest priority of the thread's currently in it's wait queue.
+\tab\tab A pointer to a thread's priority value. This initially points to the priority of the thread\\
+\tab\tab that holds the semaphore.
 \newpage
 
 \subsubsection{B2}
+
+Priority donation is controlled by each thread containing a list of pointers to the locks it currently holds, if those locks also have been donated to. The logic behind donation requires that the lock is only donated to and added to this list when the donation priority is greater than the thread's current priority. As such, the thread's current priority is determined through one of two ways:
+
+\begin{enumerate}
+\item If \tx{lock\_list} is empty, the thread's priority is determined by \tx{thread->priority}.
+\item Otherwise, the thread's priority is determined by the priority pointed to by the lock at the head of the \tx{lock\_list}.
+\end{enumerate}
+
+The lock's priority is held in the lock's semaphore. This priority is updated to the greatest priority of all the threads currently waiting on the semaphore. As this priority is held in a pointer, an update to the pointer's location to a higher priority thread passes through into the scheduling logic. However, the lock is only donated once, on the first instance of the priority donation. After this, only its priority pointer updates should a higher priority thread attempt to acquire.
+
+Whenever a higher priority thread tries to acquire a lock, the lock pointer is `donated' to the lock holder. It is inserted in an ordered way (by priority, descending) to the thread's lock list.
+
+If the lock holder is currently blocked, and the thread's blocking-lock's holder has a lower priority, then the currently blocking-lock has its priority pointer updated to point to the thread which has this higher priority. This logic recurses, updating the blocking locks in a chain.
+
+
 \begin{verbatim}
---------------------------------------------------------------------------------
---------------------------------- ASCII Diagram: -------------------------------
---------------------------------- Initial Setup: -------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |    M     |    H     |-
----------|pri:NULL   |pri:NULL   |-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder:NULL|holder:NULL|-----------|locks:[]  |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:0 |blocker:0 |
---------------------------------------------------------------------------------
+                                +----------------+
+                                - ASCII Diagram: -
+  Initial Setup:                +----------------+
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |    M     |    H     |
+         |pri:NULL   |pri:NULL   |           |pri: 1    |pri: 2    |pri: 3    |
+         |holder:NULL|holder:NULL|           |locks:[]  |locks:[]  |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:0 |blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=1 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 ================================================================================
--- Thread L: lock_acquire(A); ----- Thread M: lock_acquire(b) ------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |    M     |    H     |-
----------|pri: L->pri|pri: M->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[]  |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:0 |blocker:0 |-
---------------------------------------------------------------------------------
+  Thread L: lock_acquire(A);      Thread M: lock_acquire(b) 
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |    M     |    H     |
+         |pri: L->pri|pri: M->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[]  |locks:[]  |locks:[]  |
+         -------------------------           |blocker:0 |blocker:0 |blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=1 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 ================================================================================
--- Thread M: lock_acquire(a) ---------------------------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |    H     |-
----------|pri: M->pri|pri: M->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:0 |-
---------------------------------------------------------------------------------
+  Thread M: lock_acquire(a) 
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |    H     |
+         |pri: M->pri|pri: M->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[]  |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=2 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 ================================================================================
--- Thread H: lock_acquire(b) ---------------------------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+  Thread H: lock_acquire(b)
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
--- Thread L: lock_release(a) -- about to unblock Thread M: lock_acquire(a) -----
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: NULL  |pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder:NULL|holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
--thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
-================================================================================
--- Thread M: lock_acquire(a) completes -----------------------------------------
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |    M     |H-blocked |-
----------|pri: M->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: M  |holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:0 |blocker:&M|-
---------------------------------------------------------------------------------
+  Thread L: lock_release(a) -- about to unblock Thread M: lock_acquire(a) 
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: NULL  |pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder:NULL|holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
+   Thread M: lock_acquire(a) completes
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |    M     |H-blocked |
+         |pri: M->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: M  |holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:0 |blocker:&M|
+                                             +--------------------------------+
+-thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+
 --And so on and so forth -------------------------------------------------------
 \end{verbatim}
 
@@ -159,15 +178,17 @@ The waiters list for a semaphore is ordered by descending priority. When choosin
 Consider the case where there is a data structure as below:
 
 \begin{verbatim}
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |    H     |-
----------|pri: M->pri|pri: M->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[]  |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:0 |-
---------------------------------------------------------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |    H     |
+         |pri: M->pri|pri: M->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[]  |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:0 |
+                                             +--------------------------------+
 -thread_get_priority(L)=2 - thread_get_priority(M)=2 - thread_get_priority(H)=3-
 \end{verbatim}
 
-Should High priority thread (H) call lock\_acquire(B), which is held by thread M, the sequence of events is such:
+\newpage
+Should High priority thread (H) call \texttt{lock\_acquire(B)}, which is held by thread M, the sequence of events is such:
 \begin{verbatim}
   (1) lock_available(B) returns false
   (2) The priorities of Thread M and thread H are compared
@@ -186,27 +207,29 @@ Should High priority thread (H) call lock\_acquire(B), which is held by thread M
 At the end of this logical sequence, the data structure would be so:
 
 \begin{verbatim}
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
 Nested donation is handled via the recursive step.
 
+\newpage
 \subsubsection{B5}
 
 Considering the case where data structure is as such:
 
 \begin{verbatim}
---------------------------------------------------------------------------------
-- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
----------|pri: H->pri|pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
----------|holder: L  |holder: M  |-----------|locks:[A] |locks:[B] |locks:[]  |-
----------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
---------------------------------------------------------------------------------
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: H->pri|pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder: L  |holder: M  |           |locks:[A] |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
 -thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 \end{verbatim}
 
@@ -223,6 +246,52 @@ Should lock\_release(A), be called by Thread L:
     (9)  This waiter is unblocked
 \end{verbatim}
 
+At the end of this process, the data structure would be as such:
+
+\begin{verbatim}
+         +-----------------------+           +--------------------------------+
+  Locks: |     A     |     B     |  Threads: |    L     |M-blocked |H-blocked |
+         |pri: NULL  |pri: H->pri|           |pri: 1    |pri: 2    |pri: 3    |
+         |holder:NULL|holder: M  |           |locks:[]  |locks:[B] |locks:[]  |
+         +-----------------------+           |blocker:0 |blocker:&L|blocker:&M|
+                                             +--------------------------------+
+-thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+\end{verbatim}
+\newpage
+\subsubsection{B6}
+Consider an implementation where the \tx{struct thread} has two integers representing the base priority and the donated priority. The function \tx{set\_priority} could recompute the base priority or set the base priority and recompute the donated priority to be the max of the two values and yield. Suppose that another thread donates its own priority while this re-computation is taking place. This thread may read the old value of donated priority, and write to the new value such that the donated priority is lower than the base priority as shown in the diagram below:
+\begin{verbatim}
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 7
+
+        But Consider: Thread B donating to thread A whilst set_pri is computing: 
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 6
+                      ^                        ^
+                      | Read 5                 | Write 6
+                      + 5 < 6 -----------------+
+        Thread B     donate(A)
+        pri: 6
+        dpri: 6 
+\end{verbatim}    
+
+The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which can only happen between processor instructions) can not cause a problem.
+
+In this implementation the way it could be easily avoided would be to use a static, kernel-space lock that is only acquired and released in \tx{thread\_set\_priority} and \tx{thread\_donate}. This would lock execution of setting priority and donating priority such that they could never execute at the same time, and synchronisation race conditions, such as that shown above, could never occur.
+
+\subsubsection{B7} 
+
+This design was chosen due to a simpleness of implementation that should avoid 
+the major problems associated with priority donation, such as that given above. 
+In order to minimise the memory and processing footprint of this design, we 
+extensively used pointers such that data need only be updated once. 
+\\\\
+Initially we considered a two-integer implementation with base priority and donated priority being integer members. We decided against using this design due to the processing overhead during multiple priority donation. We theorised that the donated priority would have to be recomputed significantly often, whereas pointers to locks need only be inserted in the correct order or removed from the list. 
+
 \section{Advanced Scheduler}
 \subsection{Data Structures}
 \subsubsection{C1}
@@ -236,7 +305,8 @@ Added to \tx{thread.c}: \\
 \tab\tab Amount of clock ticks after which the priorities of the threads will be recomputed.
 \\\\
 \tab\tab \tx{static struct list thread\_mlfqs\_queue}\\
-\tab\tab Queue of the ready to run threads used by the mlfqs scheduler.
+\tab\tab A list of ready-to-run threads used by the mlfqs scheduler. By ordering the elements, simulates\\
+\tab\tab the 64 queues used by the scheduler.
 \\\\
 \tab\tab \tx{static long long mlfqs\_recompute\_ticks} \\
 \tab\tab Number of ticks until the thread priorities will be recomputed.
@@ -244,28 +314,47 @@ Added to \tx{thread.c}: \\
 \tab\tab \tx{static int mlfqs\_load\_avg}\\
 \tab\tab The system's load average, an estimate of the number of threads ready to be run in the \\
 \tab\tab past minute.
-\newpage
+
 \subsubsection{C2}
-\begin{verbatim}
-timer  recent_cpu    priority   thread
-ticks   A   B   C   A   B   C   to run
------  --  --  --  --  --  --   ------
- 0      0   0   0  63  61  59      A
- 4      4   0   0  62  61  59      A  
- 8      8   0   0  61  61  59      B
-12      8   4   0  61  60  59      A
-16      12  4   0  60  60  59      B
-20      12  8   0  60  59  59      A     
-24      16  8   0  59  59  59      C
-28      16  8   4  59  59  58      B 
-32      16  12  4  59  58  58      A        
-36      20  12  4  58  58  58      C
+\begin{verbatim}     
+                     +------------------------------------------+
+                     | timer  recent_cpu    priority   thread   | 
+                     | ticks   A   B   C   A   B   C   to run   |  
+                     | -----  --  --  --  --  --  --   ------   |  
+                     |  0      0   0   0  63  61  59      A     |
+                     |  4      4   0   0  62  61  59      A     |  
+                     |  8      8   0   0  61  61  59      B     |
+                     | 12      8   4   0  61  60  59      A     |
+                     | 16      12  4   0  60  60  59      B     |
+                     | 20      12  8   0  60  59  59      A     |     
+                     | 24      16  8   0  59  59  59      C     |
+                     | 28      16  8   4  59  59  58      B     | 
+                     | 32      16  12  4  59  58  58      A     |        
+                     | 36      20  12  4  58  58  58      C     |
+                     +------------------------------------------+
 \end{verbatim}
 
+\newpage
 \subsubsection{C3}
-The only possible ambiguity is the coiche of which thread to run when two or more thread have the same priority. However the specification says that if there is more than one thread with the same priority, the scheduler must go through them following a "round robin" order. In our implementation, when a thread yields, it is put back into the list of ready threads, and we took care of inserting after all the threads with the same priority. 
+
+The specification does not clearly express whether the calculation of the priority for each thread is carried out before or after updating the \tx{recent\_cpu} value. While fulfilling the table, we assumed that \tx{recent\_cpu} is calculated first, and then the priority is updated. Our implementation of the advances scheduler matches this behaviour.  
 
 \subsubsection{C4}
-At the beginning, the fixed\-point representation was implemented storing the actual value of the number in a struct, and using several functions to perform the necessary operations. Even if the implementation was correct, it was judged not efficient by the members of the group: having to call a function only to perform a mathematic operation was cause of a huge time loss, especially considering that each second, the kernel needs to recompute the priority of each thread. Moreover, the memory usage due to representing the number with a struct could be easily avoided. In the end, we decided to define \tx{fixed\_point} as a \tx{typedef} of an \tx{int32\_t}, and then define a series of inline functions to actually implement the methods needed to perform the operations. This strategy was preferred to impementing macros because inline functions are more pratical when dealing with adding assertions or bits of codes.
+
+Scheduling has been split between \texttt{thread\_tick()} which is called from the timer interrupt handler, and \texttt{next\_thread\_to\_run()}, which is called outside of an interrupt handler. The majority of the scheduling processing is done in the timer interrupt handler, which is where we may recalculate thread priorities, \texttt{recent\_cpu} values and the system load average, and update the list which stores the next thread to run. As such, most of the code is in \texttt{thread\_tick()} and there is little in \texttt{next\_thread\_to\_run()}. This negatively impacts our performance as \texttt{thread\_tick()} is called every tick, and although we may not do recalculations every tick, we check whether we have to perform them.
+
+\subsubsection{C5}
+
+One advantage of our implementation of the advanced scheduler is that we have only used one list to implement the 64 queues used by the scheduler. The list is ordered descending by priority, so we can always pick the thread with the highest priority to run by looking at the head of this list. This gives us a time complexity of $O(1)$ for choosing the next thread to run, as opposed to $O(n)$ if we used 64 separate lists (we'd have to do a search from the list for priority $63$ downwards).
+
+However, in our implementation queuing threads is more expensive, as we call \texttt{list\_insert\_ordered()} on the single list rather than if we had 64 lists where we would simply call \texttt{list\_push\_back()} on the list for the queue with the appropriate priority. We also have to call \texttt{list\_sort()} on the list when we recompute priorities rather than if we had 64 lists where we'd just the threads whose priorities have changed between lists, which will be more expensive if only a few thread's priorities have changed.
+\\ \\
+One refinement we could make to our current design is recomputing all thread priorities and all \texttt{recent\_cpu} values at the same time every second if the number of ticks per second is a multiple of the thread priority recompilation interval.
+
+As the current number of ticks per second (100 ticks) is a multiple of the tick interval for which we recompute all priorities (4 ticks), when we recompute all \texttt{recent\_cpu} values every second, we could recompute all the thread priorities at the same time, as both processes require that we loop over the list of all threads; performing these two steps together and iterating over the list once would be more efficient, and would improve our implementation as we want to reduce the time spent in the timer interrupt handler.
+
+\subsubsection{C6}
+
+Our initial fixed-point implementation consisted of a struct containing a number used for the fixed-point number representation, and several functions to perform the necessary fixed-point operations using this struct. Even if the implementation was correct, we deemed it inefficient: calling a function to perform simple mathematical operations was a significant overhead, especially considering that the kernel needs to recompute the priority of all the threads every second. In the end, we created a \tx{fixed\_point} typedef to an \tx{int32\_t}, and then defined a series of inline functions which actually implement the methods needed to perform the fixed-point operations. We chose inline functions over macros because inline functions are more practical when debugging, for example.
 
 \end{document}

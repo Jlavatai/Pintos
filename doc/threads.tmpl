@@ -228,7 +228,7 @@ logic recurses, updating the blocking locks in a chain.
 ---------|holder:NULL|holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
 ---------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
 --------------------------------------------------------------------------------
--thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
+-thread_get_priority(L)=1 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 ================================================================================
 -- Thread M: lock_acquire(a) completes -----------------------------------------
 --------------------------------------------------------------------------------
@@ -310,6 +310,15 @@ Should lock_release(A), be called by Thread L:
     (8)  The top priority waiter is popped off the list
     (9)  This waiter is unblocked
 
+The Datastructure, after this process, is such:
+
+--------------------------------------------------------------------------------
+- Locks: |     A     |     B     |- Threads: |    L     |M-blocked |H-blocked |-
+---------|pri: NULL  |pri: H->pri|-----------|pri: 1    |pri: 2    |pri: 3    |-
+---------|holder:NULL|holder: M  |-----------|locks:[]  |locks:[B] |locks:[]  |-
+---------------------------------------------|blocker:0 |blocker:&L|blocker:&M|-
+--------------------------------------------------------------------------------
+-thread_get_priority(L)=3 - thread_get_priority(M)=3 - thread_get_priority(H)=3-
 
 
 ---- SYNCHRONIZATION ----
@@ -320,8 +329,51 @@ Should lock_release(A), be called by Thread L:
 
 ---- RATIONALE ----
 
+Consider an implementation where the struct thread has two ints representing 
+the base priority and the donated priority. Set priority could recompute the 
+base priority or set the base priority and recompute the donated priority to be 
+the max of the two values and yield. Suppose that another thread donates its 
+own priority while this recomputation is taking place. This thread may read the 
+old value of donated priority, and writes to the new value such that the 
+donated priority is lower than the base priority.
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 7
+
+        But Consider: Thread B donating to thread A whilst set_pri is 
+        computing: 
+
+        Thread A        set_pri(7)
+        pri: 2     | pri:7  | pri: 7           | pri: 7
+        dpri: 5    | dpri:5 | dpri: max(5,7)=7 | dpri: 6
+                      ^                        ^
+                      | Read 5                 | Write 6
+                      + 5 < 6 -----------------+
+        Thread B     donate(A)
+        pri: 6
+        dpri: 6 
+
+The way this potential race condition is avoided in our implementation is via only storing one integer per thread to represent the priority. Each lock points to the priority of the thread that holds it, and thus any updates via set priority automatically set the priorities of locks in a single instruction. Thus interrupts (which happen between processor instructions) can not cause a problem.
+
+In this implementation the way it could be easily avoided would be to use a static, kernel-space lock that is only acquired and released in thread_set_priority and thread_donate. This would lock execution of setting priority and donating priority such that they could never execute at the same time, and synchronisation race conditions, such as that shown above, could never occur.
+
+                
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+
+This design was chosen due to a simpleness of implementation that should avoid 
+the major problems associated with priority donation, such as that given above. 
+In order to minimise the memory and processing footprint of this design, we 
+extensively used pointers such that data need only be updated once. 
+
+Initially we considered the two integer implementation with base priority and 
+donated priority. We decided against using this design due to the processing 
+overhead during multiple priority donation. We theorised that the donated 
+priority would have to be recomputed significantly often, whereas pointers to 
+locks need only be inserted (in an ordered way (expensive when a thread holds 
+many locks)) or removed from the list. 
 
               ADVANCED SCHEDULER
               ==================
@@ -390,8 +442,18 @@ with the same priority.
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
+Scheduling has been split between thread tick() which is called from the timer
+interrupt handler, and next thread to run(), which is called outside of an
+interrupt handler. The majority of the scheduling processing is done in the
+timer interrupt handler, which is where we may recalculate thread priorities,
+recent cpu values and the system load average, and update the list which stores
+the next thread to run. As such, most of the code is in thread tick() and there
+is little in next thread to run(). This negatively impacts our performance as
+thread tick() is called every tick, and although we may not do recalculations
+every tick, we check whether we have to perform recalculations on every tick.
+
 ---- RATIONALE ----
-l
+
 >> C5: Briefly critique your design, pointing out advantages and
 >> disadvantages in your design choices.  If you were to have extra
 >> time to work on this part of the task, how might you choose to
