@@ -41,16 +41,17 @@ process_execute (const char *file_name)
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page (0);
+    // fn_copy = "run.exe arg1 arg2 arg3..."
     if (fn_copy == NULL)
         return TID_ERROR;
     strlcpy (fn_copy, file_name, PGSIZE);
 
     struct params_struct params;
 
-    char *file_cpy = fn_copy;
+    params.argv = malloc(100*sizeof(char*));
     char **tokens_list = params.argv;
     char *token, *pos;
-    char *token_cpy;
+    // char *token_cpy;
 
     printf("----Beginning tokenization\n");
 
@@ -58,23 +59,20 @@ process_execute (const char *file_name)
             token = strtok_r (NULL, " ", &pos))
     {
         // printf("Copying\n");
-        // token_cpy = malloc(strlen(token));
+        // token_cpy = fn_copy;
         // strlcpy(token_cpy, token, strlen(token));
-
-        printf("Assigning\n");
-        *tokens_list = token_cpy;
-        printf("Assigned\n");
+        *tokens_list = token;
         tokens_list++;
         printf ("'%s'\n", token);
     }
 
         printf("----Ending tokenization\n");
 
-    char *fst = *params.argv;
-
+      char *fst = *params.argv;
+      printf("%s\n", fst );
 
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create (fst, PRI_DEFAULT, start_process, fn_copy);
+    tid = thread_create (fst, PRI_DEFAULT, start_process, &params);
     if (tid == TID_ERROR)
         palloc_free_page (fn_copy);
     return tid;
