@@ -18,6 +18,15 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+struct token
+{
+  char *str;
+  struct list_elem token_list_elem;
+};
+
+struct list token_list;
+
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -38,8 +47,29 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  list_init(&token_list);
+
+  char *file_cpy = fn_copy;
+  char *token, *pos;
+
+
+  for (token = strtok_r (file_cpy, " ", &pos); token != NULL;
+        token = strtok_r (NULL, " ", &pos)) {
+
+          struct token *curr_token = malloc(sizeof(struct token));
+          curr_token->str = token;
+          list_push_back(&token_list, &curr_token->token_list_elem);
+          printf ("'%s'\n", token);
+   }
+
+   struct list_elem *fst = list_front(&token_list);
+    
+   struct token *fst_tok = list_entry(fst, struct token, token_list_elem);
+   
+   printf("Fst token is %s\n", fst_tok->str); 
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fst_tok->str, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -54,6 +84,8 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -61,10 +93,30 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  /*Set Up Stack here*/
+
+  printf("----Testing if I can access elements in token list---\n");
+
+  struct list_elem *fst = list_front(&token_list);
+    
+   struct token *fst_tok = list_entry(fst, struct token, token_list_elem);
+   
+   printf("Fst token is %s\n", fst_tok->str); 
+
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+
+  /* If load successful, gather arguments and put them onto the stack*/
+
+ 
+
+ 
+
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,6 +140,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  for(;;);
   return -1;
 }
 
