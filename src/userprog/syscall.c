@@ -6,6 +6,8 @@
 
 static void syscall_handler (struct intr_frame *);
 
+static bool validate_user_pointer (void *pointer);
+
 void
 syscall_init (void) 
 {
@@ -13,8 +15,18 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
-  printf ("system call!\n");
+  void *esp = f->esp;
+  int32_t syscall_number = *esp;
+
   thread_exit ();
+}
+
+/* Returns whether a user pointer is valid or not. If it is invalid, the callee
+   should free any of its resources and call thread_exit(). */
+static bool
+validate_user_pointer (void *pointer)
+{
+	return is_user_vaddr () && pagedir_get_page (pointer) != NULL;
 }
