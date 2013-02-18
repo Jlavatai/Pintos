@@ -90,6 +90,8 @@ process_wait (tid_t child_tid UNUSED)
 {
   while (1) {
   }
+
+  return -1;
 }
 
 /* Free the current process's resources. */
