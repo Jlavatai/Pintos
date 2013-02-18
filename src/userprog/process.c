@@ -18,12 +18,15 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-struct params_struct
+struct argument
 {
-    char **argv;
-    int argc;
+  char *token;
+  struct list_elem token_list_elem;
 };
 
+struct list argv;
+
+int argc;
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -46,33 +49,30 @@ process_execute (const char *file_name)
         return TID_ERROR;
     strlcpy (fn_copy, file_name, PGSIZE);
 
-    struct params_struct params;
+    list_init(&argv);
+    argc = 0;
 
-    params.argv = malloc(100*sizeof(char*));
-    char **tokens_list = params.argv;
     char *token, *pos;
-    // char *token_cpy;
 
     printf("----Beginning tokenization\n");
 
     for (token = strtok_r (fn_copy, " ", &pos); token != NULL;
             token = strtok_r (NULL, " ", &pos))
     {
-        // printf("Copying\n");
-        // token_cpy = fn_copy;
-        // strlcpy(token_cpy, token, strlen(token));
-        *tokens_list = token;
-        tokens_list++;
-        printf ("'%s'\n", token);
+      struct argument *arg = malloc(sizeof(struct argument));
+      arg->token = token;
+      list_push_back(&argv, &arg->token_list_elem);
+      printf ("'%s'\n", token);
+      argc++;
     }
 
         printf("----Ending tokenization\n");
 
-      char *fst = *params.argv;
-      printf("%s\n", fst );
+      struct argument *fst_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
+      printf("%s %d\n", fst_arg->token, argc);
 
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create (fst, PRI_DEFAULT, start_process, &params);
+    tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, NULL);
     if (tid == TID_ERROR)
         palloc_free_page (fn_copy);
     return tid;
@@ -81,45 +81,33 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *unused)
 {
-    char *file_name = file_name_;
+    //struct params_struct *params = params_;
+    //printf("Casted to params ptr\n");
     struct intr_frame if_;
     bool success;
 
-    printf("------%s\n", file_name);
+
+     struct argument *fst_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
+
+    printf("----Proc name is %s\n", fst_arg->token);
 
     /* Initialize interrupt frame and load executable. */
     memset (&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
-    success = load (file_name, &if_.eip, &if_.esp);
-
-
-    /*Tokenization here*/
-
-    /*Set Up Stack here*/
-
-    printf("----Testing if I can access elements in token list---\n");
-
-    // struct list_elem *fst = list_front(&token_list);
-
-    //  struct token *fst_tok = list_entry(fst, struct token, token_list_elem);
-
-    //  printf("Fst token is %s\n", fst_tok->str);
-
+    success = load (fst_arg->token, &if_.eip, &if_.esp);
 
     /* If load failed, quit. */
-    palloc_free_page (file_name);
+    palloc_free_page (fst_arg->token);
     if (!success)
         thread_exit ();
 
+    /*Set Up Stack here*/
 
-    /* If load successful, gather arguments and put them onto the stack*/
-
-
-
+      
 
 
 
