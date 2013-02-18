@@ -20,8 +20,8 @@
 
 struct argument
 {
-  char *token;
-  struct list_elem token_list_elem;
+    char *token;
+    struct list_elem token_list_elem;
 };
 
 struct list argv;
@@ -59,17 +59,17 @@ process_execute (const char *file_name)
     for (token = strtok_r (fn_copy, " ", &pos); token != NULL;
             token = strtok_r (NULL, " ", &pos))
     {
-      struct argument *arg = malloc(sizeof(struct argument));
-      arg->token = token;
-      list_push_back(&argv, &arg->token_list_elem);
-      printf ("'%s'\n", token);
-      argc++;
+        struct argument *arg = malloc(sizeof(struct argument));
+        arg->token = token;
+        list_push_front(&argv, &arg->token_list_elem);
+        printf ("'%s'\n", token);
+        argc++;
     }
 
-        printf("----Ending tokenization\n");
+    printf("----Ending tokenization\n");
 
-      struct argument *fst_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
-      printf("%s %d\n", fst_arg->token, argc);
+    struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
+    printf("%s %d\n", fst_arg->token, argc);
 
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, NULL);
@@ -89,7 +89,7 @@ start_process (void *unused)
     bool success;
 
 
-     struct argument *fst_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
+    struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
 
     printf("----Proc name is %s\n", fst_arg->token);
 
@@ -107,10 +107,64 @@ start_process (void *unused)
 
     /*Set Up Stack here*/
 
-      
+      printf("-----Starting setup\n");
 
+    struct list_elem *e;
 
+    //Push the actual strings by copying them, then change the 
+    //char* value stored in the arguments list so that we can recurse again.
 
+    printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
+
+    for (e = list_begin (&argv); e != list_end (&argv);
+            e = list_next (e))
+    {
+        struct argument *arg = list_entry (e, struct argument, token_list_elem);
+        printf("Got actual argument\n");
+        char *curr_arg = arg->token;
+        strlcpy (if_.esp, curr_arg, strlen(curr_arg));
+        printf("Copied String\n");
+        arg->token = (char *)if_.esp;
+        printf("Stored pointer\n");
+        if_.esp--;
+        printf("Decresed esp\n");
+    }
+
+    printf("---First Pass done\n");
+    //Push word align
+
+    uint8_t align = 0;
+    *(int32_t *)if_.esp = align;
+    if_.esp--;
+
+     for (e = list_begin (&argv); e != list_end (&argv);
+            e = list_next (e))
+    {
+        struct argument *arg = list_entry (e, struct argument, token_list_elem);
+        char *curr_arg = arg->token;
+        *(int32_t *)if_.esp = curr_arg;
+        printf("pushed ptr\n");
+        if_.esp--;
+        printf("decreased esp\n");
+    }
+
+    printf("---Second pass done\n");
+
+      *(int32_t *)if_.esp = if_.esp--;
+      if_.esp--;
+
+      printf("---Pushed argv\n");
+
+       *(int32_t *)if_.esp = argc;
+       if_.esp--;
+
+       printf("----Pushed argc\n");
+
+       void *fake_return  = 0;
+      *(int32_t *)if_.esp = fake_return;
+      if_.esp--;
+
+       printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
