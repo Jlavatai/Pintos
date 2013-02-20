@@ -88,20 +88,22 @@ start_process (void *unused)
     struct intr_frame if_;
     bool success;
 
+     struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
+     char *fst_arg_saved = fst_arg->token; 
 
-    struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
+     printf("----Proc name is %s\n", fst_arg_saved);
 
-    printf("----Proc name is %s\n", fst_arg->token);
+
 
     /* Initialize interrupt frame and load executable. */
     memset (&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
-    success = load (fst_arg->token, &if_.eip, &if_.esp);
+    success = load (fst_arg_saved, &if_.eip, &if_.esp);
 
     /* If load failed, quit. */
-    palloc_free_page (fst_arg->token);
+    
     if (!success)
         thread_exit ();
 
@@ -114,55 +116,69 @@ start_process (void *unused)
     //Push the actual strings by copying them, then change the 
     //char* value stored in the arguments list so that we can recurse again.
 
+    struct argument *last_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
+
+    printf("----Last arg is %s\n", last_arg->token);
+
+    void *beg_esp = if_.esp;
+
     printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
 
     for (e = list_begin (&argv); e != list_end (&argv);
             e = list_next (e))
     {
         struct argument *arg = list_entry (e, struct argument, token_list_elem);
-        printf("Got actual argument\n");
+        //printf("Got actual argument\n");
         char *curr_arg = arg->token;
-        strlcpy (if_.esp, curr_arg, strlen(curr_arg));
-        printf("Copied String\n");
-        arg->token = (char *)if_.esp;
-        printf("Stored pointer\n");
-        if_.esp--;
-        printf("Decresed esp\n");
+        printf("%s\n", curr_arg );
+        if_.esp -= (strlen(curr_arg) + 1);
+        strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
+        //printf("Copied String\n");
+        printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
+        arg->token = if_.esp;
+        //printf("Stored pointer\n");
+        printf("Decreasing by %d\n", strlen(curr_arg) + 1);
+        //printf("Decresed esp\n");
     }
 
+    hex_dump(0, if_.esp, 100, true);
+
     printf("---First Pass done\n");
-    //Push word align
+   //Push word align
 
     uint8_t align = 0;
-    *(int32_t *)if_.esp = align;
     if_.esp--;
+    *(int32_t *)if_.esp = align;
 
      for (e = list_begin (&argv); e != list_end (&argv);
             e = list_next (e))
     {
         struct argument *arg = list_entry (e, struct argument, token_list_elem);
         char *curr_arg = arg->token;
+        printf("Char addr 0x%x\n", (unsigned int)curr_arg);
+        if_.esp -= (sizeof(char*));
         *(int32_t *)if_.esp = curr_arg;
+        printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp));
         printf("pushed ptr\n");
-        if_.esp--;
-        printf("decreased esp\n");
     }
 
     printf("---Second pass done\n");
 
+       if_.esp--;
       *(int32_t *)if_.esp = if_.esp--;
-      if_.esp--;
-
+     
       printf("---Pushed argv\n");
 
+        if_.esp--;
        *(int32_t *)if_.esp = argc;
-       if_.esp--;
+     
 
        printf("----Pushed argc\n");
 
        void *fake_return  = 0;
-      *(int32_t *)if_.esp = fake_return;
       if_.esp--;
+      *(int32_t *)if_.esp = fake_return;
+      
 
        printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
 
@@ -172,6 +188,8 @@ start_process (void *unused)
        arguments on the stack in the form of a `struct intr_frame',
        we just point the stack pointer (%esp) to our stack frame
        and jump to it. */
+
+    palloc_free_page (fst_arg_saved);
     asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
     NOT_REACHED ();
 }
@@ -538,7 +556,7 @@ setup_stack (void **esp)
     {
         success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
         if (success)
-            *esp = PHYS_BASE - 12;
+            *esp = PHYS_BASE;
         else
             palloc_free_page (kpage);
     }
