@@ -93,8 +93,6 @@ start_process (void *unused)
 
      printf("----Proc name is %s\n", fst_arg_saved);
 
-
-
     /* Initialize interrupt frame and load executable. */
     memset (&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -147,8 +145,13 @@ start_process (void *unused)
    //Push word align
 
     uint8_t align = 0;
-    if_.esp--;
+    if_.esp -= (sizeof(uint8_t));
     *(int32_t *)if_.esp = align;
+
+    void *last_arg_ptr  = 0;
+      if_.esp-= (sizeof(void *));
+      *(int32_t *)if_.esp = last_arg_ptr;
+
 
      for (e = list_begin (&argv); e != list_end (&argv);
             e = list_next (e))
@@ -158,26 +161,36 @@ start_process (void *unused)
         printf("Char addr 0x%x\n", (unsigned int)curr_arg);
         if_.esp -= (sizeof(char*));
         *(int32_t *)if_.esp = curr_arg;
-        printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp));
+        printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
         printf("pushed ptr\n");
     }
 
-    printf("---Second pass done\n");
 
-       if_.esp--;
-      *(int32_t *)if_.esp = if_.esp--;
-     
+
+      printf("---Second pass done\n");
+
+       char **fst_arg_ptr = if_.esp;
+       printf("Esp value is 0x%x\n", (unsigned int) if_.esp);
+       printf("I'm about to push 0x%x\n", fst_arg_ptr);
+       if_.esp -= (sizeof(char **));
+      *(int32_t *)if_.esp = fst_arg_ptr;
+      
+        printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp) );
+
       printf("---Pushed argv\n");
 
-        if_.esp--;
+        if_.esp -=(sizeof(argc));
        *(int32_t *)if_.esp = argc;
      
 
        printf("----Pushed argc\n");
+         printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
 
        void *fake_return  = 0;
-      if_.esp--;
+       if_.esp -= (sizeof(void *));
       *(int32_t *)if_.esp = fake_return;
+
+      printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
       
 
        printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
