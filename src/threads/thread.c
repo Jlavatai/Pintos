@@ -282,7 +282,13 @@ thread_create (const char *name, int priority,
     t->nice = thread_get_nice ();
   }
 
+  // Add to parent thread's child list
+  struct thread * parent = thread_current();
+  list_push_back(&parent->children, &t->procelem);
+
   intr_set_level (old_level);
+
+
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -728,6 +734,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
 
   list_init(&t->lock_list);
+  list_init(&t->children);
 
   // Set Priority
   if (thread_mlfqs)
@@ -818,6 +825,8 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
+      if (prev->death)
+    	  prev->death();
       palloc_free_page (prev);
     }
 }

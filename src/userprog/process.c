@@ -83,6 +83,9 @@ process_execute (const char *file_name)
 static void
 start_process (void *unused)
 {
+
+
+
     //struct params_struct *params = params_;
     //printf("Casted to params ptr\n");
     struct intr_frame if_;
@@ -206,7 +209,15 @@ start_process (void *unused)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-    for (;;);
+	struct thread * cur = thread_current();
+	struct list_elem * e;
+	// Lookup child_tid in children
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);
+	     e = list_next (e))
+	{
+	  struct thread *t = list_entry (e, struct thread, procelem);
+	  func (t, aux);
+	}
     return -1;
 }
 
@@ -220,6 +231,7 @@ process_exit (void)
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     pd = cur->pagedir;
+    list_remove(&cur->procelem);
     if (pd != NULL)
     {
         /* Correct ordering here is crucial.  We must set
@@ -230,6 +242,7 @@ process_exit (void)
            directory, or our active page directory will be one
            that's been freed (and cleared). */
         cur->pagedir = NULL;
+
         pagedir_activate (NULL);
         pagedir_destroy (pd);
     }
