@@ -102,7 +102,7 @@ halt_handler (void)
 static void
 exit_handler (int status)
 {
-  
+  thread_exit();
 }
 
 static int
