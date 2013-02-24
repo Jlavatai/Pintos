@@ -132,14 +132,14 @@ start_process (void *unused UNUSED)
         //printf("Decresed esp\n");
     }
 
-   //hex_dump(0, if_.esp, 100, true);
+   hex_dump(0, if_.esp, 100, true);
 
     //printf("---First Pass done\n");
    //Push word align
 
     uint8_t align = 0;
     if_.esp -= (sizeof(uint8_t));
-    *(int32_t *)if_.esp = align;
+    *(uint8_t *)if_.esp = align;
 
     char *last_arg_ptr  = NULL;
       if_.esp-= (sizeof(char *));
@@ -194,6 +194,8 @@ start_process (void *unused UNUSED)
        arguments on the stack in the form of a `struct intr_frame',
        we just point the stack pointer (%esp) to our stack frame
        and jump to it. */
+
+       hex_dump(0, if_.esp, 100, true);
 
     palloc_free_page (fst_arg_saved);
     asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
