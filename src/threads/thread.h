@@ -97,15 +97,18 @@ struct thread
     int priority;
     struct list_elem procelem;          /* Element for the children list */
     struct lock *blocker;               /* Each thread knows of the lock that's blocking it*/
+
     struct list children;               /* Holds the list of processes started by this process. */
     long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
 
     struct list_elem allelem;           /* List element for all threads list. */
-    int nice;                           /* The nice value used for the mlfq scheduler. */
-    fixed_point recent_cpu;             /* The recent CPU value used by the mlfq scheduler. */
-    struct lock anchor;        /* The Anchor into the world of the living */
+    int nice;                            /* The nice value used for the mlfq scheduler. */
+    fixed_point recent_cpu;              /* The recent CPU value used by the mlfq scheduler. */
+    struct semaphore anchor;            /* A semaphore held during the thread's life */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    int exit_status;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

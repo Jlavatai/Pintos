@@ -207,7 +207,7 @@ start_process (void *unused)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
 	struct thread * cur = thread_current();
 	struct list_elem * e;
@@ -215,8 +215,14 @@ process_wait (tid_t child_tid UNUSED)
     for (e = list_begin (&cur->children); e != list_end (&cur->children);
 	     e = list_next (e))
 	{
-	  struct thread *t = list_entry (e, struct thread, procelem);
-	  func (t, aux);
+		struct thread *t = list_entry (e, struct thread, procelem);
+		if (t->tid == child_tid) {
+			sema_down(&t->anchor);
+			int exit_status = t->exit_status;
+			sema_up(&t->anchor);
+			// After this point we can't rely on t being valid.
+			return exit_status;
+		}
 	}
     return -1;
 }

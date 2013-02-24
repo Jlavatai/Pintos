@@ -255,6 +255,11 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  // Add to parent thread's child list
+  if (is_thread(running_thread ())) {
+	  list_push_back(&thread_current()->children, &t->procelem);
+  }
+
   // Initialise timer sleep member to 0
   t->wakeup_tick = 0;
 
@@ -282,9 +287,6 @@ thread_create (const char *name, int priority,
     t->nice = thread_get_nice ();
   }
 
-  // Add to parent thread's child list
-  struct thread * parent = thread_current();
-  list_push_back(&parent->children, &t->procelem);
 
   intr_set_level (old_level);
 
@@ -405,14 +407,24 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
+  if (is_thread(running_thread())) {
+	  // Release the anchor!
+	  sema_up(&thread_current()->anchor);
 
-#ifdef USERPROG
-  process_exit ();
-#endif
+	  // The parent thread needs the thread struct so let it acquire and release
+	  // the anchor when it has the data it needs (i.e. exit system call arguments)
+	  sema_down(&thread_current()->anchor);
+	  sema_up(&thread_current()->anchor);
+  }
+  #ifdef USERPROG
+      process_exit ();
+  #endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
+
+
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -735,7 +747,12 @@ init_thread (struct thread *t, const char *name, int priority)
 
   list_init(&t->lock_list);
   list_init(&t->children);
-
+  if (is_thread(running_thread())) {
+	  // Initialise Anchor
+	  sema_init(&t->anchor, 1);
+	  // "Acquire" it
+	  sema_down(&t->anchor);
+  }
   // Set Priority
   if (thread_mlfqs)
     thread_mlfqs_recompute_priority (t, NULL);
@@ -825,8 +842,6 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      if (prev->death)
-    	  prev->death();
       palloc_free_page (prev);
     }
 }
