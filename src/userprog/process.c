@@ -54,7 +54,9 @@ process_execute (const char *file_name)
 
     char *token, *pos;
 
-    printf("----Beginning tokenization\n");
+    //printf("----Beginning tokenization\n");
+
+   // ASSERT(fn_copy =! NULL);
 
     for (token = strtok_r (fn_copy, " ", &pos); token != NULL;
             token = strtok_r (NULL, " ", &pos))
@@ -62,14 +64,14 @@ process_execute (const char *file_name)
         struct argument *arg = malloc(sizeof(struct argument));
         arg->token = token;
         list_push_front(&argv, &arg->token_list_elem);
-        printf ("'%s'\n", token);
+       // printf ("'%s'\n", token);
         argc++;
     }
 
-    printf("----Ending tokenization\n");
+    //printf("----Ending tokenization\n");
 
     struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
-    printf("%s %d\n", fst_arg->token, argc);
+   // printf("%s %d\n", fst_arg->token, argc);
 
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, NULL);
@@ -81,7 +83,7 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *unused)
+start_process (void *unused UNUSED)
 {
 
 
@@ -94,9 +96,7 @@ start_process (void *unused)
      struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
      char *fst_arg_saved = fst_arg->token; 
 
-     printf("----Proc name is %s\n", fst_arg_saved);
-
-
+    // printf("----Proc name is %s\n", fst_arg_saved);
 
     /* Initialize interrupt frame and load executable. */
     memset (&if_, 0, sizeof if_);
@@ -119,13 +119,13 @@ start_process (void *unused)
     //Push the actual strings by copying them, then change the 
     //char* value stored in the arguments list so that we can recurse again.
 
-    struct argument *last_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
+    //struct argument *last_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
 
-    printf("----Last arg is %s\n", last_arg->token);
+    //printf("----Last arg is %s\n", last_arg->token);
 
-    void *beg_esp = if_.esp;
+   // void *beg_esp = if_.esp;
 
-    printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
+    //printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
 
     for (e = list_begin (&argv); e != list_end (&argv);
             e = list_next (e))
@@ -137,53 +137,68 @@ start_process (void *unused)
         if_.esp -= (strlen(curr_arg) + 1);
         strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
         //printf("Copied String\n");
-        printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
+       // printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
         arg->token = if_.esp;
         //printf("Stored pointer\n");
-        printf("Decreasing by %d\n", strlen(curr_arg) + 1);
+       // printf("Decreasing by %d\n", strlen(curr_arg) + 1);
         //printf("Decresed esp\n");
     }
 
-    hex_dump(0, if_.esp, 100, true);
+   // hex_dump(0, if_.esp, 100, true);
 
-    printf("---First Pass done\n");
+    //printf("---First Pass done\n");
    //Push word align
 
     uint8_t align = 0;
-    if_.esp--;
+    if_.esp -= (sizeof(uint8_t));
     *(int32_t *)if_.esp = align;
+
+    void *last_arg_ptr  = 0;
+      if_.esp-= (sizeof(void *));
+      *(int32_t *)if_.esp = last_arg_ptr;
+
 
      for (e = list_begin (&argv); e != list_end (&argv);
             e = list_next (e))
     {
         struct argument *arg = list_entry (e, struct argument, token_list_elem);
         char *curr_arg = arg->token;
-        printf("Char addr 0x%x\n", (unsigned int)curr_arg);
+      //  printf("Char addr 0x%x\n", (unsigned int)curr_arg);
         if_.esp -= (sizeof(char*));
         *(int32_t *)if_.esp = curr_arg;
-        printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp));
-        printf("pushed ptr\n");
+        // printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
+        // printf("pushed ptr\n");
     }
 
-    printf("---Second pass done\n");
 
-       if_.esp--;
-      *(int32_t *)if_.esp = if_.esp--;
-     
-      printf("---Pushed argv\n");
 
-        if_.esp--;
+      // printf("---Second pass done\n");
+
+       char **fst_arg_ptr = if_.esp;
+       // printf("Esp value is 0x%x\n", (unsigned int) if_.esp);
+       // printf("I'm about to push 0x%x\n", fst_arg_ptr);
+       if_.esp -= (sizeof(char **));
+      *(int32_t *)if_.esp = fst_arg_ptr;
+      
+      //   printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp) );
+
+      // printf("---Pushed argv\n");
+
+        if_.esp -=(sizeof(argc));
        *(int32_t *)if_.esp = argc;
      
 
-       printf("----Pushed argc\n");
+       // printf("----Pushed argc\n");
+       //   printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
 
        void *fake_return  = 0;
-      if_.esp--;
+       if_.esp -= (sizeof(void *));
       *(int32_t *)if_.esp = fake_return;
+
+      // printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
       
 
-       printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
+      //  printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
