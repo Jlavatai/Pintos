@@ -151,14 +151,14 @@ static int
 write_handler (int fd, const void *buffer, unsigned size)
 {
   
-  printf("---Single arg %s\n", (char *)  buffer);
+  //printf("---Single arg %s\n", (char *)  buffer);
 
   if (fd == 1) {
     putbuf (buffer, size);
     return size;
   }
 
-  printf("\n");
+  thread_exit();
 
 	return 0;
 }
