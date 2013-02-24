@@ -240,6 +240,8 @@ process_wait (tid_t child_tid)
 void
 process_exit (void)
 {
+    // TODO: Use a condition variable synchronisation primitive instead of disabling interrupts 
+    // Because from a design perspective, behaviour is more ensured.
     struct thread *cur = thread_current ();
     uint32_t *pd;
 
