@@ -358,6 +358,7 @@ thread_unblock (struct thread *t)
 {
   enum intr_level old_level;
 
+
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
@@ -407,15 +408,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-  if (is_thread(running_thread())) {
-	  // Release the anchor!
-	  sema_up(&thread_current()->anchor);
 
-	  // The parent thread needs the thread struct so let it acquire and release
-	  // the anchor when it has the data it needs (i.e. exit system call arguments)
-	  sema_down(&thread_current()->anchor);
-	  sema_up(&thread_current()->anchor);
-  }
   #ifdef USERPROG
       process_exit ();
   #endif
@@ -423,7 +416,6 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-
 
   intr_disable ();
   list_remove (&thread_current()->allelem);
@@ -744,6 +736,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+  t->exit_status = -1;
 
   list_init(&t->lock_list);
   list_init(&t->children);

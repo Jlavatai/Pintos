@@ -135,7 +135,7 @@ start_process (void *unused UNUSED)
         //printf("Decresed esp\n");
     }
 
-   hex_dump(0, if_.esp, 100, true);
+   //hex_dump(0, if_.esp, 100, true);
 
     //printf("---First Pass done\n");
    //Push word align
@@ -198,7 +198,7 @@ start_process (void *unused UNUSED)
        we just point the stack pointer (%esp) to our stack frame
        and jump to it. */
 
-       hex_dump(0, if_.esp, 100, true);
+       //hex_dump(0, if_.esp, 100, true);
 
     palloc_free_page (fst_arg_saved);
     asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
@@ -228,6 +228,7 @@ process_wait (tid_t child_tid)
 			sema_down(&t->anchor);
 			int exit_status = t->exit_status;
 			sema_up(&t->anchor);
+      thread_unblock(t);
 			// After this point we can't rely on t being valid.
 			return exit_status;
 		}
@@ -242,10 +243,21 @@ process_exit (void)
     struct thread *cur = thread_current ();
     uint32_t *pd;
 
-    /* Destroy the current process's page directory and switch back
-       to the kernel-only page directory. */
+    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+    // Release the anchor!
+    sema_up(&thread_current()->anchor);
+
+    // The parent thread needs the thread struct so let it block until
+    // it has the data it needs (i.e. exit system call arguments)
+    int old_level = intr_disable ();
+    thread_block();
+    intr_set_level(old_level);
+
     pd = cur->pagedir;
     list_remove(&cur->procelem);
+    /* Destroy the current process's page directory and switch back
+       to the kernel-only page directory. */
     if (pd != NULL)
     {
         /* Correct ordering here is crucial.  We must set

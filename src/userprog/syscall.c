@@ -9,7 +9,7 @@
 static void syscall_handler (struct intr_frame *);
 
 static void halt_handler (void);
-static void exit_handler (int status);
+void exit_handler (int status);
 static int exec_handler (const char *cmd_line);
 static int wait_handler (int pid);
 static bool create_handler (const char *file, unsigned initial_size);
@@ -75,7 +75,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_WRITE:
-      f->eax = write_handler ((int)*(esp + 3), (const void*)*(esp + 2), (unsigned)*(esp + 1));
+      f->eax = write_handler ((int)*(esp + 1), (const void*)*(esp + 2), (unsigned)*(esp + 3));
       break;
 
     case SYS_SEEK:
@@ -99,9 +99,12 @@ halt_handler (void)
 
 }
 
-static void
+void
 exit_handler (int status)
 {
+  struct thread *t = thread_current ();
+  t->exit_status = status;
+
   thread_exit();
 }
 
@@ -150,17 +153,10 @@ read_handler (int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED)
 static int
 write_handler (int fd, const void *buffer, unsigned size)
 {
-  
-  //printf("---Single arg %s\n", (char *)  buffer);
-
   if (fd == 1) {
     putbuf (buffer, size);
     return size;
   }
-
-  thread_exit();
-
-  thread_exit();
 
 	return 0;
 }
