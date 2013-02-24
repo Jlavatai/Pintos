@@ -75,7 +75,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_WRITE:
-      f->eax = write_handler ((int)*(esp + 1), (const void*)*(esp + 2), (unsigned)*(esp + 3));
+      f->eax = write_handler ((int)*(esp + 3), (const void*)*(esp + 2), (unsigned)*(esp + 1));
       break;
 
     case SYS_SEEK:
@@ -159,6 +159,8 @@ write_handler (int fd, const void *buffer, unsigned size)
   }
 
   printf("\n");
+
+  thread_exit();
 
 	return 0;
 }
