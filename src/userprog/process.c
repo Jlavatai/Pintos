@@ -109,20 +109,11 @@ start_process (void *unused UNUSED)
 
     /*Set Up Stack here*/
 
-      printf("-----Starting setup\n");
 
     struct list_elem *e;
 
     //Push the actual strings by copying them, then change the 
-    //char* value stored in the arguments list so that we can recurse again.
-
-    //struct argument *last_arg = list_entry(list_front(&argv), struct argument, token_list_elem);
-
-    //printf("----Last arg is %s\n", last_arg->token);
-
-   // void *beg_esp = if_.esp;
-
-    //printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
+    //char* value stored in the arguments list so that we can traverse again.
 
     for (e = list_begin (&argv); e != list_end (&argv);
             e = list_next (e))
@@ -130,7 +121,7 @@ start_process (void *unused UNUSED)
         struct argument *arg = list_entry (e, struct argument, token_list_elem);
         //printf("Got actual argument\n");
         char *curr_arg = arg->token;
-        printf("%s\n", curr_arg );
+        //printf("%s\n", curr_arg );
         if_.esp -= (strlen(curr_arg) + 1);
         strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
         //printf("Copied String\n");
@@ -141,7 +132,7 @@ start_process (void *unused UNUSED)
         //printf("Decresed esp\n");
     }
 
-   // hex_dump(0, if_.esp, 100, true);
+   //hex_dump(0, if_.esp, 100, true);
 
     //printf("---First Pass done\n");
    //Push word align
@@ -150,8 +141,8 @@ start_process (void *unused UNUSED)
     if_.esp -= (sizeof(uint8_t));
     *(int32_t *)if_.esp = align;
 
-    void *last_arg_ptr  = 0;
-      if_.esp-= (sizeof(void *));
+    char *last_arg_ptr  = NULL;
+      if_.esp-= (sizeof(char *));
       *(int32_t *)if_.esp = last_arg_ptr;
 
 
@@ -160,9 +151,9 @@ start_process (void *unused UNUSED)
     {
         struct argument *arg = list_entry (e, struct argument, token_list_elem);
         char *curr_arg = arg->token;
-      //  printf("Char addr 0x%x\n", (unsigned int)curr_arg);
         if_.esp -= (sizeof(char*));
         *(int32_t *)if_.esp = curr_arg;
+        //free(arg);
         // printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
         // printf("pushed ptr\n");
     }
