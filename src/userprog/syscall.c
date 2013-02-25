@@ -23,7 +23,7 @@ static void seek_handler (int fd, unsigned position);
 static unsigned tell_handler (int fd);
 static void close_handler (int fd);
 
-static bool validate_user_pointer (void *pointer);
+static void validate_user_pointer (void *pointer);
 
 static struct lock file_system_lock;
 
@@ -53,7 +53,12 @@ syscall_handler (struct intr_frame *f)
   		break;
 
   	case SYS_EXEC:
-  		f->eax = exec_handler ((const char*)*(esp + 1));
+    {
+      const char *first_arg = (const char*)*(esp + 1);
+      validate_user_pointer ((void*)first_arg);
+
+  		f->eax = exec_handler (first_arg);
+    }
   		break;
 
     case SYS_WAIT:
@@ -61,15 +66,30 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_CREATE:
-      f->eax = create_handler ((const char*)*(esp + 1), (unsigned)*(esp + 2));
+    {
+      const char *first_arg = (const char*)*(esp + 1);
+      validate_user_pointer ((void*)first_arg);
+
+      f->eax = create_handler (first_arg, (unsigned)*(esp + 2));
+    }
       break;
 
     case SYS_REMOVE:
-      f->eax = remove_handler ((const char*)*(esp + 1));
+    {
+      const char *first_arg = (const char*)*(esp + 1);
+      validate_user_pointer ((void*)first_arg);
+
+      f->eax = remove_handler (first_arg);
+    }
       break;
 
     case SYS_OPEN:
-      f->eax = open_handler ((const char*)*(esp + 1));
+    {
+      const char *first_arg = (const char*)*(esp + 1);
+      validate_user_pointer ((void*)first_arg);
+
+      f->eax = open_handler (first_arg);
+    }
       break;
 
     case SYS_FILESIZE:
@@ -77,11 +97,21 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_READ:
+    {
+      void *second_arg = (void*)*(esp + 2);
+      validate_user_pointer ((void*)second_arg);
+
       f->eax = read_handler ((int)*(esp + 1), (void*)*(esp + 2), (unsigned)*(esp + 3));
+    }
       break;
 
     case SYS_WRITE:
+    {
+      void *second_arg = (void*)*(esp + 1);
+      validate_user_pointer ((void*)second_arg);
+
       f->eax = write_handler ((int)*(esp + 1), (const void*)*(esp + 2), (unsigned)*(esp + 3));
+    }
       break;
 
     case SYS_SEEK:
@@ -192,10 +222,16 @@ close_handler (int fd UNUSED)
 
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
    should free any of its resources and call thread_exit(). */
-static bool
+static void
 validate_user_pointer (void *pointer)
 {
   struct thread *t = thread_current ();
 
-	return is_user_vaddr (pointer) && pagedir_get_page (t->pagedir, pointer) != NULL;
+  // Terminate cleanly if the address is invalid.
+	if (!is_user_vaddr (pointer) || pagedir_get_page (t->pagedir, pointer) == NULL) {
+    thread_exit ();
+
+    // As we terminate, we shouldn't reach this point.
+    NOTREACHED();
+  }
 }
