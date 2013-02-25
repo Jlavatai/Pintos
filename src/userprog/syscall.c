@@ -197,7 +197,7 @@ open_handler (const char *filename)
 
     fd = descriptor->fd;
 
-    hash_insert (&t->file_descriptor_table, descriptor); 
+    hash_insert (&t->file_descriptor_table, &descriptor->hash_elem); 
   }
 
   lock_release (&file_system_lock);
@@ -269,15 +269,31 @@ write_handler (int fd, const void *buffer, unsigned size)
 }
 
 static void
-seek_handler (int fd UNUSED, unsigned position UNUSED)
+seek_handler (int fd, unsigned position)
 {
+  lock_acquire (&file_system_lock);
 
+  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  if (descriptor != NULL)
+    file_seek (descriptor->file, position);
+
+  lock_release (&file_system_lock); 
 }
 
 static unsigned
 tell_handler (int fd UNUSED)
 {
-	return 0;
+  lock_acquire (&file_system_lock);
+
+  unsigned position = 0;
+
+  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  if (descriptor != NULL)
+    position = (unsigned)file_tell (descriptor->file);
+
+  lock_release (&file_system_lock); 
+
+  return position;
 }
 
 static void
@@ -296,12 +312,10 @@ close_handler (int fd)
 static void
 validate_user_pointer (void *pointer)
 {
-  return;
-
   struct thread *t = thread_current ();
 
   // Terminate cleanly if the address is invalid.
-	if (!is_user_vaddr (pointer) || pagedir_get_page (t->pagedir, pointer) == NULL) {
+	if (!is_user_vaddr (pointer)) {
     thread_exit ();
 
     // As we terminate, we shouldn't reach this point.
