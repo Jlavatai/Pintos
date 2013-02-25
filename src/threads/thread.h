@@ -96,7 +96,6 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     struct list lock_list;              /* Ordered List of the thread's held locks, with highest priority first */
     int priority;
-    struct list_elem procelem;          /* Element for the children list */
     struct lock *blocker;               /* Each thread knows of the lock that's blocking it*/
 
     struct list children;               /* Holds the list of processes started by this process. */
@@ -105,13 +104,18 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     int nice;                            /* The nice value used for the mlfq scheduler. */
     fixed_point recent_cpu;              /* The recent CPU value used by the mlfq scheduler. */
-    struct semaphore anchor;            /* A semaphore held during the thread's life */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-    int exit_status;
+
 
 #ifdef USERPROG
+    struct condition isFinished;  /* A synchronisation primitive that signals when it finishes */
+    struct lock anchor;           /* A lock held during the thread's life */
+    int exit_status;
+    struct list_elem procelem;          /* Element for the children list */
+
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
