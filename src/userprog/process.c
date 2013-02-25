@@ -225,12 +225,11 @@ process_wait (tid_t child_tid)
 	{
 		struct thread *t = list_entry (e, struct thread, procelem);
 		if (t->tid == child_tid) {
-			sema_down(&t->anchor);
-			int exit_status = t->exit_status;
-			sema_up(&t->anchor);
-      thread_unblock(t);
-			// After this point we can't rely on t being valid.
-			return exit_status;
+			lock_acquire(&t->anchor);
+			cond_wait(&t->isFinished, &t->anchor);
+			int exitStatus = t->exit_status;
+			lock_release(&t->anchor);
+			return exitStatus;
 		}
 	}
     return -1;
@@ -247,16 +246,13 @@ process_exit (void)
 
     printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
-    // Release the anchor!
-    sema_up(&thread_current()->anchor);
-
-    // The parent thread needs the thread struct so let it block until
-    // it has the data it needs (i.e. exit system call arguments)
-    int old_level = intr_disable ();
-    thread_block();
-    intr_set_level(old_level);
-
+    // Tell the processes waiters that this process is finished
+    lock_acquire(&cur->anchor);
+    cond_broadcast(&cur->isFinished, &cur->anchor);
+    lock_release(&cur->anchor);
+    thread_yield();
     pd = cur->pagedir;
+    // Remove this process from the parent's child process list
     list_remove(&cur->procelem);
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */

@@ -254,11 +254,12 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  #ifdef USERPROG
   // Add to parent thread's child list
   if (is_thread(running_thread ())) {
 	  list_push_back(&thread_current()->children, &t->procelem);
   }
+  #endif
 
   // Initialise timer sleep member to 0
   t->wakeup_tick = 0;
@@ -736,16 +737,21 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->exit_status = -1;
+
 
   list_init(&t->lock_list);
   list_init(&t->children);
+  #ifdef USERPROG
+  t->exit_status = -1;
   if (is_thread(running_thread())) {
 	  // Initialise Anchor
-	  sema_init(&t->anchor, 1);
-	  // "Acquire" it
-	  sema_down(&t->anchor);
+	  lock_init(&t->anchor);
+	  // Initialise life condition
+	  cond_init(&t->isFinished);
+	  // Acquire the lock
+//	  lock_acquire_as_thread(&t->anchor,t);
   }
+  #endif
   // Set Priority
   if (thread_mlfqs)
     thread_mlfqs_recompute_priority (t, NULL);
