@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -126,9 +127,15 @@ wait_handler (int pid UNUSED)
 }
 
 static bool
-create_handler (const char *file UNUSED, unsigned initial_size UNUSED)
+create_handler (const char *file, unsigned initial_size)
 {
-	return false;
+  lock_acquire(&file_system_lock);
+
+  bool result = filesys_create(file, (off_t)initial_size);
+
+  lock_release(&file_system_lock);
+
+	return result;
 }
 
 static bool
