@@ -249,7 +249,23 @@ write_handler (int fd, const void *buffer, unsigned size)
     return size;
   }
 
-	return 0;
+  int bytes_written = -1;
+
+  lock_acquire (&file_system_lock);
+
+  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  if (descriptor != NULL) {
+    struct file *file = descriptor->file;
+    int write_size = size;
+    if (write_size > file_length (file))
+      write_size = file_length (file);
+
+    bytes_written = (int)file_write (file, buffer, write_size);
+  }
+
+  lock_release (&file_system_lock); 
+
+	return bytes_written;
 }
 
 static void
