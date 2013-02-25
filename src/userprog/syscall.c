@@ -120,7 +120,13 @@ remove_handler (struct intr_frame *f)
 {
   const char *file = stack_argument (f, 0, const char*);
 
-	f->eax = false;
+  lock_acquire(&file_system_lock);
+
+  bool result = filesys_remove(file);
+
+  lock_release(&file_system_lock);
+
+  f->eax = result;
 }
 
 static void
