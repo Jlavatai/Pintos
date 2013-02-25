@@ -55,7 +55,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_CREATE:
-      f->eax = create_handler ((const char*)*(esp + 2), (unsigned)*(esp + 1));
+      f->eax = create_handler ((const char*)*(esp + 1), (unsigned)*(esp + 2));
       break;
 
     case SYS_REMOVE:
@@ -71,7 +71,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_READ:
-      f->eax = read_handler ((int)*(esp + 3), (void*)*(esp + 2), (unsigned)*(esp + 1));
+      f->eax = read_handler ((int)*(esp + 1), (void*)*(esp + 2), (unsigned)*(esp + 3));
       break;
 
     case SYS_WRITE:
@@ -79,7 +79,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_SEEK:
-      seek_handler ((int)*(esp + 2), (unsigned)*(esp + 1));
+      seek_handler ((int)*(esp + 1), (unsigned)*(esp + 2));
       break;
 
     case SYS_TELL:
