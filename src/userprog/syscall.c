@@ -24,10 +24,15 @@ static void close_handler (int fd);
 
 static bool validate_user_pointer (void *pointer);
 
+static struct lock file_system_lock;
+
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+
+  // Initialise the lock which is used for filesystem access.
+  lock_init(&file_system_lock);
 }
 
 static void
