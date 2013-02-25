@@ -7,27 +7,46 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
+
+#define stack_argument(INTR_FRAME, INDEX, TYPE) (TYPE)*((int32_t*)((INTR_FRAME)->esp) + (INDEX) + 1)
+typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
 
 static void syscall_handler (struct intr_frame *);
 
-static void halt_handler (void);
-void exit_handler (int status);
-static int exec_handler (const char *cmd_line);
-static int wait_handler (int pid);
-static bool create_handler (const char *file, unsigned initial_size);
-static bool remove_handler (const char *file);
-static int open_handler (const char *file);
-static int filesize_handler (int fd);
-static int read_handler (int fd, void *buffer, unsigned size);
-static int write_handler (int fd, const void *buffer, unsigned size);
-static void seek_handler (int fd, unsigned position);
-static unsigned tell_handler (int fd);
-static void close_handler (int fd);
+static void halt_handler      (struct intr_frame *f);
+static void exit_handler      (struct intr_frame *f);
+static void exec_handler      (struct intr_frame *f);
+static void wait_handler      (struct intr_frame *f);
+static void create_handler    (struct intr_frame *f);
+static void remove_handler    (struct intr_frame *f);
+static void open_handler      (struct intr_frame *f);
+static void filesize_handler  (struct intr_frame *f);
+static void read_handler      (struct intr_frame *f);
+static void write_handler     (struct intr_frame *f);
+static void seek_handler      (struct intr_frame *f);
+static void tell_handler      (struct intr_frame *f);
+static void close_handler     (struct intr_frame *f);
 
 static void validate_user_pointer (void *pointer);
 static struct file_descriptor *get_file_descriptor_struct(int fd);
 
 static struct lock file_system_lock;
+static const SYSCALL_HANDLER syscall_handlers[] = {
+  &halt_handler,
+  &exit_handler,
+  &exec_handler,
+  &wait_handler,
+  &create_handler,
+  &remove_handler,
+  &open_handler,
+  &filesize_handler,
+  &read_handler,
+  &write_handler,
+  &seek_handler,
+  &tell_handler,
+  &close_handler
+};
 
 void
 syscall_init (void) 
@@ -41,144 +60,75 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  int32_t *esp = f->esp;
-  int32_t syscall_number = *esp;
+  int32_t syscall_number = *((int32_t*)f->esp);
 
-  switch (syscall_number)
-  {
-  	case SYS_HALT:
-  		halt_handler ();
-  		break;
-
-  	case SYS_EXIT:
-  		exit_handler (*(esp + 1));
-  		break;
-
-  	case SYS_EXEC:
-    {
-      const char *first_arg = (const char*)*(esp + 1);
-      validate_user_pointer ((void*)first_arg);
-
-  		f->eax = exec_handler (first_arg);
-    }
-  		break;
-
-    case SYS_WAIT:
-      f->eax = wait_handler (*(esp + 1));
-      break;
-
-    case SYS_CREATE:
-    {
-      const char *first_arg = (const char*)*(esp + 1);
-      validate_user_pointer ((void*)first_arg);
-
-      f->eax = create_handler (first_arg, (unsigned)*(esp + 2));
-    }
-      break;
-
-    case SYS_REMOVE:
-    {
-      const char *first_arg = (const char*)*(esp + 1);
-      validate_user_pointer ((void*)first_arg);
-
-      f->eax = remove_handler (first_arg);
-    }
-      break;
-
-    case SYS_OPEN:
-    {
-      const char *first_arg = (const char*)*(esp + 1);
-      validate_user_pointer ((void*)first_arg);
-
-      f->eax = open_handler (first_arg);
-    }
-      break;
-
-    case SYS_FILESIZE:
-      f->eax = filesize_handler ((int)*(esp + 1));
-      break;
-
-    case SYS_READ:
-    {
-      void *second_arg = (void*)*(esp + 2);
-      validate_user_pointer ((void*)second_arg);
-
-      f->eax = read_handler ((int)*(esp + 1), (void*)*(esp + 2), (unsigned)*(esp + 3));
-    }
-      break;
-
-    case SYS_WRITE:
-    {
-      void *second_arg = (void*)*(esp + 1);
-      validate_user_pointer ((void*)second_arg);
-
-      f->eax = write_handler ((int)*(esp + 1), (const void*)*(esp + 2), (unsigned)*(esp + 3));
-    }
-      break;
-
-    case SYS_SEEK:
-      seek_handler ((int)*(esp + 1), (unsigned)*(esp + 2));
-      break;
-
-    case SYS_TELL:
-      f->eax = tell_handler (*(esp + 1));
-      break;
-
-    case SYS_CLOSE:
-      close_handler (*(esp + 1));
-      break;
-  }
+  ASSERT(syscall_number < SYS_NUM_SYSCALLS);
+  syscall_handlers[syscall_number](f);
 }
 
 // /* System calls */
 static void
-halt_handler (void)
+halt_handler (struct intr_frame *f)
 {
 
 }
 
-void
-exit_handler (int status)
+static void
+exit_handler (struct intr_frame *f)
 {
+  int status = stack_argument(f, 0, int);
+  // int status = (int)*((int32_t*)((f)->esp) + (0) + 1);
+
   struct thread *t = thread_current ();
   t->exit_status = status;
 
   thread_exit();
 }
 
-static int
-exec_handler (const char *cmd_line UNUSED)
+static void
+exec_handler (struct intr_frame *f)
 {
-	return 0;
+  const char *cmd_line = stack_argument (f, 0, const char*); 
+
+	f->eax = 0;
 }
 
-static int
-wait_handler (int pid UNUSED)
+static void
+wait_handler (struct intr_frame *f)
 {
-	return 0;
+  int pid = stack_argument (f, 0, int);
+
+	f->eax = 0;
 }
 
-static bool
-create_handler (const char *file, unsigned initial_size)
+static void
+create_handler (struct intr_frame *f)
 {
+  const char *file = stack_argument (f, 0, const char*);
+  unsigned initial_size = stack_argument(f, 1, unsigned);
+
   lock_acquire(&file_system_lock);
 
   bool result = filesys_create(file, (off_t)initial_size);
 
   lock_release(&file_system_lock);
 
-	return result;
+	f->eax = result;
 }
 
-static bool
-remove_handler (const char *file UNUSED)
+static void
+remove_handler (struct intr_frame *f)
 {
-	return false;
+  const char *file = stack_argument (f, 0, const char*);
+
+	f->eax = false;
 }
 
-static int
-open_handler (const char *filename)
+static void
+open_handler (struct intr_frame *f)
 {
+  const char *filename = stack_argument (f, 0, const char*);
+
   lock_acquire (&file_system_lock);
 
   int fd = -1;
@@ -202,12 +152,14 @@ open_handler (const char *filename)
 
   lock_release (&file_system_lock);
 
-  return fd;
+  f->eax = fd;
 }
 
-static int
-filesize_handler (int fd)
+static void
+filesize_handler (struct intr_frame *f)
 {
+  int fd = stack_argument (f, 0, int);
+
   lock_acquire (&file_system_lock);
 
   int file_size = 0;
@@ -217,15 +169,21 @@ filesize_handler (int fd)
 
   lock_release (&file_system_lock);
 
-	return file_size;
+	f->eax = file_size;
 }
 
-static int
-read_handler (int fd, void *buffer, unsigned size)
+static void
+read_handler (struct intr_frame *f)
 {
+  int fd = stack_argument (f, 0, int);
+  void *buffer = stack_argument (f, 1, void*);
+  unsigned size = stack_argument (f, 2, unsigned);
+
   // TODO: implement
-  if (fd == 0)
-    return 0;
+  if (fd == 0) {
+    f->eax = 0;
+    return;
+  }
 
   int bytes_read = -1;
 
@@ -238,15 +196,20 @@ read_handler (int fd, void *buffer, unsigned size)
 
   lock_release (&file_system_lock);
 
-	return bytes_read;
+	f->eax = bytes_read;
 }
 
-static int
-write_handler (int fd, const void *buffer, unsigned size)
+static void
+write_handler (struct intr_frame *f)
 {
+  int fd = stack_argument (f, 0, int);
+  const void *buffer = stack_argument (f, 1, const void*);
+  unsigned size = stack_argument (f, 2, unsigned);
+
   if (fd == 1) {
     putbuf (buffer, size);
-    return size;
+    f->eax = size;
+    return;
   }
 
   int bytes_written = -1;
@@ -265,12 +228,15 @@ write_handler (int fd, const void *buffer, unsigned size)
 
   lock_release (&file_system_lock); 
 
-	return bytes_written;
+	f->eax = bytes_written;
 }
 
 static void
-seek_handler (int fd, unsigned position)
+seek_handler (struct intr_frame *f)
 {
+  int fd = stack_argument (f, 0, int);
+  unsigned position = stack_argument (f, 1, unsigned);
+
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
@@ -280,9 +246,11 @@ seek_handler (int fd, unsigned position)
   lock_release (&file_system_lock); 
 }
 
-static unsigned
-tell_handler (int fd UNUSED)
+static void
+tell_handler (struct intr_frame *f)
 {
+  int fd = stack_argument (f, 0, int);
+
   lock_acquire (&file_system_lock);
 
   unsigned position = 0;
@@ -293,12 +261,14 @@ tell_handler (int fd UNUSED)
 
   lock_release (&file_system_lock); 
 
-  return position;
+  f->eax = position;
 }
 
 static void
-close_handler (int fd)
+close_handler (struct intr_frame *f)
 {
+  int fd = stack_argument (f, 0, int);
+
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *open_file_descriptor = get_file_descriptor_struct (fd);
