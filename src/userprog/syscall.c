@@ -77,7 +77,6 @@ static void
 exit_handler (struct intr_frame *f)
 {
   int status = stack_argument(f, 0, int);
-  // int status = (int)*((int32_t*)((f)->esp) + (0) + 1);
 
   struct thread *t = thread_current ();
   t->exit_status = status;
