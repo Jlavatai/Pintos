@@ -240,8 +240,25 @@ tell_handler (int fd UNUSED)
 }
 
 static void
-close_handler (int fd UNUSED)
+close_handler (int fd)
 {
+  lock_acquire (&file_system_lock);
+
+  struct file_descriptor descriptor;
+  descriptor.fd = fd;
+
+  struct thread *t = thread_current ();
+  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
+                                               &descriptor.hash_elem);
+  if (found_element != NULL) {
+    struct file_descriptor *open_file_descriptor = hash_entry (found_element,
+                                                               struct file_descriptor,
+                                                               hash_elem);
+
+    file_close (open_file_descriptor->file);
+  }
+
+  lock_release (&file_system_lock);
 }
 
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
