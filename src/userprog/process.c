@@ -478,6 +478,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                &file_descriptor_hash_function,
                &file_descriptor_less_func,
                NULL);
+    t->next_fd = 2;
 
     /* Start address. */
     *eip = (void ( *) (void)) ehdr.e_entry;

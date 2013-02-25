@@ -25,6 +25,7 @@ static unsigned tell_handler (int fd);
 static void close_handler (int fd);
 
 static void validate_user_pointer (void *pointer);
+static struct file_descriptor *get_file_descriptor_struct(int fd);
 
 static struct lock file_system_lock;
 
@@ -187,11 +188,11 @@ open_handler (const char *filename)
     struct thread *t = thread_current ();
 
     // fds 0 and 1 are reserved for stdout and stderr.
-    ASSERT(t->highest_fd > 1);
+    ASSERT(t->next_fd > 1);
 
     // Create the file_descriptor entry to put into the hash table.
     struct file_descriptor *descriptor = malloc (sizeof (struct file_descriptor));
-    descriptor->fd = ++(t->highest_fd);
+    descriptor->fd = (t->next_fd)++;
     descriptor->file = file;
 
     fd = descriptor->fd;
@@ -205,9 +206,18 @@ open_handler (const char *filename)
 }
 
 static int
-filesize_handler (int fd UNUSED)
+filesize_handler (int fd)
 {
-	return 0;
+  lock_acquire (&file_system_lock);
+
+  int file_size = 0;
+  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  if (descriptor != NULL)
+    file_size = file_length (descriptor->file);
+
+  lock_release (&file_system_lock);
+
+	return file_size;
 }
 
 static int
@@ -244,19 +254,8 @@ close_handler (int fd)
 {
   lock_acquire (&file_system_lock);
 
-  struct file_descriptor descriptor;
-  descriptor.fd = fd;
-
-  struct thread *t = thread_current ();
-  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
-                                               &descriptor.hash_elem);
-  if (found_element != NULL) {
-    struct file_descriptor *open_file_descriptor = hash_entry (found_element,
-                                                               struct file_descriptor,
-                                                               hash_elem);
-
-    file_close (open_file_descriptor->file);
-  }
+  struct file_descriptor *open_file_descriptor = get_file_descriptor_struct (fd);
+  file_close (open_file_descriptor->file);
 
   lock_release (&file_system_lock);
 }
@@ -277,4 +276,27 @@ validate_user_pointer (void *pointer)
     // As we terminate, we shouldn't reach this point.
     NOTREACHED();
   }
+}
+
+static struct file_descriptor *
+get_file_descriptor_struct(int fd)
+{
+  // fd 0 and 1 are reserved for stout and stderr respectively.
+  if (fd < 2)
+    return NULL;
+
+  struct file_descriptor descriptor;
+  descriptor.fd = fd;
+
+  struct thread *t = thread_current ();
+  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
+                                               &descriptor.hash_elem);
+  if (found_element == NULL)
+    return NULL;
+
+  struct file_descriptor *open_file_descriptor = hash_entry (found_element,
+                                                             struct file_descriptor,
+                                                             hash_elem);
+
+  return open_file_descriptor;
 }

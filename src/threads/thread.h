@@ -115,7 +115,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
-    int highest_fd;                     /* Stores the highest file descriptor in use. */
+    int next_fd;                        /* Stores the next file descriptor for use. */
 #endif
 
     /* Owned by thread.c. */
