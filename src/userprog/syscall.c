@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 #include "filesys/filesys.h"
 
 static void syscall_handler (struct intr_frame *);
@@ -175,9 +176,32 @@ remove_handler (const char *file UNUSED)
 }
 
 static int
-open_handler (const char *file UNUSED)
+open_handler (const char *filename)
 {
-  return 0;
+  lock_acquire (&file_system_lock);
+
+  int fd = -1;
+  struct file *file = filesys_open (filename);
+
+  if (file != NULL) {
+    struct thread *t = thread_current ();
+
+    // fds 0 and 1 are reserved for stdout and stderr.
+    ASSERT(t->highest_fd > 1);
+
+    // Create the file_descriptor entry to put into the hash table.
+    struct file_descriptor *descriptor = malloc (sizeof (struct file_descriptor));
+    descriptor->fd = ++(t->highest_fd);
+    descriptor->file = file;
+
+    fd = descriptor->fd;
+
+    hash_insert (&t->file_descriptor_table, descriptor); 
+  }
+
+  lock_release (&file_system_lock);
+
+  return fd;
 }
 
 static int
@@ -225,6 +249,8 @@ close_handler (int fd UNUSED)
 static void
 validate_user_pointer (void *pointer)
 {
+  return;
+
   struct thread *t = thread_current ();
 
   // Terminate cleanly if the address is invalid.

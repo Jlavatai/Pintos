@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 #include "synch.h"
 
@@ -113,6 +114,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
+    int highest_fd;                     /* Stores the highest file descriptor in use. */
 #endif
 
     /* Owned by thread.c. */

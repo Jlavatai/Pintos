@@ -28,6 +28,11 @@ struct list argv;
 
 int argc;
 
+unsigned file_descriptor_hash_function (const struct hash_elem *e, void *aux);
+bool file_descriptor_less_func (const struct hash_elem *a,
+                                const struct hash_elem *b,
+                                void *aux);
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -274,6 +279,9 @@ process_exit (void)
         pagedir_activate (NULL);
         pagedir_destroy (pd);
     }
+
+    /* Destroy the file descriptor table */
+    hash_destroy(&cur->file_descriptor_table, NULL);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -465,6 +473,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
     if (!setup_stack (esp))
         goto done;
 
+    /* Set up file descriptor table. */
+    hash_init (&t->file_descriptor_table,
+               &file_descriptor_hash_function,
+               &file_descriptor_less_func,
+               NULL);
+
     /* Start address. */
     *eip = (void ( *) (void)) ehdr.e_entry;
 
@@ -622,4 +636,27 @@ install_page (void *upage, void *kpage, bool writable)
        address, then map our page there. */
     return (pagedir_get_page (t->pagedir, upage) == NULL
             && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* File descriptor functions. */
+
+unsigned file_descriptor_hash_function (const struct hash_elem *e, void *aux)
+{
+  struct file_descriptor *descriptor =  hash_entry (e, struct file_descriptor, hash_elem);
+
+  return descriptor->fd;
+}
+
+bool file_descriptor_less_func (const struct hash_elem *a,
+                                const struct hash_elem *b,
+                                void *aux)
+{
+  struct file_descriptor *descriptor_a =  hash_entry (a,
+                                                      struct file_descriptor,
+                                                      hash_elem);
+  struct file_descriptor *descriptor_b =  hash_entry (b,
+                                                      struct file_descriptor,
+                                                      hash_elem);
+
+  return descriptor_a->fd < descriptor_b->fd;
 }
