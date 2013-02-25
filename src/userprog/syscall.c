@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h" 
 
 static void syscall_handler (struct intr_frame *);
 
@@ -55,7 +56,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_CREATE:
-      f->eax = create_handler ((const char*)*(esp + 1), (unsigned)*(esp + 2));
+      f->eax = create_handler ((const char*)*(esp + 2), (unsigned)*(esp + 1));
       break;
 
     case SYS_REMOVE:
@@ -71,7 +72,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_READ:
-      f->eax = read_handler ((int)*(esp + 1), (void*)*(esp + 2), (unsigned)*(esp + 3));
+      f->eax = read_handler ((int)*(esp + 3), (void*)*(esp + 2), (unsigned)*(esp + 1));
       break;
 
     case SYS_WRITE:
@@ -79,7 +80,7 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_SEEK:
-      seek_handler ((int)*(esp + 1), (unsigned)*(esp + 2));
+      seek_handler ((int)*(esp + 2), (unsigned)*(esp + 1));
       break;
 
     case SYS_TELL:
@@ -109,15 +110,20 @@ exit_handler (int status)
 }
 
 static int
-exec_handler (const char *cmd_line UNUSED)
+exec_handler (const char *cmd_line )
 {
-	return 0;
+	int proc_ident = process_execute(cmd_line);
+
+  sema_down(&exec_sema);
+
+  return proc_ident;
+
 }
 
 static int
-wait_handler (int pid UNUSED)
+wait_handler (int pid)
 {
-	return 0;
+	return process_wait(pid);
 }
 
 static bool
@@ -153,6 +159,9 @@ read_handler (int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED)
 static int
 write_handler (int fd, const void *buffer, unsigned size)
 {
+
+  printf("Printing buf %s\n", (char *) buffer );
+
   if (fd == 1) {
     putbuf (buffer, size);
     return size;

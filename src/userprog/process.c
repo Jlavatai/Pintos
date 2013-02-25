@@ -24,9 +24,11 @@ struct argument
     struct list_elem token_list_elem;
 };
 
-struct list argv;
-
-int argc;
+struct stack_setup_data
+{
+  struct list argv;
+  int argc;
+};
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -38,6 +40,9 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
+    sema_init(&exec_sema, 1);
+    sema_down(&exec_sema);
+
     char *fn_copy;
     tid_t tid;
 
@@ -46,11 +51,24 @@ process_execute (const char *file_name)
     fn_copy = palloc_get_page (0);
     // fn_copy = "run.exe arg1 arg2 arg3..."
     if (fn_copy == NULL)
+    {
+      sema_up(&exec_sema);
         return TID_ERROR;
+    }
     strlcpy (fn_copy, file_name, PGSIZE);
 
-    list_init(&argv);
-    argc = 0;
+    struct stack_setup_data* setup_data = NULL;
+
+    setup_data = malloc(sizeof(struct stack_setup_data));
+
+    if (setup_data == NULL)
+    {
+      sema_up(&exec_sema);
+        return TID_ERROR;
+    }
+
+    list_init(&setup_data->argv);
+    setup_data->argc = 0;
 
     char *token, *pos;
 
@@ -61,135 +79,155 @@ process_execute (const char *file_name)
     for (token = strtok_r (fn_copy, " ", &pos); token != NULL;
             token = strtok_r (NULL, " ", &pos))
     {
-        struct argument *arg = malloc(sizeof(struct argument));
+        struct argument *arg = NULL;
+        arg = malloc(sizeof(struct argument));
+        
+        if(arg == NULL)
+        {
+          sema_up(&exec_sema);
+          return TID_ERROR;
+        }
+
         arg->token = token;
-        list_push_front(&argv, &arg->token_list_elem);
-       // printf ("'%s'\n", token);
-        argc++;
+        list_push_front(&setup_data->argv, &arg->token_list_elem);
+        //printf ("'%s'\n", token);
+        setup_data->argc++;
     }
 
     //printf("----Ending tokenization\n");
 
-    struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
+    struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
    // printf("%s %d\n", fst_arg->token, argc);
 
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, NULL);
+    tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
         palloc_free_page (fn_copy);
+
+    sema_up(&exec_sema);
     return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *unused UNUSED)
+start_process (void *setup_data_)
 {
 
+  struct stack_setup_data *setup_data = (struct stack_setup_data *) setup_data_;
+
+  //struct params_struct *params = params_;
+  //printf("Casted to params ptr\n");
+  struct intr_frame if_;
+  bool success;
+
+   struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
+   char *fst_arg_saved = fst_arg->token; 
+
+  //printf("----Proc name is %s\n", fst_arg_saved);
+
+  /* Initialize interrupt frame and load executable. */
+  memset (&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+  success = load (fst_arg_saved, &if_.eip, &if_.esp);
+
+  /* If load failed, quit. */
+  
+  if (!success)
+      thread_exit ();
+
+  //printf("-----Success\n");
+  /*Set Up Stack here*/
 
 
-    //struct params_struct *params = params_;
-    //printf("Casted to params ptr\n");
-    struct intr_frame if_;
-    bool success;
+  struct list_elem *e;
 
-     struct argument *fst_arg = list_entry(list_back(&argv), struct argument, token_list_elem);
-     char *fst_arg_saved = fst_arg->token; 
+  //Push the actual strings by copying them, then change the 
+  //char* value stored in the arguments list so that we can traverse again.
 
-    // printf("----Proc name is %s\n", fst_arg_saved);
+  for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);
+          e = list_next (e))
+  {
+      struct argument *arg = list_entry (e, struct argument, token_list_elem);
+      //printf("Got actual argument\n");
+      //printf("%s\n", arg->token );
+      char *curr_arg = arg->token;
+      //printf("%s\n", curr_arg );
+      if_.esp -= (strlen(curr_arg) + 1);
+      strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
+      // printf("Copied String\n");
+      printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
+      arg->token = if_.esp;
+      // printf("Stored pointer\n");
+      // printf("Decreasing by %d\n", strlen(curr_arg) + 1);
+      //printf("Decresed esp\n");
+  }
 
-    /* Initialize interrupt frame and load executable. */
-    memset (&if_, 0, sizeof if_);
-    if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-    if_.cs = SEL_UCSEG;
-    if_.eflags = FLAG_IF | FLAG_MBS;
-    success = load (fst_arg_saved, &if_.eip, &if_.esp);
-
-    /* If load failed, quit. */
-    
-    if (!success)
-        thread_exit ();
-
-    /*Set Up Stack here*/
-
-
-    struct list_elem *e;
-
-    //Push the actual strings by copying them, then change the 
-    //char* value stored in the arguments list so that we can traverse again.
-
-    for (e = list_begin (&argv); e != list_end (&argv);
-            e = list_next (e))
-    {
-        struct argument *arg = list_entry (e, struct argument, token_list_elem);
-        //printf("Got actual argument\n");
-        char *curr_arg = arg->token;
-        //printf("%s\n", curr_arg );
-        if_.esp -= (strlen(curr_arg) + 1);
-        strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
-        //printf("Copied String\n");
-       // printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
-        arg->token = if_.esp;
-        //printf("Stored pointer\n");
-       // printf("Decreasing by %d\n", strlen(curr_arg) + 1);
-        //printf("Decresed esp\n");
-    }
-
-   //hex_dump(0, if_.esp, 100, true);
+   hex_dump(0, if_.esp, 100, true);
 
     //printf("---First Pass done\n");
    //Push word align
 
-    uint8_t align = 0;
-    if_.esp -= (sizeof(uint8_t));
-    *(uint8_t *)if_.esp = align;
+  uint8_t align = 0;
+  if_.esp -= (sizeof(uint8_t));
+  *(uint8_t *)if_.esp = align;
 
-    char *last_arg_ptr  = NULL;
-      if_.esp-= (sizeof(char *));
-      *(int32_t *)if_.esp = last_arg_ptr;
+  char *last_arg_ptr  = NULL;
+  if_.esp-= (sizeof(char *));
+  *(int32_t *)if_.esp = last_arg_ptr;
 
 
-     for (e = list_begin (&argv); e != list_end (&argv);
-            e = list_next (e))
-    {
-        struct argument *arg = list_entry (e, struct argument, token_list_elem);
-        char *curr_arg = arg->token;
-        if_.esp -= (sizeof(char*));
-        *(int32_t *)if_.esp = curr_arg;
-        //free(arg);
-        // printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
-        // printf("pushed ptr\n");
-    }
+  for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);
+         e = list_next (e))
+  {
+      struct argument *arg = list_entry (e, struct argument, token_list_elem);
+      char *curr_arg = arg->token;
+      if_.esp -= (sizeof(char*));
+      *(int32_t *)if_.esp = curr_arg;
+      printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
+      // printf("pushed ptr\n");
+  }
 
 
 
       // printf("---Second pass done\n");
 
-       char **fst_arg_ptr = if_.esp;
-       // printf("Esp value is 0x%x\n", (unsigned int) if_.esp);
-       // printf("I'm about to push 0x%x\n", fst_arg_ptr);
-       if_.esp -= (sizeof(char **));
-      *(int32_t *)if_.esp = fst_arg_ptr;
+  char **fst_arg_ptr = if_.esp;
+   // printf("Esp value is 0x%x\n", (unsigned int) if_.esp);
+  // printf("I'm about to push 0x%x\n", fst_arg_ptr);
+  if_.esp -= (sizeof(char **));
+  *(int32_t *)if_.esp = fst_arg_ptr;
       
       //   printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp) );
 
       // printf("---Pushed argv\n");
-
-        if_.esp -=(sizeof(argc));
-       *(int32_t *)if_.esp = argc;
+  if_.esp -=(sizeof(&setup_data->argc));
+  *(int32_t *)if_.esp = &setup_data->argc;
      
 
        // printf("----Pushed argc\n");
        //   printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
 
-       void *fake_return  = 0;
-       if_.esp -= (sizeof(void *));
-      *(int32_t *)if_.esp = fake_return;
+  void *fake_return  = 0;
+  if_.esp -= (sizeof(void *));
+  *(int32_t *)if_.esp = fake_return;
 
       // printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
       
 
       //  printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
+
+        /*Free all the list*/
+
+    //  for (e = list_begin (&argv); e != list_end (&argv);
+    //         e = list_next (e))
+    // {
+    //   struct argument *arg = list_entry (e, struct argument, token_list_elem);
+    //   free(arg);
+    // }
+
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -198,7 +236,9 @@ start_process (void *unused UNUSED)
        we just point the stack pointer (%esp) to our stack frame
        and jump to it. */
 
-       //hex_dump(0, if_.esp, 100, true);
+       hex_dump(0, if_.esp, 100, true);
+
+
 
     palloc_free_page (fst_arg_saved);
     asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
