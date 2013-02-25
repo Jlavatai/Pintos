@@ -88,6 +88,7 @@ static void
 exec_handler (struct intr_frame *f)
 {
   const char *cmd_line = stack_argument (f, 0, const char*); 
+  validate_user_pointer (cmd_line);
 
 	f->eax = 0;
 }
@@ -105,6 +106,7 @@ create_handler (struct intr_frame *f)
 {
   const char *file = stack_argument (f, 0, const char*);
   unsigned initial_size = stack_argument(f, 1, unsigned);
+  validate_user_pointer (file);
 
   lock_acquire(&file_system_lock);
 
@@ -119,6 +121,7 @@ static void
 remove_handler (struct intr_frame *f)
 {
   const char *file = stack_argument (f, 0, const char*);
+  validate_user_pointer (file);
 
   lock_acquire(&file_system_lock);
 
@@ -133,6 +136,7 @@ static void
 open_handler (struct intr_frame *f)
 {
   const char *filename = stack_argument (f, 0, const char*);
+  validate_user_pointer (filename);
 
   lock_acquire (&file_system_lock);
 
@@ -184,6 +188,8 @@ read_handler (struct intr_frame *f)
   void *buffer = stack_argument (f, 1, void*);
   unsigned size = stack_argument (f, 2, unsigned);
 
+  validate_user_pointer (buffer);
+
   // TODO: implement
   if (fd == 0) {
     f->eax = 0;
@@ -210,6 +216,8 @@ write_handler (struct intr_frame *f)
   int fd = stack_argument (f, 0, int);
   const void *buffer = stack_argument (f, 1, const void*);
   unsigned size = stack_argument (f, 2, unsigned);
+
+  validate_user_pointer (buffer);
 
   if (fd == 1) {
     putbuf (buffer, size);
