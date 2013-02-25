@@ -221,9 +221,24 @@ filesize_handler (int fd)
 }
 
 static int
-read_handler (int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED)
+read_handler (int fd, void *buffer, unsigned size)
 {
-	return 0;
+  // TODO: implement
+  if (fd == 0)
+    return 0;
+
+  int bytes_read = -1;
+
+  lock_acquire (&file_system_lock);
+
+  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  if (descriptor != NULL) {
+    bytes_read = (int)file_read (descriptor->file, buffer, size);
+  }
+
+  lock_release (&file_system_lock);
+
+	return bytes_read;
 }
 
 static int
