@@ -68,9 +68,9 @@ syscall_handler (struct intr_frame *f)
 
 // /* System calls */
 static void
-halt_handler (struct intr_frame *f)
+halt_handler (struct intr_frame *f UNUSED)
 {
-
+  shutdown_power_off();
 }
 
 static void
