@@ -300,7 +300,7 @@ validate_user_pointer (void *pointer)
   struct thread *t = thread_current ();
 
   // Terminate cleanly if the address is invalid.
-	if (!is_user_vaddr (pointer)) {
+	if (pointer == NULL || !is_user_vaddr (pointer)) {
     thread_exit ();
 
     // As we terminate, we shouldn't reach this point.
