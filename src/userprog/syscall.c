@@ -6,14 +6,12 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h" 
-=======
 #include "userprog/process.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 
 #define stack_argument(INTR_FRAME, INDEX, TYPE) (TYPE)*((int32_t*)((INTR_FRAME)->esp) + (INDEX) + 1)
 typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
->>>>>>> 9cb86498ea753fb4a4c8b1e97969d5a51cb12980
 
 static void syscall_handler (struct intr_frame *);
 
@@ -63,69 +61,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  int32_t *esp = f->esp;
-  int32_t syscall_number = *esp;
-
-  switch (syscall_number)
-  {
-  	case SYS_HALT:
-  		halt_handler ();
-  		break;
-
-  	case SYS_EXIT:
-  		exit_handler (*(esp + 1));
-  		break;
-
-  	case SYS_EXEC:
-  		f->eax = exec_handler ((const char*)*(esp + 1));
-  		break;
-
-    case SYS_WAIT:
-      f->eax = wait_handler (*(esp + 1));
-      break;
-
-    case SYS_CREATE:
-      f->eax = create_handler ((const char*)*(esp + 2), (unsigned)*(esp + 1));
-      break;
-
-    case SYS_REMOVE:
-      f->eax = remove_handler ((const char*)*(esp + 1));
-      break;
-
-    case SYS_OPEN:
-      f->eax = open_handler ((const char*)*(esp + 1));
-      break;
-
-    case SYS_FILESIZE:
-      f->eax = filesize_handler ((int)*(esp + 1));
-      break;
-
-    case SYS_READ:
-      f->eax = read_handler ((int)*(esp + 3), (void*)*(esp + 2), (unsigned)*(esp + 1));
-      break;
-
-    case SYS_WRITE:
-      f->eax = write_handler ((int)*(esp + 1), (const void*)*(esp + 2), (unsigned)*(esp + 3));
-      break;
-
-    case SYS_SEEK:
-      seek_handler ((int)*(esp + 2), (unsigned)*(esp + 1));
-      break;
-
-    case SYS_TELL:
-      f->eax = tell_handler (*(esp + 1));
-      break;
-
-    case SYS_CLOSE:
-      close_handler (*(esp + 1));
-      break;
-  }
-=======
   int32_t syscall_number = *((int32_t*)f->esp);
 
   ASSERT(syscall_number < SYS_NUM_SYSCALLS);
   syscall_handlers[syscall_number](f);
->>>>>>> 9cb86498ea753fb4a4c8b1e97969d5a51cb12980
 }
 
 // /* System calls */
@@ -277,16 +216,11 @@ read_handler (struct intr_frame *f)
 static void
 write_handler (struct intr_frame *f)
 {
-<<<<<<< HEAD
-
- // printf("Printing buf %s\n", (char *) buffer );
-=======
   int fd = stack_argument (f, 0, int);
   const void *buffer = stack_argument (f, 1, const void*);
   unsigned size = stack_argument (f, 2, unsigned);
 
   validate_user_pointer (buffer);
->>>>>>> 9cb86498ea753fb4a4c8b1e97969d5a51cb12980
 
   if (fd == 1) {
     putbuf (buffer, size);
