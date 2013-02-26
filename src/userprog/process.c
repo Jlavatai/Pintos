@@ -30,6 +30,11 @@ struct stack_setup_data
   int argc;
 };
 
+unsigned file_descriptor_hash_function (const struct hash_elem *e, void *aux);
+bool file_descriptor_less_func (const struct hash_elem *a,
+                                const struct hash_elem *b,
+                                void *aux);
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -265,12 +270,11 @@ process_wait (tid_t child_tid)
 	{
 		struct thread *t = list_entry (e, struct thread, procelem);
 		if (t->tid == child_tid) {
-			sema_down(&t->anchor);
-			int exit_status = t->exit_status;
-			sema_up(&t->anchor);
-      thread_unblock(t);
-			// After this point we can't rely on t being valid.
-			return exit_status;
+			lock_acquire(&t->anchor);
+			cond_wait(&t->isFinished, &t->anchor);
+			int exitStatus = t->exit_status;
+			lock_release(&t->anchor);
+			return exitStatus;
 		}
 	}
     return -1;
@@ -287,16 +291,13 @@ process_exit (void)
 
     printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
-    // Release the anchor!
-    sema_up(&thread_current()->anchor);
-
-    // The parent thread needs the thread struct so let it block until
-    // it has the data it needs (i.e. exit system call arguments)
-    int old_level = intr_disable ();
-    thread_block();
-    intr_set_level(old_level);
-
+    // Tell the processes waiters that this process is finished
+    lock_acquire(&cur->anchor);
+    cond_broadcast(&cur->isFinished, &cur->anchor);
+    lock_release(&cur->anchor);
+    thread_yield();
     pd = cur->pagedir;
+    // Remove this process from the parent's child process list
     list_remove(&cur->procelem);
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -314,6 +315,9 @@ process_exit (void)
         pagedir_activate (NULL);
         pagedir_destroy (pd);
     }
+
+    /* Destroy the file descriptor table */
+    hash_destroy(&cur->file_descriptor_table, NULL);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -505,6 +509,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
     if (!setup_stack (esp))
         goto done;
 
+    /* Set up file descriptor table. */
+    hash_init (&t->file_descriptor_table,
+               &file_descriptor_hash_function,
+               &file_descriptor_less_func,
+               NULL);
+    t->next_fd = 2;
+
     /* Start address. */
     *eip = (void ( *) (void)) ehdr.e_entry;
 
@@ -662,4 +673,27 @@ install_page (void *upage, void *kpage, bool writable)
        address, then map our page there. */
     return (pagedir_get_page (t->pagedir, upage) == NULL
             && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* File descriptor functions. */
+
+unsigned file_descriptor_hash_function (const struct hash_elem *e, void *aux)
+{
+  struct file_descriptor *descriptor =  hash_entry (e, struct file_descriptor, hash_elem);
+
+  return descriptor->fd;
+}
+
+bool file_descriptor_less_func (const struct hash_elem *a,
+                                const struct hash_elem *b,
+                                void *aux)
+{
+  struct file_descriptor *descriptor_a =  hash_entry (a,
+                                                      struct file_descriptor,
+                                                      hash_elem);
+  struct file_descriptor *descriptor_b =  hash_entry (b,
+                                                      struct file_descriptor,
+                                                      hash_elem);
+
+  return descriptor_a->fd < descriptor_b->fd;
 }
