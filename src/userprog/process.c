@@ -30,10 +30,11 @@ struct stack_setup_data
   int argc;
 };
 
-unsigned file_descriptor_hash_function (const struct hash_elem *e, void *aux);
-bool file_descriptor_less_func (const struct hash_elem *a,
-                                const struct hash_elem *b,
-                                void *aux);
+unsigned file_descriptor_table_hash_function (const struct hash_elem *e, void *aux);
+bool file_descriptor_table_less_func (const struct hash_elem *a,
+                                      const struct hash_elem *b,
+                                      void *aux);
+void file_descriptor_table_destroy_func (struct hash_elem *e, void *aux);
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -330,7 +331,8 @@ process_exit (void)
     }
 
     /* Destroy the file descriptor table */
-    hash_destroy(&cur->file_descriptor_table, NULL);
+    hash_destroy(&cur->file_descriptor_table,
+                 &file_descriptor_table_destroy_func);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -524,8 +526,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
     /* Set up file descriptor table. */
     hash_init (&t->file_descriptor_table,
-               &file_descriptor_hash_function,
-               &file_descriptor_less_func,
+               &file_descriptor_table_hash_function,
+               &file_descriptor_table_less_func,
                NULL);
     t->next_fd = 2;
 
@@ -690,16 +692,41 @@ install_page (void *upage, void *kpage, bool writable)
 
 /* File descriptor functions. */
 
-unsigned file_descriptor_hash_function (const struct hash_elem *e, void *aux)
+struct file_descriptor *
+process_get_file_descriptor_struct(int fd)
+{
+  // fd 0 and 1 are reserved for stout and stderr respectively.
+  if (fd < 2)
+    return NULL;
+
+  struct file_descriptor descriptor;
+  descriptor.fd = fd;
+
+  struct thread *t = thread_current ();
+  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
+                                               &descriptor.hash_elem);
+  if (found_element == NULL)
+    return NULL;
+
+  struct file_descriptor *open_file_descriptor = hash_entry (found_element,
+                                                             struct file_descriptor,
+                                                             hash_elem);
+
+  return open_file_descriptor;
+}
+
+unsigned
+file_descriptor_table_hash_function (const struct hash_elem *e, void *aux)
 {
   struct file_descriptor *descriptor =  hash_entry (e, struct file_descriptor, hash_elem);
 
   return descriptor->fd;
 }
 
-bool file_descriptor_less_func (const struct hash_elem *a,
-                                const struct hash_elem *b,
-                                void *aux)
+bool
+file_descriptor_table_less_func (const struct hash_elem *a,
+                           const struct hash_elem *b,
+                           void *aux)
 {
   struct file_descriptor *descriptor_a =  hash_entry (a,
                                                       struct file_descriptor,
@@ -709,4 +736,17 @@ bool file_descriptor_less_func (const struct hash_elem *a,
                                                       hash_elem);
 
   return descriptor_a->fd < descriptor_b->fd;
+}
+
+void
+file_descriptor_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
+{
+  struct file_descriptor *descriptor =  hash_entry (e,
+                                                    struct file_descriptor,
+                                                    hash_elem);
+
+  ASSERT (descriptor->file != NULL);
+
+  // Close the file descriptor for the open file.
+  close_syscall (descriptor->file);
 }

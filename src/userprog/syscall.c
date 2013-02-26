@@ -27,11 +27,12 @@ static void seek_handler      (struct intr_frame *f);
 static void tell_handler      (struct intr_frame *f);
 static void close_handler     (struct intr_frame *f);
 
+static struct lock file_system_lock;
+
 void *get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (void *pointer);
 static struct file_descriptor *get_file_descriptor_struct(int fd);
 
-static struct lock file_system_lock;
 static const SYSCALL_HANDLER syscall_handlers[] = {
   &halt_handler,
   &exit_handler,
@@ -78,10 +79,7 @@ exit_handler (struct intr_frame *f)
 {
   int status = (int)get_stack_argument(f, 0);
 
-  struct thread *t = thread_current ();
-  t->exit_status = status;
-
-  thread_exit();
+  exit_syscall (status);
 }
 
 
@@ -182,7 +180,7 @@ filesize_handler (struct intr_frame *f)
   lock_acquire (&file_system_lock);
 
   int file_size = 0;
-  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL)
     file_size = file_length (descriptor->file);
 
@@ -210,7 +208,7 @@ read_handler (struct intr_frame *f)
 
   lock_acquire (&file_system_lock);
 
-  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL) {
     bytes_read = (int)file_read (descriptor->file, buffer, size);
   }
@@ -239,7 +237,7 @@ write_handler (struct intr_frame *f)
 
   lock_acquire (&file_system_lock);
 
-  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL) {
     struct file *file = descriptor->file;
     int write_size = size;
@@ -262,7 +260,7 @@ seek_handler (struct intr_frame *f)
 
   lock_acquire (&file_system_lock);
 
-  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL)
     file_seek (descriptor->file, position);
 
@@ -278,7 +276,7 @@ tell_handler (struct intr_frame *f)
 
   unsigned position = 0;
 
-  struct file_descriptor *descriptor = get_file_descriptor_struct (fd);
+  struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL)
     position = (unsigned)file_tell (descriptor->file);
 
@@ -292,21 +290,8 @@ close_handler (struct intr_frame *f)
 {
   int fd = (int)get_stack_argument (f, 0);
 
-  lock_acquire (&file_system_lock);
-
-  struct file_descriptor *open_file_descriptor = get_file_descriptor_struct (fd);
-
-  // Close the file if it was found.
-  if (open_file_descriptor != NULL) {
-    file_close (open_file_descriptor->file);
-
-    // Remove the entry from the open files hash table.
-    struct file_descriptor descriptor;
-    descriptor.fd = fd;
-    hash_delete (&thread_current ()->file_descriptor_table, &descriptor.hash_elem);
-  }
-
-  lock_release (&file_system_lock);
+  struct file_descriptor *open_file_descriptor = process_get_file_descriptor_struct (fd);
+  close_syscall (open_file_descriptor);
 }
 
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
@@ -315,35 +300,14 @@ static void
 validate_user_pointer (void *pointer)
 {
   // Terminate cleanly if the address is invalid.
-	if (pointer == NULL || !is_user_vaddr (pointer)) {
-    thread_exit ();
+	if (pointer == NULL
+      || !is_user_vaddr (pointer)
+      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) {
+    exit_syscall (-1);
 
     // As we terminate, we shouldn't reach this point.
     NOTREACHED();
   }
-}
-
-static struct file_descriptor *
-get_file_descriptor_struct(int fd)
-{
-  // fd 0 and 1 are reserved for stout and stderr respectively.
-  if (fd < 2)
-    return NULL;
-
-  struct file_descriptor descriptor;
-  descriptor.fd = fd;
-
-  struct thread *t = thread_current ();
-  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
-                                               &descriptor.hash_elem);
-  if (found_element == NULL)
-    return NULL;
-
-  struct file_descriptor *open_file_descriptor = hash_entry (found_element,
-                                                             struct file_descriptor,
-                                                             hash_elem);
-
-  return open_file_descriptor;
 }
 
 void *get_stack_argument(struct intr_frame *f, unsigned int index)
@@ -352,4 +316,31 @@ void *get_stack_argument(struct intr_frame *f, unsigned int index)
   validate_user_pointer (pointer);
 
   return *((int32_t*)pointer);
+}
+
+/* Publicly visible system calls */
+void
+close_syscall (struct file_descriptor *file_descriptor)
+{
+  lock_acquire (&file_system_lock);
+
+  // Close the file if it was found.
+  if (file_descriptor != NULL) {
+    file_close (file_descriptor->file);
+
+    // Remove the entry from the open files hash table.
+    struct file_descriptor descriptor;
+    descriptor.fd = file_descriptor->fd;
+    hash_delete (&thread_current ()->file_descriptor_table, &descriptor.hash_elem);
+  }
+
+  lock_release (&file_system_lock);
+}
+
+void exit_syscall (int status)
+{
+  struct thread *t = thread_current ();
+  t->exit_status = status;
+
+  thread_exit();
 }
