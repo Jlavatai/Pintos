@@ -43,12 +43,28 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
+user_process_execute (const char *file_name, struct semaphore *exec_sema) 
+{ 
+  sema_down(exec_sema);
+
+  tid_t usr_proc_tid = process_load_setup(file_name);
+
+  sema_up(exec_sema);
+
+  return usr_proc_tid;
+}
+
+tid_t
 process_execute (const char *file_name)
 {
-    sema_init(&exec_sema, 1);
-    sema_down(&exec_sema);
+    return process_load_setup(file_name);
+}
 
-    char *fn_copy;
+
+tid_t
+process_load_setup(const char *file_name)
+{
+  char *fn_copy;
     tid_t tid;
 
     /* Make a copy of FILE_NAME.
@@ -57,7 +73,6 @@ process_execute (const char *file_name)
     // fn_copy = "run.exe arg1 arg2 arg3..."
     if (fn_copy == NULL)
     {
-      sema_up(&exec_sema);
         return TID_ERROR;
     }
     strlcpy (fn_copy, file_name, PGSIZE);
@@ -68,7 +83,6 @@ process_execute (const char *file_name)
 
     if (setup_data == NULL)
     {
-      sema_up(&exec_sema);
         return TID_ERROR;
     }
 
@@ -89,7 +103,6 @@ process_execute (const char *file_name)
         
         if(arg == NULL)
         {
-          sema_up(&exec_sema);
           return TID_ERROR;
         }
 
@@ -109,9 +122,9 @@ process_execute (const char *file_name)
     if (tid == TID_ERROR)
         palloc_free_page (fn_copy);
 
-    sema_up(&exec_sema);
     return tid;
 }
+
 
 /* A thread function that loads a user process and starts it
    running. */

@@ -88,11 +88,21 @@ exit_handler (struct intr_frame *f)
 static void
 exec_handler (struct intr_frame *f)
 {
+
+  struct semaphore exec_sema;
+
+  sema_init(&exec_sema, 1);
+
   const char *cmd_line = stack_argument (f, 0, const char*); 
   validate_user_pointer (cmd_line);
 
-	f->eax = 0;
+  int tid = user_process_execute(cmd_line, &exec_sema);
 
+  sema_down(&exec_sema);
+
+	f->eax = tid;
+
+  sema_up(&exec_sema);
 }
 
 static void
