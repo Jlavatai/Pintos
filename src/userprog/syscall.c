@@ -160,7 +160,7 @@ static int
 write_handler (int fd, const void *buffer, unsigned size)
 {
 
-  printf("Printing buf %s\n", (char *) buffer );
+ // printf("Printing buf %s\n", (char *) buffer );
 
   if (fd == 1) {
     putbuf (buffer, size);

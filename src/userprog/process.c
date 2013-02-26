@@ -158,14 +158,14 @@ start_process (void *setup_data_)
       if_.esp -= (strlen(curr_arg) + 1);
       strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
       // printf("Copied String\n");
-      printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
+     // printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
       arg->token = if_.esp;
       // printf("Stored pointer\n");
       // printf("Decreasing by %d\n", strlen(curr_arg) + 1);
       //printf("Decresed esp\n");
   }
 
-   hex_dump(0, if_.esp, 100, true);
+   //hex_dump(0, if_.esp, 100, true);
 
     //printf("---First Pass done\n");
    //Push word align
@@ -186,7 +186,7 @@ start_process (void *setup_data_)
       char *curr_arg = arg->token;
       if_.esp -= (sizeof(char*));
       *(int32_t *)if_.esp = curr_arg;
-      printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
+      //printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
       // printf("pushed ptr\n");
   }
 
@@ -203,8 +203,8 @@ start_process (void *setup_data_)
       //   printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp) );
 
       // printf("---Pushed argv\n");
-  if_.esp -=(sizeof(&setup_data->argc));
-  *(int32_t *)if_.esp = &setup_data->argc;
+  if_.esp -=(sizeof(setup_data->argc));
+  *(int32_t *)if_.esp = setup_data->argc;
      
 
        // printf("----Pushed argc\n");
@@ -236,7 +236,7 @@ start_process (void *setup_data_)
        we just point the stack pointer (%esp) to our stack frame
        and jump to it. */
 
-       hex_dump(0, if_.esp, 100, true);
+       //hex_dump(0, if_.esp, 100, true);
 
 
 
