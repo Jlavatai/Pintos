@@ -9,7 +9,6 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 
-#define stack_argument(INTR_FRAME, INDEX, TYPE) (TYPE)*((int32_t*)((INTR_FRAME)->esp) + (INDEX) + 1)
 typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
 
 static void syscall_handler (struct intr_frame *);
@@ -28,6 +27,7 @@ static void seek_handler      (struct intr_frame *f);
 static void tell_handler      (struct intr_frame *f);
 static void close_handler     (struct intr_frame *f);
 
+void *get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (void *pointer);
 static struct file_descriptor *get_file_descriptor_struct(int fd);
 
@@ -76,7 +76,7 @@ halt_handler (struct intr_frame *f UNUSED)
 static void
 exit_handler (struct intr_frame *f)
 {
-  int status = stack_argument(f, 0, int);
+  int status = (int)get_stack_argument(f, 0);
 
   struct thread *t = thread_current ();
   t->exit_status = status;
@@ -93,7 +93,10 @@ exec_handler (struct intr_frame *f)
 
   sema_init(&exec_sema, 1);
 
-  const char *cmd_line = stack_argument (f, 0, const char*); 
+  
+
+  const char *cmd_line = (const char*)get_stack_argument (f, 0); 
+
   validate_user_pointer (cmd_line);
 
   int tid = user_process_execute(cmd_line, &exec_sema);
@@ -108,7 +111,7 @@ exec_handler (struct intr_frame *f)
 static void
 wait_handler (struct intr_frame *f)
 {
-	int pid = stack_argument (f, 0, int);
+	int pid = (int)get_stack_argument (f, 0);
 	f->eax = process_wait(pid);
 }
 
@@ -116,8 +119,9 @@ wait_handler (struct intr_frame *f)
 static void
 create_handler (struct intr_frame *f)
 {
-  const char *file = stack_argument (f, 0, const char*);
-  unsigned initial_size = stack_argument(f, 1, unsigned);
+  const char *file = (const char*)get_stack_argument (f, 0);
+  unsigned initial_size = (unsigned)get_stack_argument (f, 1);
+
   validate_user_pointer (file);
 
   lock_acquire(&file_system_lock);
@@ -132,7 +136,7 @@ create_handler (struct intr_frame *f)
 static void
 remove_handler (struct intr_frame *f)
 {
-  const char *file = stack_argument (f, 0, const char*);
+  const char *file = (const char*)get_stack_argument (f, 0);
   validate_user_pointer (file);
 
   lock_acquire(&file_system_lock);
@@ -147,7 +151,7 @@ remove_handler (struct intr_frame *f)
 static void
 open_handler (struct intr_frame *f)
 {
-  const char *filename = stack_argument (f, 0, const char*);
+  const char *filename = (const char*)get_stack_argument (f, 0);
   validate_user_pointer (filename);
 
   lock_acquire (&file_system_lock);
@@ -179,7 +183,7 @@ open_handler (struct intr_frame *f)
 static void
 filesize_handler (struct intr_frame *f)
 {
-  int fd = stack_argument (f, 0, int);
+  int fd = (int)get_stack_argument (f, 0);
 
   lock_acquire (&file_system_lock);
 
@@ -196,9 +200,9 @@ filesize_handler (struct intr_frame *f)
 static void
 read_handler (struct intr_frame *f)
 {
-  int fd = stack_argument (f, 0, int);
-  void *buffer = stack_argument (f, 1, void*);
-  unsigned size = stack_argument (f, 2, unsigned);
+  int fd = (int)get_stack_argument (f, 0);
+  void *buffer = get_stack_argument (f, 1);
+  unsigned size = (unsigned)get_stack_argument (f, 2);
 
   validate_user_pointer (buffer);
 
@@ -225,9 +229,9 @@ read_handler (struct intr_frame *f)
 static void
 write_handler (struct intr_frame *f)
 {
-  int fd = stack_argument (f, 0, int);
-  const void *buffer = stack_argument (f, 1, const void*);
-  unsigned size = stack_argument (f, 2, unsigned);
+  int fd = (int)get_stack_argument (f, 0);
+  const void *buffer = (const void*)get_stack_argument (f, 1);
+  unsigned size = (unsigned)get_stack_argument (f, 2);
 
   validate_user_pointer (buffer);
 
@@ -259,8 +263,8 @@ write_handler (struct intr_frame *f)
 static void
 seek_handler (struct intr_frame *f)
 {
-  int fd = stack_argument (f, 0, int);
-  unsigned position = stack_argument (f, 1, unsigned);
+  int fd = (int)get_stack_argument (f, 0);
+  unsigned position = (unsigned)get_stack_argument (f, 1);
 
   lock_acquire (&file_system_lock);
 
@@ -274,7 +278,7 @@ seek_handler (struct intr_frame *f)
 static void
 tell_handler (struct intr_frame *f)
 {
-  int fd = stack_argument (f, 0, int);
+  int fd = (int)get_stack_argument (f, 0);
 
   lock_acquire (&file_system_lock);
 
@@ -292,12 +296,21 @@ tell_handler (struct intr_frame *f)
 static void
 close_handler (struct intr_frame *f)
 {
-  int fd = stack_argument (f, 0, int);
+  int fd = (int)get_stack_argument (f, 0);
 
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *open_file_descriptor = get_file_descriptor_struct (fd);
-  file_close (open_file_descriptor->file);
+
+  // Close the file if it was found.
+  if (open_file_descriptor != NULL) {
+    file_close (open_file_descriptor->file);
+
+    // Remove the entry from the open files hash table.
+    struct file_descriptor descriptor;
+    descriptor.fd = fd;
+    hash_delete (&thread_current ()->file_descriptor_table, &descriptor.hash_elem);
+  }
 
   lock_release (&file_system_lock);
 }
@@ -307,10 +320,8 @@ close_handler (struct intr_frame *f)
 static void
 validate_user_pointer (void *pointer)
 {
-  struct thread *t = thread_current ();
-
   // Terminate cleanly if the address is invalid.
-	if (!is_user_vaddr (pointer)) {
+	if (pointer == NULL || !is_user_vaddr (pointer)) {
     thread_exit ();
 
     // As we terminate, we shouldn't reach this point.
@@ -339,4 +350,12 @@ get_file_descriptor_struct(int fd)
                                                              hash_elem);
 
   return open_file_descriptor;
+}
+
+void *get_stack_argument(struct intr_frame *f, unsigned int index)
+{
+  uint32_t *pointer = (uint32_t*)f->esp + index + 1;
+  validate_user_pointer (pointer);
+
+  return *((int32_t*)pointer);
 }
