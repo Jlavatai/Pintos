@@ -288,7 +288,16 @@ close_handler (struct intr_frame *f)
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *open_file_descriptor = get_file_descriptor_struct (fd);
-  file_close (open_file_descriptor->file);
+
+  // Close the file if it was found.
+  if (open_file_descriptor != NULL) {
+    file_close (open_file_descriptor->file);
+
+    // Remove the entry from the open files hash table.
+    struct file_descriptor descriptor;
+    descriptor.fd = fd;
+    hash_delete (&thread_current ()->file_descriptor_table, &descriptor.hash_elem);
+  }
 
   lock_release (&file_system_lock);
 }
@@ -298,8 +307,6 @@ close_handler (struct intr_frame *f)
 static void
 validate_user_pointer (void *pointer)
 {
-  struct thread *t = thread_current ();
-
   // Terminate cleanly if the address is invalid.
 	if (pointer == NULL || !is_user_vaddr (pointer)) {
     thread_exit ();
