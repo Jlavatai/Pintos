@@ -602,10 +602,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
     success = true;
 
-done:
-
     // Deny writes to a currently running executable
     file_deny_write(file);
+
+done:
 
     /* We close the file when it finishes executing. */
     t->file = file;
