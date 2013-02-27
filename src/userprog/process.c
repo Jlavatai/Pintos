@@ -336,15 +336,18 @@ process_exit (void)
 
     printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
+
+
+    pd = cur->pagedir;
+    // Remove this process from the parent's child process list
+    list_remove(&cur->procelem);
+
     // Tell the processes waiters that this process is finished
     lock_acquire(&cur->anchor);
     cond_broadcast(&cur->condvar_process_sync, &cur->anchor);
     cond_wait(&cur->condvar_process_sync, &cur->anchor);
     lock_release(&cur->anchor);
 
-    pd = cur->pagedir;
-    // Remove this process from the parent's child process list
-    list_remove(&cur->procelem);
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     if (pd != NULL)
