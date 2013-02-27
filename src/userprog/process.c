@@ -292,6 +292,8 @@ start_process (void *setup_data_)
 
 
     palloc_free_page (fst_arg_saved);
+    free(setup_data);
+
     asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
     NOT_REACHED ();
 }
@@ -377,8 +379,6 @@ process_exit (void)
     cond_wait(&cur->condvar_process_sync, &cur->anchor);
     lock_release(&cur->anchor);
 
-
-
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     if (pd != NULL)
@@ -396,7 +396,7 @@ process_exit (void)
         pagedir_destroy (pd);
     }
 
-    /* Destroy the file descriptor table */
+    /* Destroy the file descriptor table, closing all file descripotrs as we go */
     hash_destroy(&cur->file_descriptor_table,
                  &file_descriptor_table_destroy_func);
 }
