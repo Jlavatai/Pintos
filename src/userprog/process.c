@@ -186,7 +186,8 @@ start_process (void *setup_data_)
   // Exit the process if the file failed to load
   if (!success)
 	thread_exit ();
-
+  // Return to default failure exit_status in case of exceptions
+  cur->exit_status = -1;
   /*Set Up Stack here*/
 
   struct list_elem *e;
