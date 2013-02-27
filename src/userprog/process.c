@@ -46,11 +46,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 user_process_execute (const char *file_name) 
 { 
-
-  struct thread *curr = thread_current();
-
-  sema_down(&curr->exec_sema);
-
   tid_t usr_proc_tid = process_load_setup(file_name);
 
   return usr_proc_tid;
@@ -120,13 +115,31 @@ process_load_setup(const char *file_name)
    // printf("%s %d\n", fst_arg->token, argc);
 
     /* Create a new thread to execute FILE_NAME. */
-    struct thread *curr = thread_current();
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
     {
         palloc_free_page (fn_copy);
-        sema_up(&curr->exec_sema);
     }
+
+    // We want to collect an exit_status of -1, and return it, if thread cannot start
+    // Get the thread structure
+    struct list_elem *e;
+    struct thread *cur = thread_current();
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);
+	     e = list_next (e))
+	{
+		struct thread *t = list_entry (e, struct thread, procelem);
+		if (t->tid == tid) {
+			lock_acquire(&t->anchor);
+			cond_wait(&t->condvar_process_sync, &t->anchor);
+			// If the exit status is -1, this is what we want to return
+			if (t->exit_status == -1)
+				return -1;
+			cond_signal(&t->condvar_process_sync, &t->anchor);
+			lock_release(&t->anchor);
+		}
+	}
+
 
     return tid;
 }
@@ -159,16 +172,22 @@ start_process (void *setup_data_)
 
   /* If load failed, quit. */
   
-  struct thread *curr = thread_current();
+  struct thread *cur = thread_current();
 
-  if (!success) 
-      thread_exit ();
+  lock_acquire(&cur->anchor);
 
-  
-  sema_up(&curr->parent_thread->exec_sema);
-   //printf("-----Success\n");
+  // Signal the parent process about the execution's validity
+  cur->exit_status = success?1:-1;
+  cond_signal(&cur->condvar_process_sync, &cur->anchor);
+  // Wait for it to get the signal
+  cond_wait(&cur->condvar_process_sync, &cur->anchor);
+  lock_release(&cur->anchor);
+
+  // Exit the process if the file failed to load
+  if (!success)
+	thread_exit ();
+
   /*Set Up Stack here*/
-
 
   struct list_elem *e;
 
@@ -294,9 +313,9 @@ process_wait (tid_t child_tid)
 		struct thread *t = list_entry (e, struct thread, procelem);
 		if (t->tid == child_tid) {
 			lock_acquire(&t->anchor);
-			cond_wait(&t->isFinished, &t->anchor);
+			cond_wait(&t->condvar_process_sync, &t->anchor);
 			int exitStatus = t->exit_status;
-			cond_signal(&t->isFinished, &t->anchor);
+			cond_signal(&t->condvar_process_sync, &t->anchor);
 			lock_release(&t->anchor);
 
 			return exitStatus;
@@ -318,8 +337,8 @@ process_exit (void)
 
     // Tell the processes waiters that this process is finished
     lock_acquire(&cur->anchor);
-    cond_broadcast(&cur->isFinished, &cur->anchor);
-    cond_wait(&cur->isFinished, &cur->anchor);
+    cond_broadcast(&cur->condvar_process_sync, &cur->anchor);
+    cond_wait(&cur->condvar_process_sync, &cur->anchor);
     lock_release(&cur->anchor);
 
     pd = cur->pagedir;

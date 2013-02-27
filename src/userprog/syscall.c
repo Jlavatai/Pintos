@@ -56,8 +56,6 @@ syscall_init (void)
 
   // Initialise the lock which is used for filesystem access.
   lock_init(&file_system_lock);
-  struct thread *curr = thread_current();
-  sema_init(&curr->exec_sema, 1);
 }
 
 static void
@@ -88,15 +86,13 @@ exit_handler (struct intr_frame *f)
 static void
 exec_handler (struct intr_frame *f)
 {
-   struct thread *curr = thread_current();
+  struct thread *curr = thread_current();
   const char *cmd_line = (const char*)get_stack_argument (f, 0); 
   validate_user_pointer (cmd_line);
 
   int tid = process_execute(cmd_line);
 
-  sema_down(&curr->exec_sema);
-	f->eax = tid;
-  sema_up(&curr->exec_sema);
+  f->eax = tid;
 }
 
 static void

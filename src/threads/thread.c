@@ -257,7 +257,7 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
   #ifdef USERPROG
   //Define parent's thread
-    t->parent_thread = thread_current();
+    t->parent = thread_current();
   // Add to parent thread's child list
   if (is_thread(running_thread ())) {
 	  list_push_back(&thread_current()->children, &t->procelem);
@@ -750,7 +750,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	  // Initialise Anchor
 	  lock_init(&t->anchor);
 	  // Initialise life condition
-	  cond_init(&t->isFinished);
+	  cond_init(&t->condvar_process_sync);
 	  // Acquire the lock
 //	  lock_acquire_as_thread(&t->anchor,t);
   }

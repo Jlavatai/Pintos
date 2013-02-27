@@ -111,7 +111,7 @@ struct thread
 
 
 #ifdef USERPROG
-    struct condition isFinished;  /* A synchronisation primitive that signals when it finishes */
+    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise with parent thread*/
     struct lock anchor;           /* A lock held during the thread's life */
     int exit_status;
     struct list_elem procelem;          /* Element for the children list */
@@ -121,8 +121,7 @@ struct thread
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        /* Stores the next file descriptor for use. */
 
-    struct thread *parent_thread;       /* Parent thread, used to synchronize when calling thread_exec*/
-    struct semaphore exec_sema;         /* Semaphore used to synchronize exec system call*/
+    struct thread *parent;       /* Parent thread, used to synchronise when calling thread_exec*/
 #endif
 
     /* Owned by thread.c. */
