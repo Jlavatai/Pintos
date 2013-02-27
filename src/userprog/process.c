@@ -229,15 +229,16 @@ start_process (void *setup_data_)
   *(int32_t *)if_.esp = last_arg_ptr;
 
 
-  for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);
-         e = list_next (e))
+  for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);)
   {
-      struct argument *arg = list_entry (e, struct argument, token_list_elem);
-      char *curr_arg = arg->token;
-      if_.esp -= (sizeof(char*));
-      *(int32_t *)if_.esp = curr_arg;
-      //printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
-      // printf("pushed ptr\n");
+	struct argument *arg = list_entry (e, struct argument, token_list_elem);
+	char *curr_arg = arg->token;
+	if_.esp -= (sizeof(char*));
+	*(int32_t *)if_.esp = curr_arg;
+	e = list_next (e);
+	free(arg);
+	//printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
+	// printf("pushed ptr\n");
   }
 
 
