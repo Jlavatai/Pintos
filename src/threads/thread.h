@@ -111,7 +111,7 @@ struct thread
 
 
 #ifdef USERPROG
-    struct condition isFinished;  /* A synchronisation primitive that signals when it finishes */
+    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise with parent thread*/
     struct lock anchor;           /* A lock held during the thread's life */
     int exit_status;
     struct list_elem procelem;          /* Element for the children list */
@@ -120,6 +120,8 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        /* Stores the next file descriptor for use. */
+
+    struct thread *parent;       /* Parent thread, used to synchronise when calling thread_exec*/
 #endif
 
     /* Owned by thread.c. */
@@ -140,6 +142,7 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
+tid_t user_thread_create (const char *name, int priority, thread_func *, void *, struct thread *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -173,6 +176,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_set_parent(struct thread *);
 
 bool has_higher_priority(const struct list_elem *, const struct list_elem *, void *);
 

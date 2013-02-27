@@ -233,6 +233,7 @@ thread_print_stats (void)
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
+
 tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
@@ -255,6 +256,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   #ifdef USERPROG
+  //Define parent's thread
+    t->parent = thread_current();
   // Add to parent thread's child list
   if (is_thread(running_thread ())) {
 	  list_push_back(&thread_current()->children, &t->procelem);
@@ -747,7 +750,7 @@ init_thread (struct thread *t, const char *name, int priority)
 	  // Initialise Anchor
 	  lock_init(&t->anchor);
 	  // Initialise life condition
-	  cond_init(&t->isFinished);
+	  cond_init(&t->condvar_process_sync);
 	  // Acquire the lock
 //	  lock_acquire_as_thread(&t->anchor,t);
   }

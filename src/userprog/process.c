@@ -44,13 +44,9 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-user_process_execute (const char *file_name, struct semaphore *exec_sema) 
+user_process_execute (const char *file_name) 
 { 
-  sema_down(exec_sema);
-
   tid_t usr_proc_tid = process_load_setup(file_name);
-
-  sema_up(exec_sema);
 
   return usr_proc_tid;
 }
@@ -113,7 +109,7 @@ process_load_setup(const char *file_name)
         setup_data->argc++;
     }
 
-    //printf("----Ending tokenization\n");
+    //printf("----Ending tokenizatin\n");
 
     struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
    // printf("%s %d\n", fst_arg->token, argc);
@@ -121,7 +117,29 @@ process_load_setup(const char *file_name)
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
+    {
         palloc_free_page (fn_copy);
+    }
+
+    // We want to collect an exit_status of -1, and return it, if thread cannot start
+    // Get the thread structure
+    struct list_elem *e;
+    struct thread *cur = thread_current();
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);
+	     e = list_next (e))
+	{
+		struct thread *t = list_entry (e, struct thread, procelem);
+		if (t->tid == tid) {
+			lock_acquire(&t->anchor);
+			cond_wait(&t->condvar_process_sync, &t->anchor);
+			// If the exit status is -1, this is what we want to return
+			if (t->exit_status == -1)
+				return -1;
+			cond_signal(&t->condvar_process_sync, &t->anchor);
+			lock_release(&t->anchor);
+		}
+	}
+
 
     return tid;
 }
@@ -154,12 +172,23 @@ start_process (void *setup_data_)
 
   /* If load failed, quit. */
   
+  struct thread *cur = thread_current();
+
+  lock_acquire(&cur->anchor);
+
+  // Signal the parent process about the execution's validity
+  cur->exit_status = success?1:-1;
+  cond_signal(&cur->condvar_process_sync, &cur->anchor);
+  // Wait for it to get the signal
+  cond_wait(&cur->condvar_process_sync, &cur->anchor);
+  lock_release(&cur->anchor);
+
+  // Exit the process if the file failed to load
   if (!success)
-      thread_exit ();
-
-  //printf("-----Success\n");
+	thread_exit ();
+  // Return to default failure exit_status in case of exceptions
+  cur->exit_status = -1;
   /*Set Up Stack here*/
-
 
   struct list_elem *e;
 
@@ -285,9 +314,9 @@ process_wait (tid_t child_tid)
 		struct thread *t = list_entry (e, struct thread, procelem);
 		if (t->tid == child_tid) {
 			lock_acquire(&t->anchor);
-			cond_wait(&t->isFinished, &t->anchor);
+			cond_wait(&t->condvar_process_sync, &t->anchor);
 			int exitStatus = t->exit_status;
-			cond_signal(&t->isFinished, &t->anchor);
+			cond_signal(&t->condvar_process_sync, &t->anchor);
 			lock_release(&t->anchor);
 
 			return exitStatus;
@@ -307,15 +336,18 @@ process_exit (void)
 
     printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
-    // Tell the processes waiters that this process is finished
-    lock_acquire(&cur->anchor);
-    cond_broadcast(&cur->isFinished, &cur->anchor);
-    cond_wait(&cur->isFinished, &cur->anchor);
-    lock_release(&cur->anchor);
+
 
     pd = cur->pagedir;
     // Remove this process from the parent's child process list
     list_remove(&cur->procelem);
+
+    // Tell the processes waiters that this process is finished
+    lock_acquire(&cur->anchor);
+    cond_broadcast(&cur->condvar_process_sync, &cur->anchor);
+    cond_wait(&cur->condvar_process_sync, &cur->anchor);
+    lock_release(&cur->anchor);
+
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     if (pd != NULL)
