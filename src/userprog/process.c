@@ -44,13 +44,14 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-user_process_execute (const char *file_name, struct semaphore *exec_sema) 
+user_process_execute (const char *file_name) 
 { 
-  sema_down(exec_sema);
+
+  struct thread *curr = thread_current();
+
+  sema_down(&curr->exec_sema);
 
   tid_t usr_proc_tid = process_load_setup(file_name);
-
-  sema_up(exec_sema);
 
   return usr_proc_tid;
 }
@@ -113,15 +114,19 @@ process_load_setup(const char *file_name)
         setup_data->argc++;
     }
 
-    //printf("----Ending tokenization\n");
+    //printf("----Ending tokenizatin\n");
 
     struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
    // printf("%s %d\n", fst_arg->token, argc);
 
     /* Create a new thread to execute FILE_NAME. */
+    struct thread *curr = thread_current();
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
+    {
         palloc_free_page (fn_copy);
+        sema_up(&curr->exec_sema);
+    }
 
     return tid;
 }
@@ -154,10 +159,14 @@ start_process (void *setup_data_)
 
   /* If load failed, quit. */
   
-  if (!success)
+  struct thread *curr = thread_current();
+
+  if (!success) 
       thread_exit ();
 
-  //printf("-----Success\n");
+  
+  sema_up(&curr->parent_thread->exec_sema);
+   //printf("-----Success\n");
   /*Set Up Stack here*/
 
 

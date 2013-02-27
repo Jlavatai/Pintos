@@ -120,6 +120,9 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        /* Stores the next file descriptor for use. */
+
+    struct thread *parent_thread;       /* Parent thread, used to synchronize when calling thread_exec*/
+    struct semaphore exec_sema;         /* Semaphore used to synchronize exec system call*/
 #endif
 
     /* Owned by thread.c. */
@@ -140,6 +143,7 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
+tid_t user_thread_create (const char *name, int priority, thread_func *, void *, struct thread *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -173,6 +177,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_set_parent(struct thread *);
 
 bool has_higher_priority(const struct list_elem *, const struct list_elem *, void *);
 
