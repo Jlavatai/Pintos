@@ -287,7 +287,9 @@ process_wait (tid_t child_tid)
 			lock_acquire(&t->anchor);
 			cond_wait(&t->isFinished, &t->anchor);
 			int exitStatus = t->exit_status;
+			cond_signal(&t->isFinished, &t->anchor);
 			lock_release(&t->anchor);
+
 			return exitStatus;
 		}
 	}
@@ -308,8 +310,9 @@ process_exit (void)
     // Tell the processes waiters that this process is finished
     lock_acquire(&cur->anchor);
     cond_broadcast(&cur->isFinished, &cur->anchor);
+    cond_wait(&cur->isFinished, &cur->anchor);
     lock_release(&cur->anchor);
-    thread_yield();
+
     pd = cur->pagedir;
     // Remove this process from the parent's child process list
     list_remove(&cur->procelem);
