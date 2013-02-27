@@ -61,7 +61,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  int32_t syscall_number = *((int32_t*)f->esp);
+  int32_t *esp = (int32_t*)f->esp;
+  validate_user_pointer (esp);
+
+  int32_t syscall_number = *esp;
 
   ASSERT(syscall_number < SYS_NUM_SYSCALLS);
   syscall_handlers[syscall_number](f);
