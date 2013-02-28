@@ -38,6 +38,7 @@ void file_descriptor_table_destroy_func (struct hash_elem *e, void *aux);
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+int sum_fileopen(struct thread * t, struct file * f);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -185,9 +186,10 @@ start_process (void *setup_data_)
 
   // Exit the process if the file failed to load
   if (!success)
-	thread_exit ();
+    thread_exit ();
   // Return to default failure exit_status in case of exceptions
   cur->exit_status = -1;
+  
   /*Set Up Stack here*/
 
   struct list_elem *e;
@@ -293,6 +295,20 @@ start_process (void *setup_data_)
     NOT_REACHED ();
 }
 
+int sum_fileopen(struct thread * t, struct file * f) {
+	struct list_elem *e;
+	int count = 0;
+	if (t->file == f) count++;
+    for (e = list_begin (&t->children); e != list_end (&t->children);
+	     e = list_next (e))
+	{
+    	struct thread *child = list_entry (e, struct thread, procelem);
+    	count += sum_fileopen(child, f);
+	}
+    return count;
+}
+
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -336,7 +352,19 @@ process_exit (void)
 
     printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
 
+    // Go to the most senior process
+    struct thread *parent = cur;
+    while (parent->parent != NULL)
+    	parent = parent->parent;
 
+    // Add up how many times (recursively) the executing file is open
+    int file_executing_count = 0;
+    file_executing_count = sum_fileopen(parent, cur->file);
+
+    // If only one time, i.e. this thread only
+    if (file_executing_count == 1) {
+    	file_close(cur->file);
+    }
 
     pd = cur->pagedir;
     // Remove this process from the parent's child process list
@@ -347,6 +375,8 @@ process_exit (void)
     cond_broadcast(&cur->condvar_process_sync, &cur->anchor);
     cond_wait(&cur->condvar_process_sync, &cur->anchor);
     lock_release(&cur->anchor);
+
+
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -483,6 +513,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         goto done;
     }
 
+
     /* Read and verify executable header. */
     if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
             || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -571,9 +602,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
     success = true;
 
+    // Deny writes to a currently running executable
+    file_deny_write(file);
+
 done:
-    /* We arrive here whether the load is successful or not. */
-    file_close (file);
+
+    /* We close the file when it finishes executing. */
+    t->file = file;
+
     return success;
 }
 

@@ -111,6 +111,8 @@ struct thread
 
 
 #ifdef USERPROG
+    struct file * file;                 /* A pointer to the struct holding the executing file this thread's code is contained in */
+
     struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise with parent thread*/
     struct lock anchor;           /* A lock held during the thread's life */
     int exit_status;
