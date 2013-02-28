@@ -756,8 +756,8 @@ init_thread (struct thread *t, const char *name, int priority)
 
 
   list_init(&t->lock_list);
-  list_init(&t->children);
   #ifdef USERPROG
+  list_init(&t->children);
   if (is_thread(running_thread())) {
 	  // Initialise Anchor
 	  lock_init(&t->anchor);
