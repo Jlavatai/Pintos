@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 #include "synch.h"
 
@@ -95,21 +96,34 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     struct list lock_list;              /* Ordered List of the thread's held locks, with highest priority first */
     int priority;
-
     struct lock *blocker;               /* Each thread knows of the lock that's blocking it*/
 
+    struct list children;               /* Holds the list of processes started by this process. */
     long long wakeup_tick;              /* If sleeping, the tick we want to wake up on. */
 
     struct list_elem allelem;           /* List element for all threads list. */
-    int nice;                           /* The nice value used for the mlfq scheduler. */
-    fixed_point recent_cpu;             /* The recent CPU value used by the mlfq scheduler. */
+    int nice;                            /* The nice value used for the mlfq scheduler. */
+    fixed_point recent_cpu;              /* The recent CPU value used by the mlfq scheduler. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+
+
 #ifdef USERPROG
+    struct file * file;                 /* A pointer to the struct holding the executing file this thread's code is contained in */
+
+    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise with parent thread*/
+    struct lock anchor;           /* A lock held during the thread's life */
+    int exit_status;
+    struct list_elem procelem;          /* Element for the children list */
+
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
+    int next_fd;                        /* Stores the next file descriptor for use. */
+
+    struct thread *parent;       /* Parent thread, used to synchronise when calling thread_exec*/
 #endif
 
     /* Owned by thread.c. */
@@ -130,6 +144,7 @@ void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
+tid_t user_thread_create (const char *name, int priority, thread_func *, void *, struct thread *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -163,6 +178,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_set_parent(struct thread *);
 
 bool has_higher_priority(const struct list_elem *, const struct list_elem *, void *);
 

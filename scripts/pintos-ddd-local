@@ -1,6 +1,6 @@
 #! /bin/sh
 
-cd ../src/threads/build
+cd ../src/userprog/build
 
 # Path to GDB macros file.  Customize for your site.
 GDBMACROS=/usr/local/bin/gdb-macros
