@@ -128,18 +128,18 @@ process_load_setup(const char *file_name)
     struct thread *cur = thread_current();
     for (e = list_begin (&cur->children); e != list_end (&cur->children);
 	     e = list_next (e))
-	{
-		struct thread *t = list_entry (e, struct thread, procelem);
-		if (t->tid == tid) {
-			lock_acquire(&t->anchor);
-			cond_wait(&t->condvar_process_sync, &t->anchor);
-			// If the exit status is -1, this is what we want to return
-			if (t->exit_status == -1)
-				return -1;
-			cond_signal(&t->condvar_process_sync, &t->anchor);
-			lock_release(&t->anchor);
-		}
-	}
+  	{
+  		struct proc_information *pI = list_entry (e, struct proc_information, elem);
+  		if (pI->pid == tid) {
+  			lock_acquire(&pI->thread->anchor);
+  			cond_wait(&pI->thread->condvar_process_sync, &pI->thread->anchor);
+  			// If the exit status is -1, this is what we want to return
+  			if (pI->exit_status == -1)
+  				return -1;
+  			cond_signal(&pI->thread->condvar_process_sync, &pI->thread->anchor);
+  			lock_release(&pI->thread->anchor);
+  		}
+  	}
 
 
     return tid;
@@ -178,7 +178,7 @@ start_process (void *setup_data_)
   lock_acquire(&cur->anchor);
 
   // Signal the parent process about the execution's validity
-  cur->exit_status = success?1:-1;
+  cur->proc_info->exit_status = success?1:-1;
   cond_signal(&cur->condvar_process_sync, &cur->anchor);
   // Wait for it to get the signal
   cond_wait(&cur->condvar_process_sync, &cur->anchor);
@@ -188,7 +188,7 @@ start_process (void *setup_data_)
   if (!success)
     thread_exit ();
   // Return to default failure exit_status in case of exceptions
-  cur->exit_status = -1;
+  cur->proc_info->exit_status = -1;
   
   /*Set Up Stack here*/
 
@@ -327,15 +327,18 @@ process_wait (tid_t child_tid)
     for (e = list_begin (&cur->children); e != list_end (&cur->children);
 	     e = list_next (e))
 	{
-		struct thread *t = list_entry (e, struct thread, procelem);
-		if (t->tid == child_tid) {
-			lock_acquire(&t->anchor);
-			cond_wait(&t->condvar_process_sync, &t->anchor);
-			int exitStatus = t->exit_status;
-			cond_signal(&t->condvar_process_sync, &t->anchor);
-			lock_release(&t->anchor);
-
-			return exitStatus;
+		struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
+		if (procInfo->pid == child_tid) {
+      // If the thread hasn't finished yet
+      if (procInfo->thread != NULL) 
+      {
+  			lock_acquire(&procInfo->thread->anchor);
+        // Wait for it to finish
+  			cond_wait(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
+  			lock_release(&procInfo->thread->anchor);
+      }
+      // Return the exitStatus of the thread
+			return procInfo->exit_status;
 		}
 	}
     return -1;
@@ -367,16 +370,23 @@ process_exit (void)
     }
 
     pd = cur->pagedir;
-    // Remove this process from the parent's child process list
-    list_remove(&cur->procelem);
-
+    // Set the process Information's thread struct to NULL, there isn't any more useful information
+    cur->proc_info->thread = NULL;
     // Tell the processes waiters that this process is finished
     lock_acquire(&cur->anchor);
     cond_broadcast(&cur->condvar_process_sync, &cur->anchor);
-    cond_wait(&cur->condvar_process_sync, &cur->anchor);
     lock_release(&cur->anchor);
 
+    // Delete any child processes information structures
+    for (struct list_elem e = list_begin (&cur->children); e != list_end (&cur->children);
+     )
+    {
 
+      struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
+      e = list_next (e);
+      // Free the memory
+      free(procInfo);
+    }
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */

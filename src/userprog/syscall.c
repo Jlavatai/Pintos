@@ -338,7 +338,7 @@ close_syscall (struct file_descriptor *file_descriptor)
 void exit_syscall (int status)
 {
   struct thread *t = thread_current ();
-  t->exit_status = status;
+  t->proc_info->exit_status = status;
 
   thread_exit();
 }

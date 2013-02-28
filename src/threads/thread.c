@@ -259,9 +259,22 @@ thread_create (const char *name, int priority,
   //Define parent's thread
     t->parent = thread_current();
   // Add to parent thread's child list
+  // Initialise and Put together the information struct
+  struct proc_information * proc_info = calloc(1, sizeof(struct proc_information));
+  // Ensure the calloc call worked correctly
+  ASSERT(proc_info);
+  proc_info->pid = (pid_t)tid;
+  proc_info->exit_status = -1;
+  proc_info->thread = t;
+  // Store a pointer to this structure inside the thread's information struct
+  t->proc_info = proc_info;
+  // Store this in the parent's child struct
   if (is_thread(running_thread ())) {
-	  list_push_back(&thread_current()->children, &t->procelem);
+    list_push_back(&thread_current()->children, &proc_info->elem);
   }
+
+
+  
   #endif
 
   // Initialise timer sleep member to 0
@@ -745,14 +758,11 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->lock_list);
   list_init(&t->children);
   #ifdef USERPROG
-  t->exit_status = -1;
   if (is_thread(running_thread())) {
 	  // Initialise Anchor
 	  lock_init(&t->anchor);
 	  // Initialise life condition
 	  cond_init(&t->condvar_process_sync);
-	  // Acquire the lock
-//	  lock_acquire_as_thread(&t->anchor,t);
   }
   #endif
   // Set Priority
