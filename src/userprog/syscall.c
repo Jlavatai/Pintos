@@ -54,23 +54,29 @@ syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 
-  // Initialise the lock which is used for filesystem access.
+  /* Initialise the lock which is used for filesystem access. */
   lock_init(&file_system_lock);
 }
 
 static void
 syscall_handler (struct intr_frame *f) 
 {
+  /* A bad esp value could be used, so validate this first. */
   int32_t *esp = (int32_t*)f->esp;
   validate_user_pointer (esp);
 
+  /* The syscall number is stored at esp. */
   int32_t syscall_number = *esp;
 
+  /* As the system call handler is invoked internally, we can assert that
+     this should be true. */
   ASSERT(syscall_number < SYS_NUM_SYSCALLS);
+
+  /* Invoke the correct system call. */
   syscall_handlers[syscall_number](f);
 }
 
-// /* System calls */
+/* System calls */
 static void
 halt_handler (struct intr_frame *f UNUSED)
 {
@@ -82,6 +88,7 @@ exit_handler (struct intr_frame *f)
 {
   int status = (int)get_stack_argument(f, 0);
 
+  /* Invoke the publicly-visible exit_syscall() function. */
   exit_syscall (status);
 }
 
@@ -114,12 +121,14 @@ create_handler (struct intr_frame *f)
 
   validate_user_pointer (file);
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire(&file_system_lock);
 
   bool result = filesys_create(file, (off_t)initial_size);
 
   lock_release(&file_system_lock);
 
+  /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = result;
 }
 
@@ -129,12 +138,14 @@ remove_handler (struct intr_frame *f)
   const char *file = (const char*)get_stack_argument (f, 0);
   validate_user_pointer (file);
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire(&file_system_lock);
 
   bool result = filesys_remove(file);
 
   lock_release(&file_system_lock);
 
+  /* Return the result by setting the eax value in the interrupt frame. */
   f->eax = result;
 }
 
@@ -144,6 +155,7 @@ open_handler (struct intr_frame *f)
   const char *filename = (const char*)get_stack_argument (f, 0);
   validate_user_pointer (filename);
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
 
   int fd = -1;
@@ -167,6 +179,7 @@ open_handler (struct intr_frame *f)
 
   lock_release (&file_system_lock);
 
+  /* Return the result by setting the eax value in the interrupt frame. */
   f->eax = fd;
 }
 
@@ -175,6 +188,7 @@ filesize_handler (struct intr_frame *f)
 {
   int fd = (int)get_stack_argument (f, 0);
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
 
   int file_size = 0;
@@ -184,6 +198,7 @@ filesize_handler (struct intr_frame *f)
 
   lock_release (&file_system_lock);
 
+  /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = file_size;
 }
 
@@ -196,14 +211,21 @@ read_handler (struct intr_frame *f)
 
   validate_user_pointer (buffer);
 
-  // TODO: implement
   if (fd == 0) {
-    f->eax = 0;
-    return;
+    uint8_t value = input_getc();
+    unsigned bytes_read = 0;
+
+    if (size > 0) {
+      *((uint8_t*)buffer) = value;
+      bytes_read = 1;
+    }
+
+    f->eax = bytes_read;
   }
 
   int bytes_read = -1;
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
@@ -213,6 +235,7 @@ read_handler (struct intr_frame *f)
 
   lock_release (&file_system_lock);
 
+  /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = bytes_read;
 }
 
@@ -233,6 +256,7 @@ write_handler (struct intr_frame *f)
 
   int bytes_written = -1;
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
@@ -247,6 +271,7 @@ write_handler (struct intr_frame *f)
 
   lock_release (&file_system_lock); 
 
+  /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = bytes_written;
 }
 
@@ -256,6 +281,7 @@ seek_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   unsigned position = (unsigned)get_stack_argument (f, 1);
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
 
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
@@ -270,6 +296,7 @@ tell_handler (struct intr_frame *f)
 {
   int fd = (int)get_stack_argument (f, 0);
 
+  /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
 
   unsigned position = 0;
@@ -280,6 +307,7 @@ tell_handler (struct intr_frame *f)
 
   lock_release (&file_system_lock); 
 
+  /* Return the result by setting the eax value in the interrupt frame. */
   f->eax = position;
 }
 
@@ -297,36 +325,41 @@ close_handler (struct intr_frame *f)
 static void
 validate_user_pointer (void *pointer)
 {
-  // Terminate cleanly if the address is invalid.
+  /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
       || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) {
     exit_syscall (-1);
 
-    // As we terminate, we shouldn't reach this point.
+    /* As we terminate, we shouldn't reach this point. */
     NOTREACHED();
   }
 }
 
-void *get_stack_argument(struct intr_frame *f, unsigned int index)
+void *
+get_stack_argument(struct intr_frame *f, unsigned int index)
 {
   uint32_t *pointer = (uint32_t*)f->esp + index + 1;
+
+  /* We could be given a bad esp, so validate the pointer before
+     dereferencing. */
   validate_user_pointer (pointer);
 
   return *((int32_t*)pointer);
 }
 
 /* Publicly visible system calls */
+
 void
 close_syscall (struct file_descriptor *file_descriptor)
 {
   lock_acquire (&file_system_lock);
 
-  // Close the file if it was found.
+  /* Close the file if it was found. */
   if (file_descriptor != NULL) {
     file_close (file_descriptor->file);
 
-    // Remove the entry from the open files hash table.
+    /* Remove the entry from the open files hash table. */
     struct file_descriptor descriptor;
     descriptor.fd = file_descriptor->fd;
     hash_delete (&thread_current ()->file_descriptor_table, &descriptor.hash_elem);
@@ -335,7 +368,8 @@ close_syscall (struct file_descriptor *file_descriptor)
   lock_release (&file_system_lock);
 }
 
-void exit_syscall (int status)
+void
+exit_syscall (int status)
 {
   struct thread *t = thread_current ();
   t->exit_status = status;
