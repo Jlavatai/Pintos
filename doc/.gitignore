@@ -9,6 +9,7 @@
 *.toc
 *.tp
 *.vr
+*.pdf
 /pintos-ic.fns
 /pintos-ic.tps
 /pintos-ic.vrs
