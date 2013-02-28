@@ -1,8 +1,10 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
-#include "syscall.h"
 #include "threads/thread.h"
+
+typedef int pid_t;
+typedef int tid_t; // Forward declaration for include by thread.h
 
 struct proc_information { 
 	struct list_elem elem; // This struct is held as part of a list

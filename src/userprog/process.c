@@ -296,16 +296,17 @@ start_process (void *setup_data_)
 }
 
 int sum_fileopen(struct thread * t, struct file * f) {
-	struct list_elem *e;
-	int count = 0;
-	if (t->file == f) count++;
-    for (e = list_begin (&t->children); e != list_end (&t->children);
-	     e = list_next (e))
-	{
-    	struct thread *child = list_entry (e, struct thread, procelem);
-    	count += sum_fileopen(child, f);
-	}
-    return count;
+  struct list_elem *e;
+  int count = 0;
+  if (t->file == f) count++;
+  for (e = list_begin (&t->children); e != list_end (&t->children);
+       e = list_next (e))
+  {
+    struct proc_information *child = list_entry (e, struct proc_information, elem);
+    if (child->thread)
+      count += sum_fileopen(child->thread, f);
+  }
+  return count;
 }
 
 
@@ -351,9 +352,10 @@ process_exit (void)
     // TODO: Use a condition variable synchronisation primitive instead of disabling interrupts 
     // Because from a design perspective, behaviour is more ensured.
     struct thread *cur = thread_current ();
+    struct list_elem *e;
     uint32_t *pd;
 
-    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
+    printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
 
     // Go to the most senior process
     struct thread *parent = cur;
@@ -378,7 +380,7 @@ process_exit (void)
     lock_release(&cur->anchor);
 
     // Delete any child processes information structures
-    for (struct list_elem e = list_begin (&cur->children); e != list_end (&cur->children);
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);
      )
     {
 
