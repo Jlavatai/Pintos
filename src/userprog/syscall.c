@@ -175,6 +175,7 @@ open_handler (struct intr_frame *f)
     fd = descriptor->fd;
 
     hash_insert (&t->file_descriptor_table, &descriptor->hash_elem); 
+    hash_insert (&t->file_descriptor_table, &descriptor->hash_elem); 
   }
 
   lock_release (&file_system_lock);
@@ -221,6 +222,8 @@ read_handler (struct intr_frame *f)
     }
 
     f->eax = bytes_read;
+
+    return;
   }
 
   int bytes_read = -1;
