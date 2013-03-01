@@ -316,11 +316,11 @@ process_wait (tid_t child_tid)
 			lock_acquire(&procInfo->thread->anchor);
 			// Wait for it to finish
 			cond_wait(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
-			if (!procInfo->thread)
-				return -1;
-			cond_signal(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
-			// The finishing thread may delete its page table now
-			lock_release(&procInfo->thread->anchor);
+			if (procInfo->thread) {
+				cond_signal(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
+				// The finishing thread may delete its page table now
+				lock_release(&procInfo->thread->anchor);
+			}
 			return procInfo->exit_status;
 		  } else { // If it has already finished, return -1
 			  return -1;
