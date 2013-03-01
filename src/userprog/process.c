@@ -117,14 +117,12 @@ process_execute (const char *file_name)
   	{
   		struct proc_information *pI = list_entry (e, struct proc_information, elem);
   		if (pI->pid == tid) {
-  			lock_acquire(&pI->thread->anchor);
-  			cond_wait(&pI->thread->condvar_process_sync, &pI->thread->anchor);
+  			lock_acquire(&pI->anchor);
+  			cond_wait(&pI->condvar_process_sync, &pI->anchor);
   			if (pI->exit_status == -1)
   				tid = -1;
-  			if (pI->thread) {
-				cond_signal(&pI->thread->condvar_process_sync, &pI->thread->anchor);
-				lock_release(&pI->thread->anchor);
-  			}
+			cond_signal(&pI->condvar_process_sync, &pI->anchor);
+			lock_release(&pI->anchor);
   			return tid;
   		}
   	}
@@ -168,11 +166,11 @@ start_process (void *setup_data_)
 
   // Signal the parent process about the execution's validity
   if (success) {
-	  lock_acquire(&cur->anchor);
+	  lock_acquire(&cur->proc_info->anchor);
 	  cur->proc_info->exit_status = 1;
-	  cond_signal(&cur->condvar_process_sync, &cur->anchor);
-	  cond_wait(&cur->condvar_process_sync, &cur->anchor);
-	  lock_release(&cur->anchor);
+	  cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+	  cond_wait(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+	  lock_release(&cur->proc_info->anchor);
   } else {
 	  // Exit the process if the file failed to load
 	  thread_exit ();
@@ -311,21 +309,19 @@ process_wait (tid_t child_tid)
 		struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
 		if (procInfo->pid == child_tid) {
 		  // If the thread hasn't finished yet
-		  if (procInfo->thread != NULL)
+		  if (procInfo->thread)
 		  {
-			lock_acquire(&procInfo->thread->anchor);
-			// Wait for it to finish
-			cond_wait(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
-			if (procInfo->thread) {
-				cond_signal(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
-				// The finishing thread may delete its page table now
-				lock_release(&procInfo->thread->anchor);
-			}
-			return procInfo->exit_status;
-		  } else { // If it has already finished, return -1
-			  return -1;
+			lock_acquire(&procInfo->anchor);
+			// If we were blocked by acquire, we might have deleted the thread struct
+			if (procInfo->thread)
+				cond_wait(&procInfo->condvar_process_sync, &procInfo->anchor);
+			lock_release(&procInfo->anchor);
+			// Only hits here after thread has been destroyed, thus no need to release lock
 		  }
-		}
+		  return procInfo->exit_status;
+		} else { // If it has already finished, return -1
+			return -1;
+	    }
 	}
     return -1;
 }
@@ -334,61 +330,10 @@ process_wait (tid_t child_tid)
 void
 process_exit (void)
 {
+
     struct thread *cur = thread_current ();
     struct list_elem *e;
     uint32_t *pd;
-    // If we're the main thread, th threading system isn't engaged,
-    // and it has no synchronisation primitives
-    // Check to see the head of a list is NULL, if it is, it's a NULL struct
-    // Hence don't perform standard locking
-    if (cur->condvar_process_sync.waiters.head.next) {
-		printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
-
-		lock_acquire(&cur->anchor);
-		// Go to the most senior process
-		if (cur->file) {
-			struct thread *parent = cur;
-			while (parent->parent != NULL)
-				parent = parent->parent;
-
-			// Add up how many times (recursively) the executing file is open
-			int file_executing_count = 0;
-
-			file_executing_count = sum_fileopen(parent, cur->file);
-
-			// If only one time, i.e. this thread only
-			if (file_executing_count == 1) {
-				file_close(cur->file);
-			}
-		}
-    }
-    pd = cur->pagedir;
-
-    // Delete any child processes information structures
-    for (e = list_begin (&cur->children); e != list_end (&cur->children);)
-    {
-      struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
-      e = list_next (e);
-      // If the child is not dead
-      process_wait(procInfo->pid);
-      // Finally delete the child's information
-      list_remove(&procInfo->elem);
-      free(procInfo);
-    }
-
-    /* Destroy the file descriptor table */
-    hash_destroy(&cur->file_descriptor_table,
-                 &file_descriptor_table_destroy_func);
-
-    // Set the process information's thread struct to NULL, there isn't any more useful information
-    cur->proc_info->thread = NULL;
-
-    if (cur->condvar_process_sync.waiters.head.next != NULL) {
-    	cond_signal(&cur->condvar_process_sync, &cur->anchor);
-    	cond_wait(&cur->condvar_process_sync, &cur->anchor);
-    	lock_release(&cur->anchor);
-    }
-
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -406,6 +351,41 @@ process_exit (void)
         pagedir_activate (NULL);
         pagedir_destroy (pd);
     }
+
+
+    pd = cur->pagedir;
+
+
+    // Delete any child processes information structures
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);)
+    {
+      struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
+      e = list_next (e);
+      process_wait(procInfo->pid);
+      // Finally delete the child's information
+      list_remove(&procInfo->elem);
+      free(procInfo);
+    }
+
+    /* Destroy the file descriptor table */
+    hash_destroy(&cur->file_descriptor_table,
+                 &file_descriptor_table_destroy_func);
+
+    if (!cur->proc_info) // If you're the main function, return early
+    	return;
+
+    lock_acquire(&cur->proc_info->anchor);
+        printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
+
+    // re-enable writes on the executable file
+    if (cur->file)
+    	file_allow_write(cur->file);
+
+	cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+
+    cur->proc_info->thread = NULL;
+
+    lock_release(&cur->proc_info->anchor);
 }
 
 /* Sets up the CPU for running user code in the current

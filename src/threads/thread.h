@@ -113,8 +113,6 @@ struct thread
     struct file * file;                  /* A pointer to the struct holding the executing file this thread's code is contained in */
     struct proc_information * proc_info; /* A pointer to the parent's information struct containing information on this child */
     struct list children;                /* Holds the list of processes started by this process. */
-    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise with parent thread*/
-    struct lock anchor;                     /* A lock held during the thread's life */
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 

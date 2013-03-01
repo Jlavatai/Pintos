@@ -257,13 +257,17 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
   #ifdef USERPROG
   //Define parent's thread
-    t->parent = thread_current();
+  t->parent = thread_current();
   // Add to parent thread's child list
   // Initialise and Put together the information struct
   struct proc_information * proc_info = calloc(1, sizeof(struct proc_information));
   // Ensure the calloc call worked correctly
   ASSERT(proc_info);
   proc_info->pid = (pid_t)tid;
+  // Initialise Anchor
+  lock_init(&proc_info->anchor);
+  // Initialise life condition
+  cond_init(&proc_info->condvar_process_sync);
   proc_info->exit_status = -1;
   proc_info->thread = t;
   // Store a pointer to this structure inside the thread's information struct
@@ -758,12 +762,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->lock_list);
   #ifdef USERPROG
   list_init(&t->children);
-  if (is_thread(running_thread())) {
-	  // Initialise Anchor
-	  lock_init(&t->anchor);
-	  // Initialise life condition
-	  cond_init(&t->condvar_process_sync);
-  }
   #endif
   // Set Priority
   if (thread_mlfqs)
