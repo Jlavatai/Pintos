@@ -871,5 +871,5 @@ file_descriptor_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
   ASSERT (descriptor->file != NULL);
 
   // Close the file descriptor for the open file.
-  close_syscall (descriptor->file);
+  close_syscall (descriptor->file, false);
 }
