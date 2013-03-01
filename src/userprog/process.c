@@ -118,13 +118,13 @@ process_execute (const char *file_name)
   		struct proc_information *pI = list_entry (e, struct proc_information, elem);
   		if (pI->pid == tid) {
   			lock_acquire(&pI->thread->anchor);
-  			// We need to see if we've missed the signal
   			cond_wait(&pI->thread->condvar_process_sync, &pI->thread->anchor);
-  			// If the exit status is -1, this is what we want to return
   			if (pI->exit_status == -1)
   				tid = -1;
-  			cond_signal(&pI->thread->condvar_process_sync, &pI->thread->anchor);
-  			lock_release(&pI->thread->anchor);
+  			if (pI->thread) {
+				cond_signal(&pI->thread->condvar_process_sync, &pI->thread->anchor);
+				lock_release(&pI->thread->anchor);
+  			}
   			return tid;
   		}
   	}
@@ -166,18 +166,20 @@ start_process (void *setup_data_)
   
   struct thread *cur = thread_current();
 
-  lock_acquire(&cur->anchor);
-
   // Signal the parent process about the execution's validity
-  cur->proc_info->exit_status = success?1:-1;
-  cond_signal(&cur->condvar_process_sync, &cur->anchor);
-  // Wait for it to get the signal
-  cond_wait(&cur->condvar_process_sync, &cur->anchor);
-  lock_release(&cur->anchor);
+  if (success) {
+	  lock_acquire(&cur->anchor);
+	  cur->proc_info->exit_status = 1;
+	  cond_signal(&cur->condvar_process_sync, &cur->anchor);
+	  cond_wait(&cur->condvar_process_sync, &cur->anchor);
+	  lock_release(&cur->anchor);
+  } else {
+	  // Exit the process if the file failed to load
+	  thread_exit ();
+  }
 
-  // Exit the process if the file failed to load
-  if (!success)
-    thread_exit ();
+
+
   // Return to default failure exit_status in case of exceptions
   cur->proc_info->exit_status = -1;
 
@@ -314,12 +316,15 @@ process_wait (tid_t child_tid)
 			lock_acquire(&procInfo->thread->anchor);
 			// Wait for it to finish
 			cond_wait(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
+			if (!procInfo->thread)
+				return -1;
+			cond_signal(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
 			// The finishing thread may delete its page table now
-			if (procInfo->thread)
-				lock_release(&procInfo->thread->anchor);
+			lock_release(&procInfo->thread->anchor);
+			return procInfo->exit_status;
+		  } else { // If it has already finished, return -1
+			  return -1;
 		  }
-		  // Return the exitStatus of the thread
-		  return procInfo->exit_status;
 		}
 	}
     return -1;
@@ -341,13 +346,14 @@ process_exit (void)
 
 		lock_acquire(&cur->anchor);
 		// Go to the most senior process
-		struct thread *parent = cur;
-		while (parent->parent != NULL)
-			parent = parent->parent;
-
-		// Add up how many times (recursively) the executing file is open
-		int file_executing_count = 0;
 		if (cur->file) {
+			struct thread *parent = cur;
+			while (parent->parent != NULL)
+				parent = parent->parent;
+
+			// Add up how many times (recursively) the executing file is open
+			int file_executing_count = 0;
+
 			file_executing_count = sum_fileopen(parent, cur->file);
 
 			// If only one time, i.e. this thread only
@@ -358,57 +364,31 @@ process_exit (void)
     }
     pd = cur->pagedir;
 
-
-
-    // Tell the processes waiters that this process is finished
-
-
-
-
     // Delete any child processes information structures
-    for (e = list_begin (&cur->children); e != list_end (&cur->children);
-     )
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);)
     {
-
       struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
       e = list_next (e);
       // If the child is not dead
-      if (procInfo->thread)
-      {
-    	  // Wait for it to die so it can still access parent thread information
-    	  lock_acquire(&procInfo->thread->anchor);
-		  cond_wait(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
-		  if (procInfo->thread) {
-			  cond_signal(&procInfo->thread->condvar_process_sync, &procInfo->thread->anchor);
-			  lock_release(&procInfo->thread->anchor);
-		  }
-      }
-      	  // Then delete the child's information
+      process_wait(procInfo->pid);
+      // Finally delete the child's information
       list_remove(&procInfo->elem);
       free(procInfo);
-
     }
-
-    // Set the process information's thread struct to NULL, there isn't any more useful information
-    cur->proc_info->thread = NULL;
-
-    // If there is a parent waiting
-    if (cur->condvar_process_sync.waiters.head.next != NULL) {
-    	// Signal it we're finished
-    	cond_signal(&cur->condvar_process_sync, &cur->anchor);
-    	// Then tell it to delete its proc_info
-    	cond_wait(&cur->condvar_process_sync, &cur->anchor);
-    }
-
 
     /* Destroy the file descriptor table */
     hash_destroy(&cur->file_descriptor_table,
                  &file_descriptor_table_destroy_func);
 
+    // Set the process information's thread struct to NULL, there isn't any more useful information
+    cur->proc_info->thread = NULL;
 
-
-    if (cur->condvar_process_sync.waiters.head.next != NULL)
+    if (cur->condvar_process_sync.waiters.head.next != NULL) {
+    	cond_signal(&cur->condvar_process_sync, &cur->anchor);
+    	cond_wait(&cur->condvar_process_sync, &cur->anchor);
     	lock_release(&cur->anchor);
+    }
+
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
