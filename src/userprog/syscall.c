@@ -320,7 +320,7 @@ close_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
 
   struct file_descriptor *open_file_descriptor = process_get_file_descriptor_struct (fd);
-  close_syscall (open_file_descriptor);
+  close_syscall (open_file_descriptor, true);
 }
 
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
@@ -354,7 +354,8 @@ get_stack_argument(struct intr_frame *f, unsigned int index)
 /* Publicly visible system calls */
 
 void
-close_syscall (struct file_descriptor *file_descriptor)
+close_syscall (struct file_descriptor *file_descriptor,
+               bool remove_file_descriptor_table_entry)
 {
   lock_acquire (&file_system_lock);
 
@@ -362,10 +363,13 @@ close_syscall (struct file_descriptor *file_descriptor)
   if (file_descriptor != NULL) {
     file_close (file_descriptor->file);
 
-    /* Remove the entry from the open files hash table. */
-    struct file_descriptor descriptor;
-    descriptor.fd = file_descriptor->fd;
-    hash_delete (&thread_current ()->file_descriptor_table, &descriptor.hash_elem);
+    if (remove_file_descriptor_table_entry) {
+      /* Remove the entry from the open files hash table. */
+      struct file_descriptor descriptor;
+      descriptor.fd = file_descriptor->fd;
+      hash_delete (&thread_current ()->file_descriptor_table,
+                   &descriptor.hash_elem);
+    }
   }
 
   lock_release (&file_system_lock);
