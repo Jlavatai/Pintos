@@ -115,8 +115,6 @@ struct thread
     struct list children;                /* Holds the list of processes started by this process. */
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
-    int next_fd;                        /* Stores the next file descriptor for use. */
 #endif
 
     /* Owned by thread.c. */
