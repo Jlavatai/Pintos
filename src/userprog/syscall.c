@@ -27,8 +27,6 @@ static void seek_handler      (struct intr_frame *f);
 static void tell_handler      (struct intr_frame *f);
 static void close_handler     (struct intr_frame *f);
 
-static struct lock file_system_lock;
-
 void *get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (void *pointer);
 static struct file_descriptor *get_file_descriptor_struct(int fd);
@@ -53,9 +51,6 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-
-  /* Initialise the lock which is used for filesystem access. */
-  lock_init(&file_system_lock);
 }
 
 static void
@@ -122,11 +117,11 @@ create_handler (struct intr_frame *f)
   validate_user_pointer (file);
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire(&file_system_lock);
+  start_file_system_access ();
 
   bool result = filesys_create(file, (off_t)initial_size);
 
-  lock_release(&file_system_lock);
+  end_file_system_access ();
 
   /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = result;
@@ -139,11 +134,11 @@ remove_handler (struct intr_frame *f)
   validate_user_pointer (file);
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire(&file_system_lock);
+  start_file_system_access ();
 
   bool result = filesys_remove(file);
 
-  lock_release(&file_system_lock);
+  end_file_system_access ();
 
   /* Return the result by setting the eax value in the interrupt frame. */
   f->eax = result;
@@ -156,7 +151,7 @@ open_handler (struct intr_frame *f)
   validate_user_pointer (filename);
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   int fd = -1;
   struct file *file = filesys_open (filename);
@@ -177,7 +172,7 @@ open_handler (struct intr_frame *f)
     hash_insert (&t->proc_info->file_descriptor_table, &descriptor->hash_elem); 
   }
 
-  lock_release (&file_system_lock);
+  end_file_system_access ();
 
   /* Return the result by setting the eax value in the interrupt frame. */
   f->eax = fd;
@@ -189,14 +184,14 @@ filesize_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   int file_size = 0;
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL)
     file_size = file_length (descriptor->file);
 
-  lock_release (&file_system_lock);
+  end_file_system_access ();
 
   /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = file_size;
@@ -215,27 +210,27 @@ read_handler (struct intr_frame *f)
     uint8_t value = input_getc();
     unsigned bytes_read = 0;
 
+    /* Only store data in the buffer if it is big enough. */
     if (size > 0) {
       *((uint8_t*)buffer) = value;
       bytes_read = 1;
     }
 
     f->eax = bytes_read;
-
     return;
   }
 
   int bytes_read = -1;
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL) {
     bytes_read = (int)file_read (descriptor->file, buffer, size);
   }
 
-  lock_release (&file_system_lock);
+  end_file_system_access ();
 
   /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = bytes_read;
@@ -259,19 +254,18 @@ write_handler (struct intr_frame *f)
   int bytes_written = -1;
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL) {
     struct file *file = descriptor->file;
-    int write_size = size;
-    if (write_size > file_length (file))
-      write_size = file_length (file);
 
-    bytes_written = (int)file_write (file, buffer, write_size);
+    /* file_write() will handle the case if size is greater than the remaining 
+       size of the file. */
+    bytes_written = (int)file_write (file, buffer, size);
   }
 
-  lock_release (&file_system_lock); 
+  end_file_system_access (); 
 
   /* Return the result by setting the eax value in the interrupt frame. */
 	f->eax = bytes_written;
@@ -284,13 +278,13 @@ seek_handler (struct intr_frame *f)
   unsigned position = (unsigned)get_stack_argument (f, 1);
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor != NULL)
     file_seek (descriptor->file, position);
 
-  lock_release (&file_system_lock); 
+  end_file_system_access (); 
 }
 
 static void
@@ -299,7 +293,7 @@ tell_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
 
   /* We don't allow concurrent filesystem access. */
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   unsigned position = 0;
 
@@ -307,7 +301,7 @@ tell_handler (struct intr_frame *f)
   if (descriptor != NULL)
     position = (unsigned)file_tell (descriptor->file);
 
-  lock_release (&file_system_lock); 
+  end_file_system_access (); 
 
   /* Return the result by setting the eax value in the interrupt frame. */
   f->eax = position;
@@ -356,7 +350,7 @@ void
 close_syscall (struct file_descriptor *file_descriptor,
                bool remove_file_descriptor_table_entry)
 {
-  lock_acquire (&file_system_lock);
+  start_file_system_access ();
 
   /* Close the file if it was found. */
   if (file_descriptor != NULL) {
@@ -371,7 +365,7 @@ close_syscall (struct file_descriptor *file_descriptor,
     }
   }
 
-  lock_release (&file_system_lock);
+  end_file_system_access ();
 }
 
 void
