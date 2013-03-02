@@ -150,7 +150,7 @@ process_execute (const char *file_name)
     // Get the thread structure
 
   	lock_acquire(&proc_info->anchor);
-  	if (proc_info->exit_status == UNINITIALISED_EXIT_STATUS)
+  	if (proc_info->exit_status == (int)UNINITIALISED_EXIT_STATUS)
   		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
   	if (proc_info->exit_status == EXCEPTION_EXIT_STATUS)
   		tid = EXCEPTION_EXIT_STATUS;
@@ -195,7 +195,7 @@ start_process (void *setup_data_)
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
-  cur->proc_info->exit_status = success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS;
+  cur->proc_info->exit_status = (int)(success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS);
   cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
 
@@ -240,30 +240,19 @@ start_process (void *setup_data_)
   if_.esp-= (sizeof(char *));
    if(esp_not_in_boundaries(if_.esp))
         thread_exit();
-  *(int32_t *)if_.esp = last_arg_ptr;
+  *(int32_t *)if_.esp = (int32_t)last_arg_ptr;
 
    /*Iterating over the same list pushing the ptrs to the arguments strings
     on the stack*/
 
   for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);)
   {
-//<<<<<<< HEAD
-	struct argument *arg = list_entry (e, struct argument, token_list_elem);
-	char *curr_arg = arg->token;
-	if_.esp -= (sizeof(char*));
-	*(int32_t *)if_.esp = curr_arg;
-	e = list_next (e);
-	free(arg);
-	//printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
-	// printf("pushed ptr\n");
-//=======
-//      struct argument *arg = list_entry (e, struct argument, token_list_elem);
-//      char *curr_arg = arg->token;
-//      if_.esp -= (sizeof(char*));
-//       if(esp_not_in_boundaries(if_.esp))
-//        thread_exit();
-//      *(int32_t *)if_.esp = curr_arg;
-//>>>>>>> sys-calls
+  	struct argument *arg = list_entry (e, struct argument, token_list_elem);
+  	char *curr_arg = arg->token;
+  	if_.esp -= (sizeof(char*));
+  	*(int32_t *)if_.esp = (int32_t)curr_arg;
+  	e = list_next (e);
+  	free(arg);
   }
 
   /*Pushing the ptr to argv*/
@@ -272,7 +261,7 @@ start_process (void *setup_data_)
   if_.esp -= (sizeof(char **));
    if(esp_not_in_boundaries(if_.esp))
         thread_exit();
-  *(int32_t *)if_.esp = fst_arg_ptr;
+  *(int32_t *)if_.esp = (int32_t)fst_arg_ptr;
    
   /*Pushing argc*/
   if_.esp -=(sizeof(setup_data->argc));
@@ -286,7 +275,7 @@ start_process (void *setup_data_)
   if_.esp -= (sizeof(void *));
    if(esp_not_in_boundaries(if_.esp))
         thread_exit();
-  *(int32_t *)if_.esp = fake_return;
+  *(int32_t *)if_.esp = (int32_t)fake_return;
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -305,7 +294,7 @@ start_process (void *setup_data_)
 static bool
 esp_not_in_boundaries(void *esp)
 {
-  return (PHYS_BASE - (uint32_t)esp) > MAX_MEMORY;
+  return ((uint32_t *)PHYS_BASE - (uint32_t *)esp) > MAX_MEMORY;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -362,7 +351,7 @@ process_exit (void)
     uint32_t *pd;
 
     if (cur->proc_info) {
-    	if (cur->proc_info->exit_status == UNCAUGHT_EXCEPTION_STATUS)
+    	if (cur->proc_info->exit_status == (int)UNCAUGHT_EXCEPTION_STATUS)
     		cur->proc_info->exit_status = -1;
         printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
     	lock_acquire(&cur->proc_info->anchor);
@@ -806,7 +795,7 @@ process_get_file_descriptor_struct(int fd)
 }
 
 unsigned
-file_descriptor_table_hash_function (const struct hash_elem *e, void *aux)
+file_descriptor_table_hash_function (const struct hash_elem *e, void *aux UNUSED)
 {
   struct file_descriptor *descriptor =  hash_entry (e, struct file_descriptor, hash_elem);
 
@@ -816,7 +805,7 @@ file_descriptor_table_hash_function (const struct hash_elem *e, void *aux)
 bool
 file_descriptor_table_less_func (const struct hash_elem *a,
                            const struct hash_elem *b,
-                           void *aux)
+                           void *aux UNUSED)
 {
   struct file_descriptor *descriptor_a =  hash_entry (a,
                                                       struct file_descriptor,
