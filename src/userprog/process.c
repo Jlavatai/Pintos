@@ -195,7 +195,7 @@ start_process (void *setup_data_)
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
-  cur->proc_info->exit_status = success?DEFAULT_EXIT_STATUS:EXCEPTION_EXIT_STATUS;
+  cur->proc_info->exit_status = success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS;
   cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
 
@@ -350,6 +350,8 @@ process_exit (void)
     uint32_t *pd;
 
     if (cur->proc_info) {
+    	if (cur->proc_info->exit_status == UNCAUGHT_EXCEPTION_STATUS)
+    		cur->proc_info->exit_status = -1;
         printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
     	lock_acquire(&cur->proc_info->anchor);
     	cur->proc_info->child_is_alive = false;

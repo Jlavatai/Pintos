@@ -7,7 +7,7 @@ typedef int tid_t; // Forward declaration for include by thread.h
 
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
-#define DEFAULT_EXIT_STATUS -2
+#define UNCAUGHT_EXCEPTION_STATUS 0xabad1dea
 #define EXCEPTION_EXIT_STATUS -1
 
 struct proc_information { 
