@@ -26,10 +26,14 @@ struct proc_information {
 tid_t user_process_execute (const char *file_name);
 tid_t process_load_setup(const char *file_name);
 tid_t process_execute (const char *file_name);
+
+void process_init (void);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
 struct file_descriptor *process_get_file_descriptor_struct(int fd);
+void start_file_system_access(void);
+void end_file_system_access(void);
 
 #endif /* userprog/process.h */

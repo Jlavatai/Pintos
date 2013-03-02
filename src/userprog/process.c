@@ -31,6 +31,8 @@ struct stack_setup_data
   int argc;
 };
 
+static struct lock file_system_lock;
+
 static void
 cleanup_process_info (struct proc_information *process_info);
 
@@ -44,6 +46,12 @@ static thread_func start_process NO_RETURN;
 static bool esp_not_in_boundaries(void *esp);
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
+
+void
+process_init (void)
+{
+  lock_init(&file_system_lock);
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -366,6 +374,10 @@ process_exit (void)
     	}
     }
 
+    /* If this process is holding the filesystem lock, release it. */
+    if (file_system_lock.holder == cur)
+      lock_release (&file_system_lock);
+
     pd = cur->pagedir;
 
     // Delete any child processes information structures
@@ -384,7 +396,9 @@ process_exit (void)
     // Close the executable file, if the file is still open somewhere, writes
     // will still be disabled.
     if (cur->file) {
+      start_file_system_access ();
     	file_close(cur->file);
+      end_file_system_access ();
     }
 
     /* Destroy the current process's page directory and switch back
@@ -522,7 +536,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
     process_activate ();
 
     /* Open executable file. */
+    start_file_system_access ();
     file = filesys_open (file_name);
+    end_file_system_access ();
     if (file == NULL)
     {
         printf ("load: %s: open failed\n", file_name);
@@ -683,7 +699,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
 
-   Return true if successful, false if a memory allocation error
+   Return true if successful, false if a memory allocatlock_acquire(&file_system_lock);ion error
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
@@ -829,4 +845,16 @@ file_descriptor_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
 
   // Close the file descriptor for the open file.
   close_syscall (descriptor, false);
+}
+
+void
+start_file_system_access(void)
+{
+  lock_acquire(&file_system_lock);
+}
+
+void
+end_file_system_access(void)
+{
+  lock_release(&file_system_lock);
 }
