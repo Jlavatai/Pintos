@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 
 struct argument
 {
@@ -827,5 +828,5 @@ file_descriptor_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
   ASSERT (descriptor->file != NULL);
 
   // Close the file descriptor for the open file.
-  close_syscall (descriptor->file, false);
+  close_syscall (descriptor, false);
 }

@@ -8,6 +8,8 @@
 #include "userprog/process.h" 
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "devices/shutdown.h"
+#include "devices/input.h"
 
 typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
 
@@ -29,9 +31,8 @@ static void close_handler     (struct intr_frame *f);
 
 static struct lock file_system_lock;
 
-void *get_stack_argument(struct intr_frame *f, unsigned int index);
-static void validate_user_pointer (void *pointer);
-static struct file_descriptor *get_file_descriptor_struct(int fd);
+uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
+static void validate_user_pointer (const void *pointer);
 
 static const SYSCALL_HANDLER syscall_handlers[] = {
   &halt_handler,
@@ -96,13 +97,13 @@ exit_handler (struct intr_frame *f)
 static void
 exec_handler (struct intr_frame *f)
 {
-  struct thread *curr = thread_current();
   const char *cmd_line = (const char*)get_stack_argument (f, 0); 
-  validate_user_pointer (cmd_line);
+  validate_user_pointer ((void *)cmd_line);
 
   int tid = process_execute(cmd_line);
 
   f->eax = tid;
+
 }
 
 static void
@@ -119,7 +120,7 @@ create_handler (struct intr_frame *f)
   const char *file = (const char*)get_stack_argument (f, 0);
   unsigned initial_size = (unsigned)get_stack_argument (f, 1);
 
-  validate_user_pointer (file);
+  validate_user_pointer ((void *)file);
 
   /* We don't allow concurrent filesystem access. */
   lock_acquire(&file_system_lock);
@@ -136,7 +137,7 @@ static void
 remove_handler (struct intr_frame *f)
 {
   const char *file = (const char*)get_stack_argument (f, 0);
-  validate_user_pointer (file);
+  validate_user_pointer ((void *)file);
 
   /* We don't allow concurrent filesystem access. */
   lock_acquire(&file_system_lock);
@@ -153,7 +154,7 @@ static void
 open_handler (struct intr_frame *f)
 {
   const char *filename = (const char*)get_stack_argument (f, 0);
-  validate_user_pointer (filename);
+  validate_user_pointer ((void *)filename);
 
   /* We don't allow concurrent filesystem access. */
   lock_acquire (&file_system_lock);
@@ -206,7 +207,7 @@ static void
 read_handler (struct intr_frame *f)
 {
   int fd = (int)get_stack_argument (f, 0);
-  void *buffer = get_stack_argument (f, 1);
+  void *buffer = (void *)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
 
   validate_user_pointer (buffer);
@@ -325,7 +326,7 @@ close_handler (struct intr_frame *f)
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
    should free any of its resources and call thread_exit(). */
 static void
-validate_user_pointer (void *pointer)
+validate_user_pointer (const void *pointer)
 {
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
@@ -334,20 +335,20 @@ validate_user_pointer (void *pointer)
     exit_syscall (-1);
 
     /* As we terminate, we shouldn't reach this point. */
-    NOTREACHED();
+    NOT_REACHED ();
   }
 }
 
-void *
+uint32_t
 get_stack_argument(struct intr_frame *f, unsigned int index)
 {
   uint32_t *pointer = (uint32_t*)f->esp + index + 1;
 
   /* We could be given a bad esp, so validate the pointer before
      dereferencing. */
-  validate_user_pointer (pointer);
+  validate_user_pointer ((void *)pointer);
 
-  return *((int32_t*)pointer);
+  return *pointer;
 }
 
 /* Publicly visible system calls */
