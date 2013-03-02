@@ -7,8 +7,8 @@ typedef int tid_t; // Forward declaration for include by thread.h
 
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
-#define LOAD_EXCEPTION 0xbadbad
-#define DEFAULT_EXIT_STATUS -1
+#define DEFAULT_EXIT_STATUS -2
+#define EXCEPTION_EXIT_STATUS -1
 
 struct proc_information { 
     struct list_elem elem;                  /* To provide linked list functionality */

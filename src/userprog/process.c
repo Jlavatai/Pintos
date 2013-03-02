@@ -126,8 +126,8 @@ process_execute (const char *file_name)
     	palloc_free_page (fn_copy);
 
 	} else {
+		proc_info->pid = tid;
 		t = thread_lookup(tid);
-
 		// Store a pointer to this structure inside the thread's information struct
 		t->proc_info = proc_info;
 		// Store this in the parent's child struct
@@ -142,8 +142,8 @@ process_execute (const char *file_name)
   	lock_acquire(&proc_info->anchor);
   	if (proc_info->exit_status == UNINITIALISED_EXIT_STATUS)
   		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
-  	if (proc_info->exit_status == LOAD_EXCEPTION)
-  		tid = -1;
+  	if (proc_info->exit_status == EXCEPTION_EXIT_STATUS)
+  		tid = EXCEPTION_EXIT_STATUS;
 	lock_release(&proc_info->anchor);
 
     return tid;
@@ -185,13 +185,14 @@ start_process (void *setup_data_)
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
-  cur->proc_info->exit_status = success?DEFAULT_EXIT_STATUS:LOAD_EXCEPTION;
+  cur->proc_info->exit_status = success?DEFAULT_EXIT_STATUS:EXCEPTION_EXIT_STATUS;
   cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
 
-	  // Exit the process if the file failed to load
-  if (!success)
+  // Exit the process if the file failed to load
+  if (!success) {
 	  thread_exit ();
+  }
 
   struct list_elem *e;
 
