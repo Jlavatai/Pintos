@@ -48,6 +48,40 @@ The function \tx{start\_process}, will take care of pushing the arguments on the
 \subsection{Data Structures}
 \subsubsection{B1}
 
+Added to \tx{syscall.c}:
+
+\begin{verbatim}
+     static struct lock file_system_lock;
+\end{verbatim}
+
+\tab A lock used to ensure that only one file system operation is performed at any one time.
+
+\begin{verbatim}
+     typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
+\end{verbatim}
+
+\tab The function type used by all functions which implement the system calls.
+
+\begin{verbatim}
+     static const SYSCALL_HANDLER syscall_handlers[] = {
+       &halt_handler,
+       &exit_handler,
+       &exec_handler,
+       &wait_handler,
+       &create_handler,
+       &remove_handler,
+       &open_handler,
+       &filesize_handler,
+       &read_handler,
+       &write_handler,
+       &seek_handler,
+       &tell_handler,
+       &close_handler
+     };
+\end{verbatim}
+
+\tab A static array of function pointers used for system calls indexed by their respective system call number.
+
 \subsubsection{B2}
 
 File descriptors are associated with open files through a hash table. Each process's thread stores a hash table which associates file descriptors with \tx{struct file\_descriptor}s. \tx{struct file\_descriptor} stores a \tx{struct file} pointer which can then be used with the file and filesystem kernel functions.
@@ -63,6 +97,28 @@ File descriptors are unique within a single process, as there is no need for the
 
 \subsubsection{B6}
 
+We have separated the different parts of the system calls cleanly into a few parts:
+
+\begin{enumerate}
+\item We have encapsulated the code which validates user memory addresses into a function in \tx{syscall.c}, \tx{validate\_user\_pointer()}. This method checks whether the pointer is valid, and if not calls \tx{exit()} with a status code of \tx{-1}. Because it simply terminates if the memory address is invalid, this means that it does not have to return a value. If execution continues beyond a call to \tx{validate\_user\_pointer()}, it means that the memory address is a valid user memory address. If it was not, then \tx{exit()} would have been called and execution of the user program would not have continued.
+\item \tx{syscall\_handler()} is the entry point for all of our system calls; at this point we first validate \tx{esp} before dereferencing it using \tx{validate\_user\_pointer()}. As mentioned in 1), this is only a single function call, with no return value. After this, we invoke the correct system call handler function (by looking at the correct element in \tx{syscall\_handlers}). This single call to \tx{validate\_user\_pointer()} is the only user memory address validation we do in this function.
+\item For each system call handler function, we retrieve the arguments on the stack by calling \tx{get\_stack\_argument()}, which takes two arguments: the interrupt frame for the system call and the argument index. This function evaluates the address which this argument should be stored at (based on the \tx{esp} value stored in the interrupt frame), then calls \tx{validate\_user\_pointer()} with this address, then returns the dereferenced value at that address. The fact that argument retrieval is handled in another function means that the system call functions are very clean, and do not contain a swathe of address checking or error handling code. Any pointer arguments which then also require validation can be checked in the system call handler with \tx{validate\_user\_pointer()}.
+\end{enumerate}
+
+For example, the code in the \tx{write} system call handler which validates the stack arguments is very minimal:
+
+\begin{verbatim}
+// From write_handler() in syscall.c.
+int fd = (int)get_stack_argument (f, 0);
+const void *buffer = (const void*)get_stack_argument (f, 1);
+unsigned size = (unsigned)get_stack_argument (f, 2);
+
+validate_user_pointer (buffer);
+
+// Code to implement the write system call.
+// ...
+\end{verbatim}
+
 \subsection{Synchronisation}
 \subsubsection{B7}
 
@@ -73,9 +129,9 @@ File descriptors are unique within a single process, as there is no need for the
 
 \subsubsection{B10}
 
-As we use a hash table, our implementation of file descriptors is very efficient for lookup, which is an $O(1)$ operation (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which optimises for space efficiency.
+As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
 
-However, our implementation uses a single hash table per process, which requires more memory than if we only used a single hash table which was shared between all processes.
+However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.
 
 \subsubsection{B11}
 
