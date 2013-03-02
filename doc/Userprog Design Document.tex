@@ -1,0 +1,142 @@
+\documentclass[a4wide, 11pt]{article}
+\usepackage{a4, fullpage}
+\newcommand{\tab}{\hspace*{2em}}
+\usepackage[margin=2cm]{geometry}
+\newcommand{\tx}{\texttt}
+
+\begin{document}
+
+\title{OS 211 \\ Task2: User Programs \\ Design Document}
+\author{Francesco Di Mauro, Thomas Rooney, Alex Rozanski}
+\date{\today}
+\maketitle
+
+\section{Argument Passing}
+\subsection{Data Structures}
+\subsubsection{A1}
+Added to \tx{process.c}:
+\tab \begin{verbatim}
+     struct argument
+     {
+         char *token;
+         struct list_elem token_list_elem;
+     };
+\end{verbatim}
+\tab The struct represent an argument, which \tx{char *token} is pointing to. This struct can be added in a list struct.
+\\
+\tab \begin{verbatim}
+     struct stack_setup_data
+     {
+         struct list argv;
+         int argc;
+         struct argument **argument_ptrs;
+     };
+\end{verbatim}
+This struct stores the data needed to setup the stack in \tx{start\_process}, namely a list of \tx{struct argument}, the number of arguments, and a list of pointer to \tx{struct argument}, used to free the memory at the end. 
+
+\subsection{Algorithms}
+\subsubsection{A2}
+Argument parsing is split between the functions \tx{process\_execute} and \tx{start\_process}. \\
+At the beginning of \tx{process\_execute}, a \tx{stack\_setup\_data} struct is instantiated, initializing the \tx{argv} list and setting \tx{argc} to zero. Afterwards, the file name passed as an argument to the pintos command is tokenized, and the pointers to the single tokens are stored into a \tx{struct argument}, and then added to the \tx{argv} list. Each struct is pushed at the front of the list, so that at the end the arguments will already be in reverse order, as needed. \\
+The function \tx{start\_process}, will take care of pushing the arguments on the stack. As a first thing, it will save the pointer to the name of the process, which will be needed in order to free the memory page at the end of the stack setup. Then, after setting up the interrupt frame, it will iterate over the list of arguments a first time: in this first "pass", the string representing the arguments will be copied onto the stack, modifying the location \tx{esp} is pointing to depending on the length of the string. The iteration will be from the front to the end of the list, since the arguments are already in the opposite order. Moreover, the \tx{char} pointers pointing to the arguments in the heap, will be substituted with the location the \tx{esp} is pointing to. The function will then push a \tx{uint8\_t} as a word alignment, and a \tx{NULL} pointer, in order to respet the convention that \tx{argv[argc] = NULL}. Afterwards, the function will iterate over the same list again, this time pushing the pointers to the strings in the same (opposite) order. Finally, the pointer to the first argument will be pushed, followed by \tx{argc} and the "fake" return address. \\
+Overflowing the stack is avoided by checking the esp value every time it is modified: if the difference between \tx{PHYS-BASE} and the current esp is bigger than 4KB, the process stops with an error code.   
+
+\subsection{Rationale}
+\subsubsection{A3}
+The main difference between the functions \tx{strtok()} and \tx{strtok\_r()} is that the latter has an extra parameter, another \tx{char *}, which stores, after every tokenization, the pointer to the new location, to be used in the next call of the same function. the function \tx{strtok}, instead, stores the new location within an internal variable. Since Pintos might switch threads to run while this tokenization is taking place, the value of this internal variable would be lost, or could cause illegal memory accesses.
+\subsubsection{A4}
+A disadvantage of the Pintos method is that, before the tokenization, the command passed is copied into a memory page to avoid race conditions. This impose a 4KB limit on the command line, which is not present in UNIX. \\
+Moreover, if something goes wrong  in the argument parsing in Pintos, the whole kernel would panic and interrupt the execution. Parsing the arguments at a higher stage allows to identify errors before they make the whole kernel crash.
+
+\section{System Calls}
+\subsection{Data Structures}
+\subsubsection{B1}
+
+Added to \tx{syscall.c}:
+
+\begin{verbatim}
+     static struct lock file_system_lock;
+\end{verbatim}
+
+\tab A lock used to ensure that only one file system operation is performed at any one time.
+
+\begin{verbatim}
+     typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
+\end{verbatim}
+
+\tab The function type used by all functions which implement the system calls.
+
+\begin{verbatim}
+     static const SYSCALL_HANDLER syscall_handlers[] = {
+       &halt_handler,
+       &exit_handler,
+       &exec_handler,
+       &wait_handler,
+       &create_handler,
+       &remove_handler,
+       &open_handler,
+       &filesize_handler,
+       &read_handler,
+       &write_handler,
+       &seek_handler,
+       &tell_handler,
+       &close_handler
+     };
+\end{verbatim}
+
+\tab A static array of function pointers used for system calls indexed by their respective system call number.
+
+\subsubsection{B2}
+
+File descriptors are associated with open files through a hash table. Each process's thread stores a hash table which associates file descriptors with \tx{struct file\_descriptor}s. \tx{struct file\_descriptor} stores a \tx{struct file} pointer which can then be used with the file and filesystem kernel functions.
+
+File descriptors are unique within a single process, as there is no need for them to be unique within the entire OS since they only identify open files at the process level.
+
+\subsection{Algorithms}
+\subsubsection{B3}
+
+\subsubsection{B4}
+
+\subsubsection{B5}
+
+\subsubsection{B6}
+
+We have separated the different parts of the system calls cleanly into a few parts:
+
+\begin{enumerate}
+\item We have encapsulated the code which validates user memory addresses into a function in \tx{syscall.c}, \tx{validate\_user\_pointer()}. This method checks whether the pointer is valid, and if not calls \tx{exit()} with a status code of \tx{-1}. Because it simply terminates if the memory address is invalid, this means that it does not have to return a value. If execution continues beyond a call to \tx{validate\_user\_pointer()}, it means that the memory address is a valid user memory address. If it was not, then \tx{exit()} would have been called and execution of the user program would not have continued.
+\item \tx{syscall\_handler()} is the entry point for all of our system calls; at this point we first validate \tx{esp} before dereferencing it using \tx{validate\_user\_pointer()}. As mentioned in 1), this is only a single function call, with no return value. After this, we invoke the correct system call handler function (by looking at the correct element in \tx{syscall\_handlers}). This single call to \tx{validate\_user\_pointer()} is the only user memory address validation we do in this function.
+\item For each system call handler function, we retrieve the arguments on the stack by calling \tx{get\_stack\_argument()}, which takes two arguments: the interrupt frame for the system call and the argument index. This function evaluates the address which this argument should be stored at (based on the \tx{esp} value stored in the interrupt frame), then calls \tx{validate\_user\_pointer()} with this address, then returns the dereferenced value at that address. The fact that argument retrieval is handled in another function means that the system call functions are very clean, and do not contain a swathe of address checking or error handling code. Any pointer arguments which then also require validation can be checked in the system call handler with \tx{validate\_user\_pointer()}.
+\end{enumerate}
+
+For example, the code in the \tx{write} system call handler which validates the stack arguments is very minimal:
+
+\begin{verbatim}
+// From write_handler() in syscall.c.
+int fd = (int)get_stack_argument (f, 0);
+const void *buffer = (const void*)get_stack_argument (f, 1);
+unsigned size = (unsigned)get_stack_argument (f, 2);
+
+validate_user_pointer (buffer);
+
+// Code to implement the write system call.
+// ...
+\end{verbatim}
+
+\subsection{Synchronisation}
+\subsubsection{B7}
+
+\subsubsection{B8}
+
+\subsection{Rationale}
+\subsubsection{B9}
+
+\subsubsection{B10}
+
+As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
+
+However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.
+
+\subsubsection{B11}
+
+\end{document}
