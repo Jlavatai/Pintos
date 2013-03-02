@@ -117,8 +117,6 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct hash file_descriptor_table;  /* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        /* Stores the next file descriptor for use. */
-
-    struct thread *parent;       /* Parent thread, used to synchronise when calling thread_exec*/
 #endif
 
     /* Owned by thread.c. */
@@ -173,6 +171,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+struct thread* thread_lookup(tid_t tid);
 
 void thread_set_parent(struct thread *);
 

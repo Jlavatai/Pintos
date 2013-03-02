@@ -255,32 +255,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  #ifdef USERPROG
-  //Define parent's thread
-  t->parent = thread_current();
-  // Add to parent thread's child list
-  // Initialise and Put together the information struct
-  struct proc_information * proc_info = calloc(1, sizeof(struct proc_information));
-  // Ensure the calloc call worked correctly
-  ASSERT(proc_info);
-  proc_info->pid = (pid_t)tid;
-  // Initialise Anchor
-  lock_init(&proc_info->anchor);
-  // Initialise life condition
-  cond_init(&proc_info->condvar_process_sync);
-  proc_info->exit_status = -1;
-  proc_info->thread = t;
-  // Store a pointer to this structure inside the thread's information struct
-  t->proc_info = proc_info;
-  // Store this in the parent's child struct
-  if (is_thread(running_thread ())) {
-    list_push_back(&thread_current()->children, &proc_info->elem);
-  }
-
-
   
-  #endif
-
   // Initialise timer sleep member to 0
   t->wakeup_tick = 0;
 
@@ -562,6 +537,22 @@ void
 thread_foreach (thread_action_func *func, void *aux)
 {
   thread_foreachinlist(&all_list, func, aux);
+}
+
+/*
+    */
+struct thread *
+thread_lookup(tid_t tid)
+{
+  struct list_elem *e;
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+	   e = list_next (e))
+	{
+	  struct thread *t = list_entry (e, struct thread, allelem);
+	  if (t->tid == tid)
+		  return t;
+	}
+  return NULL;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */

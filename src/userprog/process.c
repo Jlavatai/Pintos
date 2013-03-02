@@ -53,7 +53,8 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
     tid_t tid;
-
+    int old_level;
+    struct thread *t;
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page (0);
@@ -100,33 +101,50 @@ process_execute (const char *file_name)
 
     struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
 
+    // Setup process information shared structure
+    // Initialise and Put together the information struct
+    struct proc_information * proc_info = calloc(1, sizeof(struct proc_information));
+    if (proc_info == NULL)
+    	return TID_ERROR;
+    // Ensure the calloc call worked correctly
+    ASSERT(proc_info);
+    proc_info->pid = tid;
+    // Initialise Anchor
+    lock_init(&proc_info->anchor);
+    // Initialise life condition
+    cond_init(&proc_info->condvar_process_sync);
+    proc_info->exit_status = UNINITIALISED_EXIT_STATUS;
+    proc_info->child_is_alive = true;
+    proc_info->parent_is_alive = true;
 
+
+    old_level = intr_disable ();
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
-    {
-        palloc_free_page (fn_copy);
-    }
+	{
+    	palloc_free_page (fn_copy);
+
+	} else {
+		t = thread_lookup(tid);
+
+		// Store a pointer to this structure inside the thread's information struct
+		t->proc_info = proc_info;
+		// Store this in the parent's child struct
+		list_push_back(&thread_current()->children, &proc_info->elem);
+
+	}
+    intr_set_level(old_level);
 
     // We want to collect an exit_status of -1, and return it, if thread cannot start
     // Get the thread structure
-    struct list_elem *e;
-    struct thread *cur = thread_current();
-    for (e = list_begin (&cur->children); e != list_end (&cur->children);
-	     e = list_next (e))
-  	{
-  		struct proc_information *pI = list_entry (e, struct proc_information, elem);
-  		if (pI->pid == tid) {
-  			lock_acquire(&pI->anchor);
-  			cond_wait(&pI->condvar_process_sync, &pI->anchor);
-  			if (pI->exit_status == -1)
-  				tid = -1;
-			cond_signal(&pI->condvar_process_sync, &pI->anchor);
-			lock_release(&pI->anchor);
-  			return tid;
-  		}
-  	}
 
+  	lock_acquire(&proc_info->anchor);
+  	if (proc_info->exit_status == UNINITIALISED_EXIT_STATUS)
+  		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
+  	if (proc_info->exit_status == LOAD_EXCEPTION)
+  		tid = -1;
+	lock_release(&proc_info->anchor);
 
     return tid;
 }
@@ -165,21 +183,15 @@ start_process (void *setup_data_)
   struct thread *cur = thread_current();
 
   // Signal the parent process about the execution's validity
-  if (success) {
-	  lock_acquire(&cur->proc_info->anchor);
-	  cur->proc_info->exit_status = 1;
-	  cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
-	  cond_wait(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
-	  lock_release(&cur->proc_info->anchor);
-  } else {
+
+  lock_acquire(&cur->proc_info->anchor);
+  cur->proc_info->exit_status = success?DEFAULT_EXIT_STATUS:LOAD_EXCEPTION;
+  cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+  lock_release(&cur->proc_info->anchor);
+
 	  // Exit the process if the file failed to load
+  if (!success)
 	  thread_exit ();
-  }
-
-
-
-  // Return to default failure exit_status in case of exceptions
-  cur->proc_info->exit_status = -1;
 
   struct list_elem *e;
 
@@ -273,21 +285,6 @@ esp_not_in_boundaries(void *esp)
   return (PHYS_BASE - (uint32_t)esp) > MAX_MEMORY;
 }
 
-int sum_fileopen(struct thread * t, struct file * f) {
-  struct list_elem *e;
-  int count = 0;
-  if (t->file == f) count++;
-  for (e = list_begin (&t->children); e != list_end (&t->children);
-       e = list_next (e))
-  {
-    struct proc_information *child = list_entry (e, struct proc_information, elem);
-    if (child->thread)
-      count += sum_fileopen(child->thread, f);
-  }
-  return count;
-}
-
-
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -308,20 +305,26 @@ process_wait (tid_t child_tid)
 	{
 		struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
 		if (procInfo->pid == child_tid) {
-		  // If the thread hasn't finished yet
-		  if (procInfo->thread)
-		  {
 			lock_acquire(&procInfo->anchor);
 			// If we were blocked by acquire, we might have deleted the thread struct
-			if (procInfo->thread)
+			if (procInfo->child_is_alive)
 				cond_wait(&procInfo->condvar_process_sync, &procInfo->anchor);
+
+			// Store the exit_status on the stack due to memory being freed
+			int exit_status = procInfo->exit_status;
+
+			// Delete from process list so the next time returns -1
+			list_remove(e);
+
+			// Atomic operation
 			lock_release(&procInfo->anchor);
-			// Only hits here after thread has been destroyed, thus no need to release lock
-		  }
-		  return procInfo->exit_status;
-		} else { // If it has already finished, return -1
-			return -1;
-	    }
+
+			// Free the memory
+			free(procInfo);
+
+			// return exit_status
+			return exit_status;
+		}
 	}
     return -1;
 }
@@ -334,6 +337,48 @@ process_exit (void)
     struct thread *cur = thread_current ();
     struct list_elem *e;
     uint32_t *pd;
+
+    if (cur->proc_info) {
+        printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
+    	lock_acquire(&cur->proc_info->anchor);
+    	cur->proc_info->child_is_alive = false;
+    	if (cur->proc_info->parent_is_alive) {
+    		cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+    		lock_release(&cur->proc_info->anchor);
+    	}
+    	else {
+    		free(cur->proc_info);
+    	}
+    }
+
+    pd = cur->pagedir;
+
+    // Delete any child processes information structures
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);)
+    {
+      struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
+      e = list_next (e);
+      list_remove(&procInfo->elem);
+      if (!procInfo->child_is_alive)
+    	  free(procInfo);
+      else {
+    	  procInfo->parent_is_alive = false;
+      }
+    }
+
+
+
+    /* Destroy the file descriptor table */
+    hash_destroy(&cur->file_descriptor_table,
+                 &file_descriptor_table_destroy_func);
+
+
+
+    // Close the executable file, if the file is still open somewhere, writes
+    // will still be disabled.
+    if (cur->file) {
+    	file_close(cur->file);
+    }
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -353,39 +398,6 @@ process_exit (void)
     }
 
 
-    pd = cur->pagedir;
-
-
-    // Delete any child processes information structures
-    for (e = list_begin (&cur->children); e != list_end (&cur->children);)
-    {
-      struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
-      e = list_next (e);
-      process_wait(procInfo->pid);
-      // Finally delete the child's information
-      list_remove(&procInfo->elem);
-      free(procInfo);
-    }
-
-    /* Destroy the file descriptor table */
-    hash_destroy(&cur->file_descriptor_table,
-                 &file_descriptor_table_destroy_func);
-
-    if (!cur->proc_info) // If you're the main function, return early
-    	return;
-
-    lock_acquire(&cur->proc_info->anchor);
-        printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
-
-    // re-enable writes on the executable file
-    if (cur->file)
-    	file_allow_write(cur->file);
-
-	cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
-
-    cur->proc_info->thread = NULL;
-
-    lock_release(&cur->proc_info->anchor);
 }
 
 /* Sets up the CPU for running user code in the current
