@@ -28,6 +28,10 @@
 
 \subsubsection{B2}
 
+File descriptors are associated with open files through a hash table. Each process's thread stores a hash table which associates file descriptors with \tx{struct file\_descriptor}s. \tx{struct file\_descriptor} stores a \tx{struct file} pointer which can then be used with the file and filesystem kernel functions.
+
+File descriptors are unique within a single process, as there is no need for them to be unique within the entire OS since they only identify open files at the process level.
+
 \subsection{Algorithms}
 \subsubsection{B3}
 
@@ -46,6 +50,10 @@
 \subsubsection{B9}
 
 \subsubsection{B10}
+
+As we use a hash table, our implementation of file descriptors is very efficient for lookup, which is an $O(1)$ operation (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which optimises for space efficiency.
+
+However, our implementation uses a single hash table per process, which requires more memory than if we only used a single hash table which was shared between all processes.
 
 \subsubsection{B11}
 
