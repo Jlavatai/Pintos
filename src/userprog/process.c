@@ -30,6 +30,9 @@ struct stack_setup_data
   int argc;
 };
 
+static void
+cleanup_process_info (struct proc_information *process_info);
+
 unsigned file_descriptor_table_hash_function (const struct hash_elem *e, void *aux);
 bool file_descriptor_table_less_func (const struct hash_elem *a,
                                       const struct hash_elem *b,
@@ -116,6 +119,13 @@ process_execute (const char *file_name)
     proc_info->exit_status = UNINITIALISED_EXIT_STATUS;
     proc_info->child_is_alive = true;
     proc_info->parent_is_alive = true;
+
+    /* Set up file descriptor table. */
+    hash_init (&proc_info->file_descriptor_table,
+               &file_descriptor_table_hash_function,
+               &file_descriptor_table_less_func,
+               NULL);
+    proc_info->next_fd = 2;
 
 
     old_level = intr_disable ();
@@ -347,7 +357,7 @@ process_exit (void)
     		lock_release(&cur->proc_info->anchor);
     	}
     	else {
-    		free(cur->proc_info);
+    		cleanup_process_info(cur->proc_info);
     	}
     }
 
@@ -360,19 +370,11 @@ process_exit (void)
       e = list_next (e);
       list_remove(&procInfo->elem);
       if (!procInfo->child_is_alive)
-    	  free(procInfo);
+    	  cleanup_process_info(procInfo);
       else {
     	  procInfo->parent_is_alive = false;
       }
     }
-
-
-
-    /* Destroy the file descriptor table */
-    hash_destroy(&cur->file_descriptor_table,
-                 &file_descriptor_table_destroy_func);
-
-
 
     // Close the executable file, if the file is still open somewhere, writes
     // will still be disabled.
@@ -398,6 +400,16 @@ process_exit (void)
     }
 
 
+}
+
+static void
+cleanup_process_info (struct proc_information *process_info)
+{
+    /* Destroy the file descriptor table */
+    hash_destroy(&process_info->file_descriptor_table,
+                 &file_descriptor_table_destroy_func);
+
+    free(process_info);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -590,13 +602,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     if (!setup_stack (esp))
         goto done;
 
-    /* Set up file descriptor table. */
-    hash_init (&t->file_descriptor_table,
-               &file_descriptor_table_hash_function,
-               &file_descriptor_table_less_func,
-               NULL);
-    t->next_fd = 2;
-
     /* Start address. */
     *eip = (void ( *) (void)) ehdr.e_entry;
 
@@ -774,7 +779,7 @@ process_get_file_descriptor_struct(int fd)
   descriptor.fd = fd;
 
   struct thread *t = thread_current ();
-  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
+  struct hash_elem *found_element = hash_find (&t->proc_info->file_descriptor_table,
                                                &descriptor.hash_elem);
   if (found_element == NULL)
     return NULL;

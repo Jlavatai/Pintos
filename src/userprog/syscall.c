@@ -165,16 +165,16 @@ open_handler (struct intr_frame *f)
     struct thread *t = thread_current ();
 
     // fds 0 and 1 are reserved for stdout and stderr.
-    ASSERT(t->next_fd > 1);
+    ASSERT(t->proc_info->next_fd > 1);
 
     // Create the file_descriptor entry to put into the hash table.
     struct file_descriptor *descriptor = malloc (sizeof (struct file_descriptor));
-    descriptor->fd = (t->next_fd)++;
+    descriptor->fd = (t->proc_info->next_fd)++;
     descriptor->file = file;
 
     fd = descriptor->fd;
 
-    hash_insert (&t->file_descriptor_table, &descriptor->hash_elem); 
+    hash_insert (&t->proc_info->file_descriptor_table, &descriptor->hash_elem); 
   }
 
   lock_release (&file_system_lock);
@@ -366,7 +366,7 @@ close_syscall (struct file_descriptor *file_descriptor,
       /* Remove the entry from the open files hash table. */
       struct file_descriptor descriptor;
       descriptor.fd = file_descriptor->fd;
-      hash_delete (&thread_current ()->file_descriptor_table,
+      hash_delete (&thread_current ()->proc_info->file_descriptor_table,
                    &descriptor.hash_elem);
     }
   }
