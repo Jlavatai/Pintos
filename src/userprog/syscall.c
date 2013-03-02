@@ -29,7 +29,7 @@ static void seek_handler      (struct intr_frame *f);
 static void tell_handler      (struct intr_frame *f);
 static void close_handler     (struct intr_frame *f);
 
-static struct lock file_system_lock;
+
 
 uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (const void *pointer);
