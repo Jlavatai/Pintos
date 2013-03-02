@@ -255,15 +255,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-  #ifdef USERPROG
-  //Define parent's thread
-    t->parent = thread_current();
-  // Add to parent thread's child list
-  if (is_thread(running_thread ())) {
-	  list_push_back(&thread_current()->children, &t->procelem);
-  }
-  #endif
-
+  
   // Initialise timer sleep member to 0
   t->wakeup_tick = 0;
 
@@ -547,6 +539,22 @@ thread_foreach (thread_action_func *func, void *aux)
   thread_foreachinlist(&all_list, func, aux);
 }
 
+/*
+    */
+struct thread *
+thread_lookup(tid_t tid)
+{
+  struct list_elem *e;
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+	   e = list_next (e))
+	{
+	  struct thread *t = list_entry (e, struct thread, allelem);
+	  if (t->tid == tid)
+		  return t;
+	}
+  return NULL;
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
@@ -702,7 +710,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void) 
@@ -743,17 +751,8 @@ init_thread (struct thread *t, const char *name, int priority)
 
 
   list_init(&t->lock_list);
-  list_init(&t->children);
   #ifdef USERPROG
-  t->exit_status = -1;
-  if (is_thread(running_thread())) {
-	  // Initialise Anchor
-	  lock_init(&t->anchor);
-	  // Initialise life condition
-	  cond_init(&t->condvar_process_sync);
-	  // Acquire the lock
-//	  lock_acquire_as_thread(&t->anchor,t);
-  }
+  list_init(&t->children);
   #endif
   // Set Priority
   if (thread_mlfqs)

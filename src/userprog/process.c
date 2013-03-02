@@ -30,6 +30,9 @@ struct stack_setup_data
   int argc;
 };
 
+static void
+cleanup_process_info (struct proc_information *process_info);
+
 unsigned file_descriptor_table_hash_function (const struct hash_elem *e, void *aux);
 bool file_descriptor_table_less_func (const struct hash_elem *a,
                                       const struct hash_elem *b,
@@ -37,6 +40,7 @@ bool file_descriptor_table_less_func (const struct hash_elem *a,
 void file_descriptor_table_destroy_func (struct hash_elem *e, void *aux);
 
 static thread_func start_process NO_RETURN;
+static bool esp_not_in_boundaries(void *esp);
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
 
@@ -44,27 +48,16 @@ int sum_fileopen(struct thread * t, struct file * f);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-tid_t
-user_process_execute (const char *file_name) 
-{ 
-  tid_t usr_proc_tid = process_load_setup(file_name);
 
-  return usr_proc_tid;
-}
+#define MAX_MEMORY 4096 //4KB
 
 tid_t
 process_execute (const char *file_name)
 {
-    return process_load_setup(file_name);
-}
-
-
-tid_t
-process_load_setup(const char *file_name)
-{
   char *fn_copy;
     tid_t tid;
-
+    int old_level;
+    struct thread *t;
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page (0);
@@ -89,9 +82,7 @@ process_load_setup(const char *file_name)
 
     char *token, *pos;
 
-    //printf("----Beginning tokenization\n");
-
-   // ASSERT(fn_copy =! NULL);
+     /*Tokenize file name copy to get the single arguments.*/
 
     for (token = strtok_r (fn_copy, " ", &pos); token != NULL;
             token = strtok_r (NULL, " ", &pos))
@@ -106,41 +97,64 @@ process_load_setup(const char *file_name)
 
         arg->token = token;
         list_push_front(&setup_data->argv, &arg->token_list_elem);
-        //printf ("'%s'\n", token);
         setup_data->argc++;
     }
 
-    //printf("----Ending tokenizatin\n");
+   
 
     struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
-   // printf("%s %d\n", fst_arg->token, argc);
 
+    // Setup process information shared structure
+    // Initialise and Put together the information struct
+    struct proc_information * proc_info = calloc(1, sizeof(struct proc_information));
+    if (proc_info == NULL)
+    	return TID_ERROR;
+    // Ensure the calloc call worked correctly
+    ASSERT(proc_info);
+    proc_info->pid = tid;
+    // Initialise Anchor
+    lock_init(&proc_info->anchor);
+    // Initialise life condition
+    cond_init(&proc_info->condvar_process_sync);
+    proc_info->exit_status = UNINITIALISED_EXIT_STATUS;
+    proc_info->child_is_alive = true;
+    proc_info->parent_is_alive = true;
+
+    /* Set up file descriptor table. */
+    hash_init (&proc_info->file_descriptor_table,
+               &file_descriptor_table_hash_function,
+               &file_descriptor_table_less_func,
+               NULL);
+    proc_info->next_fd = 2;
+
+
+    old_level = intr_disable ();
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
-    {
-        palloc_free_page (fn_copy);
-    }
+	{
+    	palloc_free_page (fn_copy);
+
+	} else {
+		proc_info->pid = tid;
+		t = thread_lookup(tid);
+		// Store a pointer to this structure inside the thread's information struct
+		t->proc_info = proc_info;
+		// Store this in the parent's child struct
+		list_push_back(&thread_current()->children, &proc_info->elem);
+
+	}
+    intr_set_level(old_level);
 
     // We want to collect an exit_status of -1, and return it, if thread cannot start
     // Get the thread structure
-    struct list_elem *e;
-    struct thread *cur = thread_current();
-    for (e = list_begin (&cur->children); e != list_end (&cur->children);
-	     e = list_next (e))
-	{
-		struct thread *t = list_entry (e, struct thread, procelem);
-		if (t->tid == tid) {
-			lock_acquire(&t->anchor);
-			cond_wait(&t->condvar_process_sync, &t->anchor);
-			// If the exit status is -1, this is what we want to return
-			if (t->exit_status == -1)
-				return -1;
-			cond_signal(&t->condvar_process_sync, &t->anchor);
-			lock_release(&t->anchor);
-		}
-	}
 
+  	lock_acquire(&proc_info->anchor);
+  	if (proc_info->exit_status == UNINITIALISED_EXIT_STATUS)
+  		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
+  	if (proc_info->exit_status == EXCEPTION_EXIT_STATUS)
+  		tid = EXCEPTION_EXIT_STATUS;
+	lock_release(&proc_info->anchor);
 
     return tid;
 }
@@ -152,17 +166,20 @@ static void
 start_process (void *setup_data_)
 {
 
+   /*The struct setup_data contains a pointer to the arguments and the arg count*/
+
   struct stack_setup_data *setup_data = (struct stack_setup_data *) setup_data_;
 
-  //struct params_struct *params = params_;
-  //printf("Casted to params ptr\n");
+
   struct intr_frame if_;
   bool success;
 
-   struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
-   char *fst_arg_saved = fst_arg->token; 
+   /*Saving the first argument, which will be needed
+    to free the memory page at the end of the setup*/
 
-  //printf("----Proc name is %s\n", fst_arg_saved);
+  struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
+  char *fst_arg_saved = fst_arg->token; 
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -175,62 +192,62 @@ start_process (void *setup_data_)
   
   struct thread *cur = thread_current();
 
-  lock_acquire(&cur->anchor);
-
   // Signal the parent process about the execution's validity
-  cur->exit_status = success?1:-1;
-  cond_signal(&cur->condvar_process_sync, &cur->anchor);
-  // Wait for it to get the signal
-  cond_wait(&cur->condvar_process_sync, &cur->anchor);
-  lock_release(&cur->anchor);
+
+  lock_acquire(&cur->proc_info->anchor);
+  cur->proc_info->exit_status = success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS;
+  cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+  lock_release(&cur->proc_info->anchor);
 
   // Exit the process if the file failed to load
-  if (!success)
-    thread_exit ();
-  // Return to default failure exit_status in case of exceptions
-  cur->exit_status = -1;
-  
-  /*Set Up Stack here*/
+  if (!success) {
+	  thread_exit ();
+  }
 
   struct list_elem *e;
 
-  //Push the actual strings by copying them, then change the 
-  //char* value stored in the arguments list so that we can traverse again.
+  /*Beginning the stack setup*/
+
+  /*The string are copied by first decreasing the esp by the length of
+    the string, and then using strlcpy to actually copying it.
+    Moreover, once the string is copied, the original ptr to the string
+    is replaced with the new ptr to the string in the stack. This will
+    allow us to iterate over the same string without allocating any resource*/
 
   for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);
           e = list_next (e))
   {
       struct argument *arg = list_entry (e, struct argument, token_list_elem);
-      //printf("Got actual argument\n");
-      //printf("%s\n", arg->token );
       char *curr_arg = arg->token;
-      //printf("%s\n", curr_arg );
       if_.esp -= (strlen(curr_arg) + 1);
+      if(esp_not_in_boundaries(if_.esp))
+        thread_exit();
       strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
-      // printf("Copied String\n");
-     // printf("Esp is pointing to %s at location 0x%x\n", if_.esp, (unsigned int)if_.esp);
       arg->token = if_.esp;
-      // printf("Stored pointer\n");
-      // printf("Decreasing by %d\n", strlen(curr_arg) + 1);
-      //printf("Decresed esp\n");
   }
 
-   //hex_dump(0, if_.esp, 100, true);
-
-    //printf("---First Pass done\n");
-   //Push word align
+  /*Pushing a 0 byte to provide alignment*/
 
   uint8_t align = 0;
   if_.esp -= (sizeof(uint8_t));
+   if(esp_not_in_boundaries(if_.esp))
+        thread_exit();
   *(uint8_t *)if_.esp = align;
+
+  /*Pushing a null pointer to respect the convention argv[argc] = NULL*/
 
   char *last_arg_ptr  = NULL;
   if_.esp-= (sizeof(char *));
+   if(esp_not_in_boundaries(if_.esp))
+        thread_exit();
   *(int32_t *)if_.esp = last_arg_ptr;
 
+   /*Iterating over the same list pushing the ptrs to the arguments strings
+    on the stack*/
 
   for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);)
   {
+//<<<<<<< HEAD
 	struct argument *arg = list_entry (e, struct argument, token_list_elem);
 	char *curr_arg = arg->token;
 	if_.esp -= (sizeof(char*));
@@ -239,46 +256,37 @@ start_process (void *setup_data_)
 	free(arg);
 	//printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
 	// printf("pushed ptr\n");
+//=======
+//      struct argument *arg = list_entry (e, struct argument, token_list_elem);
+//      char *curr_arg = arg->token;
+//      if_.esp -= (sizeof(char*));
+//       if(esp_not_in_boundaries(if_.esp))
+//        thread_exit();
+//      *(int32_t *)if_.esp = curr_arg;
+//>>>>>>> sys-calls
   }
 
-
-
-      // printf("---Second pass done\n");
+  /*Pushing the ptr to argv*/
 
   char **fst_arg_ptr = if_.esp;
-   // printf("Esp value is 0x%x\n", (unsigned int) if_.esp);
-  // printf("I'm about to push 0x%x\n", fst_arg_ptr);
   if_.esp -= (sizeof(char **));
+   if(esp_not_in_boundaries(if_.esp))
+        thread_exit();
   *(int32_t *)if_.esp = fst_arg_ptr;
-      
-      //   printf("Esp is pointing to 0x%x\n", *((int32_t*)if_.esp) );
-
-      // printf("---Pushed argv\n");
+   
+  /*Pushing argc*/
   if_.esp -=(sizeof(setup_data->argc));
+   if(esp_not_in_boundaries(if_.esp))
+        thread_exit();
   *(int32_t *)if_.esp = setup_data->argc;
      
 
-       // printf("----Pushed argc\n");
-       //   printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
-
+   /*Pushing the fake return address*/
   void *fake_return  = 0;
   if_.esp -= (sizeof(void *));
+   if(esp_not_in_boundaries(if_.esp))
+        thread_exit();
   *(int32_t *)if_.esp = fake_return;
-
-      // printf("Esp is pointing to %d\n", *((int32_t*)if_.esp) );
-      
-
-      //  printf("---------The value of esp at the beginning is 0x%x\n", (unsigned int)if_.esp);
-
-        /*Free all the list*/
-
-    //  for (e = list_begin (&argv); e != list_end (&argv);
-    //         e = list_next (e))
-    // {
-    //   struct argument *arg = list_entry (e, struct argument, token_list_elem);
-    //   free(arg);
-    // }
-
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -287,10 +295,6 @@ start_process (void *setup_data_)
        we just point the stack pointer (%esp) to our stack frame
        and jump to it. */
 
-       //hex_dump(0, if_.esp, 100, true);
-
-
-
     palloc_free_page (fst_arg_saved);
     free(setup_data);
 
@@ -298,19 +302,11 @@ start_process (void *setup_data_)
     NOT_REACHED ();
 }
 
-int sum_fileopen(struct thread * t, struct file * f) {
-	struct list_elem *e;
-	int count = 0;
-	if (t->file == f) count++;
-    for (e = list_begin (&t->children); e != list_end (&t->children);
-	     e = list_next (e))
-	{
-    	struct thread *child = list_entry (e, struct thread, procelem);
-    	count += sum_fileopen(child, f);
-	}
-    return count;
+static bool
+esp_not_in_boundaries(void *esp)
+{
+  return (PHYS_BASE - (uint32_t)esp) > MAX_MEMORY;
 }
-
 
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
@@ -330,15 +326,27 @@ process_wait (tid_t child_tid)
     for (e = list_begin (&cur->children); e != list_end (&cur->children);
 	     e = list_next (e))
 	{
-		struct thread *t = list_entry (e, struct thread, procelem);
-		if (t->tid == child_tid) {
-			lock_acquire(&t->anchor);
-			cond_wait(&t->condvar_process_sync, &t->anchor);
-			int exitStatus = t->exit_status;
-			cond_signal(&t->condvar_process_sync, &t->anchor);
-			lock_release(&t->anchor);
+		struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
+		if (procInfo->pid == child_tid) {
+			lock_acquire(&procInfo->anchor);
+			// If we were blocked by acquire, we might have deleted the thread struct
+			if (procInfo->child_is_alive)
+				cond_wait(&procInfo->condvar_process_sync, &procInfo->anchor);
 
-			return exitStatus;
+			// Store the exit_status on the stack due to memory being freed
+			int exit_status = procInfo->exit_status;
+
+			// Delete from process list so the next time returns -1
+			list_remove(e);
+
+			// Atomic operation
+			lock_release(&procInfo->anchor);
+
+			// Free the memory
+			free(procInfo);
+
+			// return exit_status
+			return exit_status;
 		}
 	}
     return -1;
@@ -348,36 +356,46 @@ process_wait (tid_t child_tid)
 void
 process_exit (void)
 {
-    // TODO: Use a condition variable synchronisation primitive instead of disabling interrupts 
-    // Because from a design perspective, behaviour is more ensured.
+
     struct thread *cur = thread_current ();
+    struct list_elem *e;
     uint32_t *pd;
 
-    printf ("%s: exit(%d)\n", cur->name, cur->exit_status);
-
-    // Go to the most senior process
-    struct thread *parent = cur;
-    while (parent->parent != NULL)
-    	parent = parent->parent;
-
-    // Add up how many times (recursively) the executing file is open
-    int file_executing_count = 0;
-    file_executing_count = sum_fileopen(parent, cur->file);
-
-    // If only one time, i.e. this thread only
-    if (file_executing_count == 1) {
-    	file_close(cur->file);
+    if (cur->proc_info) {
+    	if (cur->proc_info->exit_status == UNCAUGHT_EXCEPTION_STATUS)
+    		cur->proc_info->exit_status = -1;
+        printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
+    	lock_acquire(&cur->proc_info->anchor);
+    	cur->proc_info->child_is_alive = false;
+    	if (cur->proc_info->parent_is_alive) {
+    		cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+    		lock_release(&cur->proc_info->anchor);
+    	}
+    	else {
+    		cleanup_process_info(cur->proc_info);
+    	}
     }
 
     pd = cur->pagedir;
-    // Remove this process from the parent's child process list
-    list_remove(&cur->procelem);
 
-    // Tell the processes waiters that this process is finished
-    lock_acquire(&cur->anchor);
-    cond_broadcast(&cur->condvar_process_sync, &cur->anchor);
-    cond_wait(&cur->condvar_process_sync, &cur->anchor);
-    lock_release(&cur->anchor);
+    // Delete any child processes information structures
+    for (e = list_begin (&cur->children); e != list_end (&cur->children);)
+    {
+      struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
+      e = list_next (e);
+      list_remove(&procInfo->elem);
+      if (!procInfo->child_is_alive)
+    	  cleanup_process_info(procInfo);
+      else {
+    	  procInfo->parent_is_alive = false;
+      }
+    }
+
+    // Close the executable file, if the file is still open somewhere, writes
+    // will still be disabled.
+    if (cur->file) {
+    	file_close(cur->file);
+    }
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -395,10 +413,17 @@ process_exit (void)
         pagedir_activate (NULL);
         pagedir_destroy (pd);
     }
+}
 
-    /* Destroy the file descriptor table, closing all file descripotrs as we go */
-    hash_destroy(&cur->file_descriptor_table,
+static void
+cleanup_process_info (struct proc_information *process_info)
+{
+    /* Destroy the file descriptor table */
+    hash_destroy(&process_info->file_descriptor_table,
+
                  &file_descriptor_table_destroy_func);
+
+    free(process_info);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -591,13 +616,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     if (!setup_stack (esp))
         goto done;
 
-    /* Set up file descriptor table. */
-    hash_init (&t->file_descriptor_table,
-               &file_descriptor_table_hash_function,
-               &file_descriptor_table_less_func,
-               NULL);
-    t->next_fd = 2;
-
     /* Start address. */
     *eip = (void ( *) (void)) ehdr.e_entry;
 
@@ -775,7 +793,7 @@ process_get_file_descriptor_struct(int fd)
   descriptor.fd = fd;
 
   struct thread *t = thread_current ();
-  struct hash_elem *found_element = hash_find (&t->file_descriptor_table,
+  struct hash_elem *found_element = hash_find (&t->proc_info->file_descriptor_table,
                                                &descriptor.hash_elem);
   if (found_element == NULL)
     return NULL;
@@ -820,5 +838,5 @@ file_descriptor_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
   ASSERT (descriptor->file != NULL);
 
   // Close the file descriptor for the open file.
-  close_syscall (descriptor->file);
+  close_syscall (descriptor->file, false);
 }
