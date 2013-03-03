@@ -119,6 +119,7 @@ process_execute (const char *file_name)
     proc_info->exit_status = UNINITIALISED_EXIT_STATUS;
     proc_info->child_is_alive = true;
     proc_info->parent_is_alive = true;
+    proc_info->child_started_correctly = false; // Until it has started
 
     /* Set up file descriptor table. */
     hash_init (&proc_info->file_descriptor_table,
@@ -152,7 +153,7 @@ process_execute (const char *file_name)
   	lock_acquire(&proc_info->anchor);
   	if (proc_info->exit_status == UNINITIALISED_EXIT_STATUS)
   		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
-  	if (proc_info->exit_status == EXCEPTION_EXIT_STATUS)
+  	if (!proc_info->child_started_correctly)
   		tid = EXCEPTION_EXIT_STATUS;
 	lock_release(&proc_info->anchor);
 
@@ -195,7 +196,8 @@ start_process (void *setup_data_)
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
-  cur->proc_info->exit_status = success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS;
+  cur->proc_info->exit_status = EXCEPTION_EXIT_STATUS; // This should be the default
+  cur->proc_info->child_started_correctly = success;
   cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
 
@@ -362,8 +364,6 @@ process_exit (void)
     uint32_t *pd;
 
     if (cur->proc_info) {
-    	if (cur->proc_info->exit_status == UNCAUGHT_EXCEPTION_STATUS)
-    		cur->proc_info->exit_status = -1;
         printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
     	lock_acquire(&cur->proc_info->anchor);
     	cur->proc_info->child_is_alive = false;

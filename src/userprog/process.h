@@ -3,11 +3,9 @@
 
 #include "threads/thread.h"
 
-typedef int tid_t; // Forward declaration for include by thread.h
-
+typedef int tid_t;
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
-#define UNCAUGHT_EXCEPTION_STATUS 0xabad1dea
 #define EXCEPTION_EXIT_STATUS -1
 
 struct proc_information { 
@@ -18,6 +16,7 @@ struct proc_information {
     struct lock anchor;                     /* A lock held during the thread's life */
     bool parent_is_alive;					 /* A boolean to determine if the parent thread is alive */
     bool child_is_alive;					 /* A boolean to determine if the child thread is alive */
+    bool child_started_correctly;            /* A boolean to determine if the child thread started correctly (i.e. loaded executable etc) */
     struct hash file_descriptor_table;  	/* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        	/* Stores the next file descriptor for use. */
 };
