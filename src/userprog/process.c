@@ -366,12 +366,7 @@ process_exit (void)
     uint32_t *pd;
 
     if (cur->proc_info) {
-//<<<<<<< HEAD
-//=======
-//    	if (cur->proc_info->exit_status == (int)UNCAUGHT_EXCEPTION_STATUS)
-//    		cur->proc_info->exit_status = -1;
-//>>>>>>> 9806240b4eeb11e4aee1f557083a6789ee746b00
-        printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
+      printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
     	lock_acquire(&cur->proc_info->anchor);
     	cur->proc_info->child_is_alive = false;
     	if (cur->proc_info->parent_is_alive) {

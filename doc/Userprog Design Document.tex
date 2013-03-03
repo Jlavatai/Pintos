@@ -126,6 +126,31 @@ validate_user_pointer (buffer);
 \subsection{Synchronisation}
 \subsubsection{B7}
 
+The \"exec\" system call, in our implementation call's process\_execute, alike a kernel call to start a new process. In process\_execute, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an exit\_status, and a lock (called anchor) and condition variable. The exit\_status is initialised to 0xdeadbeef.
+
+After the thread\_create function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still 0xdeadbeef. If so, it calls cond\_wait, to be signalled when the created thread has started correctly.
+
+After \texttt{load} is called by the child thread, the lock is acquired. The exit_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
+
+In code:
+
+\begin{verbatim}
+    lock_acquire(&proc_info->anchor);
+    if (proc_info->exit_status == (int)UNINITIALISED_EXIT_STATUS) // 0xdeadbeef
+      cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
+    if (!proc_info->child_started_correctly)
+      tid = EXCEPTION_EXIT_STATUS;
+    lock_release(&proc_info->anchor);
+\end{verbatim}
+
+\begin{verbatim}
+  lock_acquire(&cur->proc_info->anchor);
+  cur->proc_info->exit_status = EXCEPTION_EXIT_STATUS; // -1
+  cur->proc_info->child_started_correctly = success;
+  cond_signal(&cur->proc_info->condvar_process_syncs, &cur->proc_info->anchor);
+  lock_release(&cur->proc_info->anchor);
+\end{verbatim}
+
 \subsubsection{B8}
 
 \subsection{Rationale}
