@@ -60,7 +60,7 @@ process_init (void)
 
 #define MAX_MEMORY 4096 //4KB
 
-tid_t
+pid_t
 process_execute (const char *file_name)
 {
   char *fn_copy;
@@ -166,7 +166,7 @@ process_execute (const char *file_name)
   		tid = EXCEPTION_EXIT_STATUS;
   	lock_release(&proc_info->anchor);
 
-    return tid;
+    return (pid_t)tid;
 }
 
 
@@ -318,7 +318,7 @@ esp_not_in_boundaries(void *esp)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid)
+process_wait (pid_t child_pid)
 {
 	struct thread * cur = thread_current();
 	struct list_elem * e;
@@ -327,7 +327,7 @@ process_wait (tid_t child_tid)
 	     e = list_next (e))
 	{
 		struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
-		if (procInfo->pid == child_tid) {
+		if (procInfo->pid == child_pid) {
 			lock_acquire(&procInfo->anchor);
 			// If we were blocked by acquire, we might have deleted the thread struct
 			if (procInfo->child_is_alive)

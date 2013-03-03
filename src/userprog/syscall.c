@@ -97,16 +97,16 @@ exec_handler (struct intr_frame *f)
   const char *cmd_line = (const char*)get_stack_argument (f, 0); 
   validate_user_pointer ((void *)cmd_line);
 
-  int tid = process_execute(cmd_line);
+  pid_t pid = process_execute(cmd_line);
 
-  f->eax = tid;
+  f->eax = pid;
 
 }
 
 static void
 wait_handler (struct intr_frame *f)
 {
-	int pid = (int)get_stack_argument (f, 0);
+	pid_t pid = (pid_t)get_stack_argument (f, 0);
 	f->eax = process_wait(pid);
 }
 
