@@ -206,7 +206,7 @@ read_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   void *buffer = (void *)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-
+  validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
 
   if (fd == 0) {
@@ -245,7 +245,7 @@ write_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   const void *buffer = (const void*)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-
+  validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
 
   if (fd == 1) {
