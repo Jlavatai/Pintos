@@ -130,7 +130,7 @@ The \"exec\" system call, in our implementation call's process\_execute, alike a
 
 After the thread\_create function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still 0xdeadbeef. If so, it calls cond\_wait, to be signalled when the created thread has started correctly.
 
-After \texttt{load} is called by the child thread, the lock is acquired. The exit_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
+After \texttt{load} is called by the child thread, the lock is acquired. The exit\_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
 
 In code:
 
@@ -160,7 +160,7 @@ To handle all three cases, in our process syncronisation shared memory structure
     bool child_is_alive;           /* A boolean to determine if the child thread is alive */
 \end{verbatim}
 
-During process\_exit, the relevant flag for the process which is exitting is set to false. I.e.: in their child's proc\_information struct, the parent_is_alive is set to false, and in the one shared with their parent, should there be one, the child\_is\_alive flag is set to false.
+During process\_exit, the relevant flag for the process which is exitting is set to false. I.e.: in their child's proc\_information struct, the parent\_is\_alive is set to false, and in the one shared with their parent, should there be one, the child\_is\_alive flag is set to false.
 
 Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
 
