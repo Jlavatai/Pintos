@@ -164,7 +164,7 @@ process_execute (const char *file_name)
   		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
   	if (!proc_info->child_started_correctly)
   		tid = EXCEPTION_EXIT_STATUS;
-	lock_release(&proc_info->anchor);
+  	lock_release(&proc_info->anchor);
 
     return tid;
 }
@@ -205,12 +205,8 @@ start_process (void *setup_data_)
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
-//<<<<<<< HEAD
   cur->proc_info->exit_status = EXCEPTION_EXIT_STATUS; // This should be the default
   cur->proc_info->child_started_correctly = success;
-//=======
-//  cur->proc_info->exit_status = (int)(success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS);
-//>>>>>>> 9806240b4eeb11e4aee1f557083a6789ee746b00
   cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
 
@@ -347,7 +343,7 @@ process_wait (tid_t child_tid)
 			lock_release(&procInfo->anchor);
 
 			// Free the memory
-			free(procInfo);
+			cleanup_process_info(procInfo);
 
 			// return exit_status
 			return exit_status;
