@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 
 struct argument
 {
@@ -29,6 +30,8 @@ struct stack_setup_data
   struct list argv;
   int argc;
 };
+
+static struct lock file_system_lock;
 
 static void
 cleanup_process_info (struct proc_information *process_info);
@@ -43,6 +46,12 @@ static thread_func start_process NO_RETURN;
 static bool esp_not_in_boundaries(void *esp);
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
+
+void
+process_init (void)
+{
+  lock_init(&file_system_lock);
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -151,7 +160,7 @@ process_execute (const char *file_name)
     // Get the thread structure
 
   	lock_acquire(&proc_info->anchor);
-  	if (proc_info->exit_status == UNINITIALISED_EXIT_STATUS)
+  	if (proc_info->exit_status == (int)UNINITIALISED_EXIT_STATUS)
   		cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
   	if (!proc_info->child_started_correctly)
   		tid = EXCEPTION_EXIT_STATUS;
@@ -196,8 +205,12 @@ start_process (void *setup_data_)
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
+//<<<<<<< HEAD
   cur->proc_info->exit_status = EXCEPTION_EXIT_STATUS; // This should be the default
   cur->proc_info->child_started_correctly = success;
+//=======
+//  cur->proc_info->exit_status = (int)(success?UNCAUGHT_EXCEPTION_STATUS:EXCEPTION_EXIT_STATUS);
+//>>>>>>> 9806240b4eeb11e4aee1f557083a6789ee746b00
   cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
 
@@ -242,30 +255,19 @@ start_process (void *setup_data_)
   if_.esp-= (sizeof(char *));
    if(esp_not_in_boundaries(if_.esp))
         thread_exit();
-  *(int32_t *)if_.esp = last_arg_ptr;
+  *(int32_t *)if_.esp = (int32_t)last_arg_ptr;
 
    /*Iterating over the same list pushing the ptrs to the arguments strings
     on the stack*/
 
   for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);)
   {
-//<<<<<<< HEAD
-	struct argument *arg = list_entry (e, struct argument, token_list_elem);
-	char *curr_arg = arg->token;
-	if_.esp -= (sizeof(char*));
-	*(int32_t *)if_.esp = curr_arg;
-	e = list_next (e);
-	free(arg);
-	//printf("Esp is pointing to 0x%x at addr 0x%x\n", *((int32_t*)if_.esp), (unsigned int)if_.esp);
-	// printf("pushed ptr\n");
-//=======
-//      struct argument *arg = list_entry (e, struct argument, token_list_elem);
-//      char *curr_arg = arg->token;
-//      if_.esp -= (sizeof(char*));
-//       if(esp_not_in_boundaries(if_.esp))
-//        thread_exit();
-//      *(int32_t *)if_.esp = curr_arg;
-//>>>>>>> sys-calls
+  	struct argument *arg = list_entry (e, struct argument, token_list_elem);
+  	char *curr_arg = arg->token;
+  	if_.esp -= (sizeof(char*));
+  	*(int32_t *)if_.esp = (int32_t)curr_arg;
+  	e = list_next (e);
+  	free(arg);
   }
 
   /*Pushing the ptr to argv*/
@@ -274,7 +276,7 @@ start_process (void *setup_data_)
   if_.esp -= (sizeof(char **));
    if(esp_not_in_boundaries(if_.esp))
         thread_exit();
-  *(int32_t *)if_.esp = fst_arg_ptr;
+  *(int32_t *)if_.esp = (int32_t)fst_arg_ptr;
    
   /*Pushing argc*/
   if_.esp -=(sizeof(setup_data->argc));
@@ -288,7 +290,7 @@ start_process (void *setup_data_)
   if_.esp -= (sizeof(void *));
    if(esp_not_in_boundaries(if_.esp))
         thread_exit();
-  *(int32_t *)if_.esp = fake_return;
+  *(int32_t *)if_.esp = (int32_t)fake_return;
 
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -307,7 +309,7 @@ start_process (void *setup_data_)
 static bool
 esp_not_in_boundaries(void *esp)
 {
-  return (PHYS_BASE - (uint32_t)esp) > MAX_MEMORY;
+  return ((uint32_t *)PHYS_BASE - (uint32_t *)esp) > MAX_MEMORY;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -364,6 +366,11 @@ process_exit (void)
     uint32_t *pd;
 
     if (cur->proc_info) {
+//<<<<<<< HEAD
+//=======
+//    	if (cur->proc_info->exit_status == (int)UNCAUGHT_EXCEPTION_STATUS)
+//    		cur->proc_info->exit_status = -1;
+//>>>>>>> 9806240b4eeb11e4aee1f557083a6789ee746b00
         printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
     	lock_acquire(&cur->proc_info->anchor);
     	cur->proc_info->child_is_alive = false;
@@ -375,6 +382,10 @@ process_exit (void)
     		cleanup_process_info(cur->proc_info);
     	}
     }
+
+    /* If this process is holding the filesystem lock, release it. */
+    if (file_system_lock.holder == cur)
+      lock_release (&file_system_lock);
 
     pd = cur->pagedir;
 
@@ -394,7 +405,9 @@ process_exit (void)
     // Close the executable file, if the file is still open somewhere, writes
     // will still be disabled.
     if (cur->file) {
+      start_file_system_access ();
     	file_close(cur->file);
+      end_file_system_access ();
     }
 
     /* Destroy the current process's page directory and switch back
@@ -532,7 +545,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
     process_activate ();
 
     /* Open executable file. */
+    start_file_system_access ();
     file = filesys_open (file_name);
+    end_file_system_access ();
     if (file == NULL)
     {
         printf ("load: %s: open failed\n", file_name);
@@ -693,7 +708,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
 
-   Return true if successful, false if a memory allocation error
+   Return true if successful, false if a memory allocatlock_acquire(&file_system_lock);ion error
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
@@ -806,7 +821,7 @@ process_get_file_descriptor_struct(int fd)
 }
 
 unsigned
-file_descriptor_table_hash_function (const struct hash_elem *e, void *aux)
+file_descriptor_table_hash_function (const struct hash_elem *e, void *aux UNUSED)
 {
   struct file_descriptor *descriptor =  hash_entry (e, struct file_descriptor, hash_elem);
 
@@ -816,7 +831,7 @@ file_descriptor_table_hash_function (const struct hash_elem *e, void *aux)
 bool
 file_descriptor_table_less_func (const struct hash_elem *a,
                            const struct hash_elem *b,
-                           void *aux)
+                           void *aux UNUSED)
 {
   struct file_descriptor *descriptor_a =  hash_entry (a,
                                                       struct file_descriptor,
@@ -838,5 +853,17 @@ file_descriptor_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
   ASSERT (descriptor->file != NULL);
 
   // Close the file descriptor for the open file.
-  close_syscall (descriptor->file, false);
+  close_syscall (descriptor, false);
+}
+
+void
+start_file_system_access(void)
+{
+  lock_acquire(&file_system_lock);
+}
+
+void
+end_file_system_access(void)
+{
+  lock_release(&file_system_lock);
 }
