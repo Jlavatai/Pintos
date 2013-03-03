@@ -153,6 +153,31 @@ In code:
 
 \subsubsection{B8}
 
+To handle all three cases, in our process syncronisation shared memory structure, we have two boolean flags:
+
+\begin{verbatim}
+    bool parent_is_alive;          /* A boolean to determine if the parent thread is alive */
+    bool child_is_alive;           /* A boolean to determine if the child thread is alive */
+\end{verbatim}
+
+During process\_exit, the relevant flag for the process which is exitting is set to false. I.e.: in their child's proc\_information struct, the parent_is_alive is set to false, and in the one shared with their parent, should there be one, the child\_is\_alive flag is set to false.
+
+Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
+
+In process\_wait, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
+
+This has the side benefit of next time we call \texttt{process\_wait} on the same process tid, it is ensured that we return \texttt{-1}, as it is no longer a member of the process's child process list.
+
+Thus all cases are hit and cause memory to be cleaned up correctly. For a walkthrough of logic in the major cases see below:
+
+\begin{enumerate}
+\item P(arent) calls wait(C) before C exits - wait calls \texttt{cond\_wait}; C calls \texttt{process\_exit}; C checks P is still alive and signals it, then exits; P cleans up memory and returns the \texttt{exit\_status} from wait(C).
+\item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits; when P calls wait(C), it see's P is not alive and clean's up the shared memory, returning the \texttt{exit\_status}.
+\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it see's that P is dead and memory still there, so it cleans it up.
+\item P terminates without waiting, before C - when P exits, it see's that C is still alive and exit's without cleaning up memory; when C exits, it see's P is not alive and cleans up the memory.
+\end{enumerate}
+
+
 \subsection{Rationale}
 \subsubsection{B9}
 
