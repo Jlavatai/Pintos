@@ -156,8 +156,8 @@ process_execute (const char *file_name)
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
 	{
-    palloc_free_page (fn_copy);
-    palloc_free_page (thread_page);
+    palloc_free_page (pg_round_down(fn_copy));
+    palloc_free_page (pg_round_down(thread_page));
 	} else {
 		proc_info->pid = tid;
 		t = thread_lookup(tid);
@@ -247,8 +247,8 @@ start_process (void *setup_data_)
       char *curr_arg = arg->token;
       if_.esp -= (strlen(curr_arg) + 1);
       if(esp_not_in_boundaries(if_.esp)) {
-        palloc_free_page(fst_arg_saved);
-        palloc_free_page(setup_data_);
+        palloc_free_page(pg_round_down(fst_arg_saved));
+        palloc_free_page(pg_round_down(setup_data_));
         thread_exit();
       }
       strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
@@ -260,8 +260,8 @@ start_process (void *setup_data_)
   uint8_t align = 0;
   if_.esp -= (sizeof(uint8_t));
   if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(fst_arg_saved);
-    palloc_free_page(setup_data_);
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
     thread_exit();
   }
   *(uint8_t *)if_.esp = align;
@@ -271,8 +271,8 @@ start_process (void *setup_data_)
   char *last_arg_ptr  = NULL;
   if_.esp-= (sizeof(char *));
   if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(fst_arg_saved);
-    palloc_free_page(setup_data_);
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
     thread_exit();
   }
   *(int32_t *)if_.esp = (int32_t)last_arg_ptr;
@@ -294,8 +294,8 @@ start_process (void *setup_data_)
   char **fst_arg_ptr = if_.esp;
   if_.esp -= (sizeof(char **));
   if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(fst_arg_saved);
-    palloc_free_page(setup_data_);
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
     thread_exit();
   }
 
@@ -304,8 +304,11 @@ start_process (void *setup_data_)
   /*Pushing argc*/
   // printf("Pushing argc: %d\n", setup_data->argc);
   if_.esp -=(sizeof(setup_data->argc));
-   if(esp_not_in_boundaries(if_.esp))
-        thread_exit();
+  if(esp_not_in_boundaries(if_.esp)) {
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
+    thread_exit();
+  }
   *(int32_t *)if_.esp = setup_data->argc;
      
 
@@ -313,16 +316,16 @@ start_process (void *setup_data_)
   void *fake_return  = 0;
   if_.esp -= (sizeof(void *));
   if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(fst_arg_saved);
-    palloc_free_page(setup_data_);
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
     thread_exit();
   }
   *(int32_t *)if_.esp = (int32_t)fake_return;
 
 
   // Free all the data used to setup the thread
-  palloc_free_page (fst_arg_saved);
-  palloc_free_page(setup_data_);
+  palloc_free_page(pg_round_down(fst_arg_saved));
+  palloc_free_page(pg_round_down(setup_data_));
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
