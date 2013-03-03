@@ -378,13 +378,13 @@ process_wait (tid_t child_tid)
 			// Atomic operation
 			lock_release(&procInfo->anchor);
 
-			// Free the memory
-			cleanup_process_info(procInfo);
+      // Free the memory
+      cleanup_process_info(procInfo);
 
-			// return exit_status
-			return exit_status;
-		}
-	}
+      // return exit_status
+      return exit_status;
+    }
+  }
     return -1;
 }
 
@@ -399,15 +399,18 @@ process_exit (void)
 
     if (cur->proc_info) {
       printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
-    	lock_acquire(&cur->proc_info->anchor);
-    	cur->proc_info->child_is_alive = false;
-    	if (cur->proc_info->parent_is_alive) {
-    		cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
-    		lock_release(&cur->proc_info->anchor);
-    	}
-    	else {
-    		cleanup_process_info(cur->proc_info);
-    	}
+      /* Destroy the file descriptor table */
+      hash_destroy(&cur->proc_info->file_descriptor_table,
+                   &file_descriptor_table_destroy_func);
+      lock_acquire(&cur->proc_info->anchor);
+      cur->proc_info->child_is_alive = false;
+      if (cur->proc_info->parent_is_alive) {
+        cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+        lock_release(&cur->proc_info->anchor);
+      }
+      else {
+        cleanup_process_info(cur->proc_info);
+      }
     }
 
     /* If this process is holding the filesystem lock, release it. */
@@ -423,9 +426,9 @@ process_exit (void)
       e = list_next (e);
       list_remove(&procInfo->elem);
       if (!procInfo->child_is_alive)
-    	  cleanup_process_info(procInfo);
+        cleanup_process_info(procInfo);
       else {
-    	  procInfo->parent_is_alive = false;
+        procInfo->parent_is_alive = false;
       }
     }
 
@@ -433,9 +436,10 @@ process_exit (void)
     // will still be disabled.
     if (cur->file) {
       start_file_system_access ();
-    	file_close(cur->file);
+      file_close(cur->file);
       end_file_system_access ();
     }
+
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -458,11 +462,6 @@ process_exit (void)
 static void
 cleanup_process_info (struct proc_information *process_info)
 {
-    /* Destroy the file descriptor table */
-    hash_destroy(&process_info->file_descriptor_table,
-
-                 &file_descriptor_table_destroy_func);
-
     free(process_info);
 }
 
