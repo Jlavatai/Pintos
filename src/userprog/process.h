@@ -4,13 +4,14 @@
 #include "threads/thread.h"
 
 typedef int tid_t;
+typedef int pid_t;
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
 #define EXCEPTION_EXIT_STATUS -1
 
 struct proc_information { 
     struct list_elem elem;                  /* To provide linked list functionality */
-    tid_t pid;                               /* Stores the pid (equivilent to tid) for the child process */
+    pid_t pid;                               /* Stores the pid (equivilent to tid) for the child process */
     int exit_status;                         /* Stores the exit_status for when the process dies */
     struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise parent and child threads*/
     struct lock anchor;                     /* A lock held during the thread's life */
@@ -22,9 +23,8 @@ struct proc_information {
 };
 
 
-tid_t user_process_execute (const char *file_name);
-tid_t process_load_setup(const char *file_name);
-tid_t process_execute (const char *file_name);
+
+pid_t process_execute (const char *file_name);
 
 void process_init (void);
 int process_wait (tid_t);

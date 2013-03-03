@@ -126,11 +126,11 @@ validate_user_pointer (buffer);
 \subsection{Synchronisation}
 \subsubsection{B7}
 
-The \"exec\" system call, in our implementation call's process\_execute, alike a kernel call to start a new process. In process\_execute, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an exit\_status, and a lock (called anchor) and condition variable. The exit\_status is initialised to 0xdeadbeef.
+The \tx{exec} system call, in our implementation call's \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The exit\_status is initialised to \tx{0xdeadbeef}.
 
-After the thread\_create function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still 0xdeadbeef. If so, it calls cond\_wait, to be signalled when the created thread has started correctly.
-
-After \texttt{load} is called by the child thread, the lock is acquired. The exit_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
+After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
+\\
+After \texttt{load} is called by the child thread, the lock is acquired. The exit\_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
 
 In code:
 
@@ -158,8 +158,8 @@ In code:
 
 \subsubsection{B10}
 
-As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
-
+As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which automatically optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
+\\
 However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.
 
 \subsubsection{B11}
