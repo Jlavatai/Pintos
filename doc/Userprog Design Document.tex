@@ -34,6 +34,24 @@ Added to \tx{process.c}:
 \end{verbatim}
 This struct stores the data needed to setup the stack in \tx{start\_process}, namely a list of \tx{struct argument}, the number of arguments, and a list of pointer to \tx{struct argument}, used to free the memory at the end. 
 
+
+\begin{verbatim}
+struct proc_information { 
+    struct list_elem elem;                  /* To provide linked list functionality */
+    tid_t pid;                               /* Stores the pid (equivilent to tid) for the child process */
+    int exit_status;                         /* Stores the exit_status for when the process dies */
+    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise parent and child threads*/
+    struct lock anchor;                     /* A lock held during the thread's life */
+    bool parent_is_alive;          /* A boolean to determine if the parent thread is alive */
+    bool child_is_alive;           /* A boolean to determine if the child thread is alive */
+    bool child_started_correctly;            /* A boolean to determine if the child thread started correctly (i.e. loaded executable etc) */
+    struct hash file_descriptor_table;    /* Stores descriptors for files opened by the current process. */ 
+    int next_fd;                          /* Stores the next file descriptor for use. */
+};
+\end{verbatim}
+
+This struct stores syncronisation information between parent and child threads.
+
 \subsection{Algorithms}
 \subsubsection{A2}
 Argument parsing is split between the functions \tx{process\_execute} and \tx{start\_process}. \\

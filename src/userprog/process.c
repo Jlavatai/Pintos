@@ -63,61 +63,75 @@ process_init (void)
 pid_t
 process_execute (const char *file_name)
 {
-  char *fn_copy;
+    ASSERT(strlen(file_name) <= PGSIZE);
+    char *fn_copy;
+    char *thread_page;
+    char *thread_page_ptr;
     tid_t tid;
     int old_level;
     struct thread *t;
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
-    fn_copy = palloc_get_page (0);
-    // fn_copy = "run.exe arg1 arg2 arg3..."
+    fn_copy     = palloc_get_page (0);
     if (fn_copy == NULL)
     {
         return TID_ERROR;
     }
-    strlcpy (fn_copy, file_name, PGSIZE);
+    thread_page = palloc_get_page (0);
+    if (thread_page == NULL)
+    {
+      palloc_free_page(fn_copy);
+      return TID_ERROR;
+    }
+
+    memset(thread_page, 0, PGSIZE);
+
+    thread_page_ptr = thread_page;
+
 
     struct stack_setup_data* setup_data = NULL;
 
-    setup_data = malloc(sizeof(struct stack_setup_data));
+    setup_data = thread_page_ptr;
 
-    if (setup_data == NULL)
-    {
-        return TID_ERROR;
-    }
+    thread_page_ptr += sizeof(struct stack_setup_data);
 
-    list_init(&setup_data->argv);
-    setup_data->argc = 0;
+    list_init(&setup_data->argv);    
+
+    // fn_copy = "run.exe arg1 arg2 arg3..."
+
+    strlcpy (fn_copy, file_name, PGSIZE);
 
     char *token, *pos;
 
      /*Tokenize file name copy to get the single arguments.*/
 
+    // printf("Before argc: %d\n", setup_data->argc);
     for (token = strtok_r (fn_copy, " ", &pos); token != NULL;
             token = strtok_r (NULL, " ", &pos))
     {
         struct argument *arg = NULL;
-        arg = malloc(sizeof(struct argument));
-        
-        if(arg == NULL)
-        {
-          return TID_ERROR;
-        }
+        arg = (struct argument *)thread_page_ptr;
+        thread_page_ptr += sizeof(struct argument);
+
+        ASSERT (thread_page_ptr - thread_page <= PGSIZE);
 
         arg->token = token;
         list_push_front(&setup_data->argv, &arg->token_list_elem);
         setup_data->argc++;
+        // printf("argc: %d\n", setup_data->argc);
     }
-
-   
+    // printf("After argc: %d\n", setup_data->argc);
 
     struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
 
     // Setup process information shared structure
     // Initialise and Put together the information struct
     struct proc_information * proc_info = calloc(1, sizeof(struct proc_information));
-    if (proc_info == NULL)
+    if (proc_info == NULL) {
+      palloc_free_page(fn_copy);
+      palloc_free_page(thread_page);
     	return TID_ERROR;
+    }
     // Ensure the calloc call worked correctly
     ASSERT(proc_info);
     proc_info->pid = tid;
@@ -137,14 +151,13 @@ process_execute (const char *file_name)
                NULL);
     proc_info->next_fd = 2;
 
-
     old_level = intr_disable ();
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (fst_arg->token, PRI_DEFAULT, start_process, setup_data);
     if (tid == TID_ERROR)
 	{
-    	palloc_free_page (fn_copy);
-
+    palloc_free_page (pg_round_down(fn_copy));
+    palloc_free_page (pg_round_down(thread_page));
 	} else {
 		proc_info->pid = tid;
 		t = thread_lookup(tid);
@@ -212,6 +225,8 @@ start_process (void *setup_data_)
 
   // Exit the process if the file failed to load
   if (!success) {
+    palloc_free_page(fst_arg_saved);
+    palloc_free_page(setup_data_);
 	  thread_exit ();
   }
 
@@ -224,15 +239,18 @@ start_process (void *setup_data_)
     Moreover, once the string is copied, the original ptr to the string
     is replaced with the new ptr to the string in the stack. This will
     allow us to iterate over the same string without allocating any resource*/
-
+  // printf("Created: argc: %d\n", setup_data->argc);
   for (e = list_begin (&setup_data->argv); e != list_end (&setup_data->argv);
           e = list_next (e))
   {
       struct argument *arg = list_entry (e, struct argument, token_list_elem);
       char *curr_arg = arg->token;
       if_.esp -= (strlen(curr_arg) + 1);
-      if(esp_not_in_boundaries(if_.esp))
+      if(esp_not_in_boundaries(if_.esp)) {
+        palloc_free_page(pg_round_down(fst_arg_saved));
+        palloc_free_page(pg_round_down(setup_data_));
         thread_exit();
+      }
       strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
       arg->token = if_.esp;
   }
@@ -241,16 +259,22 @@ start_process (void *setup_data_)
 
   uint8_t align = 0;
   if_.esp -= (sizeof(uint8_t));
-   if(esp_not_in_boundaries(if_.esp))
-        thread_exit();
+  if(esp_not_in_boundaries(if_.esp)) {
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
+    thread_exit();
+  }
   *(uint8_t *)if_.esp = align;
 
   /*Pushing a null pointer to respect the convention argv[argc] = NULL*/
 
   char *last_arg_ptr  = NULL;
   if_.esp-= (sizeof(char *));
-   if(esp_not_in_boundaries(if_.esp))
-        thread_exit();
+  if(esp_not_in_boundaries(if_.esp)) {
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
+    thread_exit();
+  }
   *(int32_t *)if_.esp = (int32_t)last_arg_ptr;
 
    /*Iterating over the same list pushing the ptrs to the arguments strings
@@ -263,40 +287,52 @@ start_process (void *setup_data_)
   	if_.esp -= (sizeof(char*));
   	*(int32_t *)if_.esp = (int32_t)curr_arg;
   	e = list_next (e);
-  	free(arg);
   }
 
   /*Pushing the ptr to argv*/
 
   char **fst_arg_ptr = if_.esp;
   if_.esp -= (sizeof(char **));
-   if(esp_not_in_boundaries(if_.esp))
-        thread_exit();
+  if(esp_not_in_boundaries(if_.esp)) {
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
+    thread_exit();
+  }
+
   *(int32_t *)if_.esp = (int32_t)fst_arg_ptr;
    
   /*Pushing argc*/
+  // printf("Pushing argc: %d\n", setup_data->argc);
   if_.esp -=(sizeof(setup_data->argc));
-   if(esp_not_in_boundaries(if_.esp))
-        thread_exit();
+  if(esp_not_in_boundaries(if_.esp)) {
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
+    thread_exit();
+  }
   *(int32_t *)if_.esp = setup_data->argc;
      
 
    /*Pushing the fake return address*/
   void *fake_return  = 0;
   if_.esp -= (sizeof(void *));
-   if(esp_not_in_boundaries(if_.esp))
-        thread_exit();
+  if(esp_not_in_boundaries(if_.esp)) {
+    palloc_free_page(pg_round_down(fst_arg_saved));
+    palloc_free_page(pg_round_down(setup_data_));
+    thread_exit();
+  }
   *(int32_t *)if_.esp = (int32_t)fake_return;
 
-    /* Start the user process by simulating a return from an
-       interrupt, implemented by intr_exit (in
-       threads/intr-stubs.S).  Because intr_exit takes all of its
-       arguments on the stack in the form of a `struct intr_frame',
-       we just point the stack pointer (%esp) to our stack frame
-       and jump to it. */
 
-    palloc_free_page (fst_arg_saved);
-    free(setup_data);
+  // Free all the data used to setup the thread
+  palloc_free_page(pg_round_down(fst_arg_saved));
+  palloc_free_page(pg_round_down(setup_data_));
+
+  /* Start the user process by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
 
     asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
     NOT_REACHED ();
@@ -342,13 +378,13 @@ process_wait (pid_t child_pid)
 			// Atomic operation
 			lock_release(&procInfo->anchor);
 
-			// Free the memory
-			cleanup_process_info(procInfo);
+      // Free the memory
+      cleanup_process_info(procInfo);
 
-			// return exit_status
-			return exit_status;
-		}
-	}
+      // return exit_status
+      return exit_status;
+    }
+  }
     return -1;
 }
 
@@ -363,15 +399,18 @@ process_exit (void)
 
     if (cur->proc_info) {
       printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
-    	lock_acquire(&cur->proc_info->anchor);
-    	cur->proc_info->child_is_alive = false;
-    	if (cur->proc_info->parent_is_alive) {
-    		cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
-    		lock_release(&cur->proc_info->anchor);
-    	}
-    	else {
-    		cleanup_process_info(cur->proc_info);
-    	}
+      /* Destroy the file descriptor table */
+      hash_destroy(&cur->proc_info->file_descriptor_table,
+                   &file_descriptor_table_destroy_func);
+      lock_acquire(&cur->proc_info->anchor);
+      cur->proc_info->child_is_alive = false;
+      if (cur->proc_info->parent_is_alive) {
+        cond_signal(&cur->proc_info->condvar_process_sync, &cur->proc_info->anchor);
+        lock_release(&cur->proc_info->anchor);
+      }
+      else {
+        cleanup_process_info(cur->proc_info);
+      }
     }
 
     /* If this process is holding the filesystem lock, release it. */
@@ -387,9 +426,9 @@ process_exit (void)
       e = list_next (e);
       list_remove(&procInfo->elem);
       if (!procInfo->child_is_alive)
-    	  cleanup_process_info(procInfo);
+        cleanup_process_info(procInfo);
       else {
-    	  procInfo->parent_is_alive = false;
+        procInfo->parent_is_alive = false;
       }
     }
 
@@ -397,9 +436,10 @@ process_exit (void)
     // will still be disabled.
     if (cur->file) {
       start_file_system_access ();
-    	file_close(cur->file);
+      file_close(cur->file);
       end_file_system_access ();
     }
+
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -422,11 +462,6 @@ process_exit (void)
 static void
 cleanup_process_info (struct proc_information *process_info)
 {
-    /* Destroy the file descriptor table */
-    hash_destroy(&process_info->file_descriptor_table,
-
-                 &file_descriptor_table_destroy_func);
-
     free(process_info);
 }
 

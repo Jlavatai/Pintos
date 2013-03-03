@@ -366,6 +366,7 @@ close_syscall (struct file_descriptor *file_descriptor,
       hash_delete (&thread_current ()->proc_info->file_descriptor_table,
                    &descriptor.hash_elem);
     }
+    free(file_descriptor);
   }
 
   end_file_system_access ();
