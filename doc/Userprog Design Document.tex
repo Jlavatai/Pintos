@@ -188,5 +188,6 @@ As we use a hash table, our implementation of file descriptors is very efficient
 However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.
 
 \subsubsection{B11}
-
+The identity mapping between \tx{pid\_t} and \tx{tid\_t} in Pintos is a viable solution since the kernel does support only single-threaded processes. Moreover, it becomes the only way to identify a process, since there is no \tx{struct process} used to store information about the process itself. 
+\\ A possible advantage of creating a more complex mapping could be that the distinction between user processes and kernel threads would become easier, for example by reserving the first $n$ identifiers to kernel threads and mapping them to values outside those range. When dealing with a identifier would then be much easier to determine its type, and choose the appropriate actions. However, one would have to suitably allocate space for storing this information, and the process of resolving this mapping could cause time loss.  
 \end{document}
