@@ -34,29 +34,11 @@ Added to \tx{process.c}:
 \end{verbatim}
 This struct stores the data needed to setup the stack in \tx{start\_process}, namely a list of \tx{struct argument}, the number of arguments, and a list of pointer to \tx{struct argument}, used to free the memory at the end. 
 
-
-\begin{verbatim}
-struct proc_information { 
-    struct list_elem elem;                  /* To provide linked list functionality */
-    tid_t pid;                               /* Stores the pid (equivilent to tid) for the child process */
-    int exit_status;                         /* Stores the exit_status for when the process dies */
-    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise parent and child threads*/
-    struct lock anchor;                     /* A lock held during the thread's life */
-    bool parent_is_alive;          /* A boolean to determine if the parent thread is alive */
-    bool child_is_alive;           /* A boolean to determine if the child thread is alive */
-    bool child_started_correctly;            /* A boolean to determine if the child thread started correctly (i.e. loaded executable etc) */
-    struct hash file_descriptor_table;    /* Stores descriptors for files opened by the current process. */ 
-    int next_fd;                          /* Stores the next file descriptor for use. */
-};
-\end{verbatim}
-
-This struct stores syncronisation information between parent and child threads.
-
 \subsection{Algorithms}
 \subsubsection{A2}
 Argument parsing is split between the functions \tx{process\_execute} and \tx{start\_process}. \\
 At the beginning of \tx{process\_execute}, a \tx{stack\_setup\_data} struct is instantiated, initializing the \tx{argv} list and setting \tx{argc} to zero. Afterwards, the file name passed as an argument to the pintos command is tokenized, and the pointers to the single tokens are stored into a \tx{struct argument}, and then added to the \tx{argv} list. Each struct is pushed at the front of the list, so that at the end the arguments will already be in reverse order, as needed. \\
-The function \tx{start\_process}, will take care of pushing the arguments on the stack. As a first thing, it will save the pointer to the name of the process, which will be needed in order to free the memory page at the end of the stack setup. Then, after setting up the interrupt frame, it will iterate over the list of arguments a first time: in this first "pass", the string representing the arguments will be copied onto the stack, modifying the location \tx{esp} is pointing to depending on the length of the string. The iteration will be from the front to the end of the list, since the arguments are already in the opposite order. Moreover, the \tx{char} pointers pointing to the arguments in the heap, will be substituted with the location the \tx{esp} is pointing to. The function will then push a \tx{uint8\_t} as a word alignment, and a \tx{NULL} pointer, in order to respet the convention that \tx{argv[argc] = NULL}. Afterwards, the function will iterate over the same list again, this time pushing the pointers to the strings in the same (opposite) order. Finally, the pointer to the first argument will be pushed, followed by \tx{argc} and the "fake" return address. \\
+The function \tx{start\_process}, will take care of pushing the arguments on the stack. As a first thing, it will save the pointer to the name of the process, which will be needed in order to free the memory page at the end of the stack setup. Then, after setting up the interrupt frame, it will iterate over the list of arguments a first time: in this first "pass", the string representing the arguments will be copied onto the stack, modifying the location \tx{esp} is pointing to depending on the length of the string. The iteration will be from the front to the end of the list, since the arguments are already in the opposite order. Moreover, the \tx{char} pointers pointing to the arguments in the heap, will be substituted with the location the \tx{esp} is pointing to. The function will then push a \tx{uint8\_t} as a word alignment, and a \tx{NULL} pointer, in order to respet the convention that \tx{argv[argc] = NULL}. Afterwards, the function will iterate over the same list again, this time pushing the pointers to the strings in the same (reverse) order. Finally, the pointer to the first argument will be pushed, followed by \tx{argc} and the "fake" return address. \\
 Overflowing the stack is avoided by checking the esp value every time it is modified: if the difference between \tx{PHYS-BASE} and the current esp is bigger than 4KB, the process stops with an error code.   
 
 \subsection{Rationale}
@@ -104,6 +86,30 @@ Added to \tx{syscall.c}:
 
 \tab A static array of function pointers used for system calls indexed by their respective system call number.
 
+\begin{verbatim}
+struct proc_information { 
+    struct list_elem elem;                  /* To provide linked list functionality */
+    pid_t pid;             /* Stores the pid (equivilent to tid) for the child process */
+    int exit_status;                  /* Stores the exit_status for when the process dies */
+    
+    struct condition condvar_process_sync;  /* A synchronisation primitive to help synchronise 
+                                                parent and child threads*/
+                                                
+    struct lock anchor;                     /* A lock held during the thread's life */
+    bool parent_is_alive;          /* A boolean to determine if the parent thread is alive */
+    bool child_is_alive;           /* A boolean to determine if the child thread is alive */
+    
+    bool child_started_correctly;       /* A boolean to determine if the child thread 
+                                       started correctly (i.e. loaded executable etc) */
+    
+    struct hash file_descriptor_table;    /* Stores descriptors for files opened by 
+                                            the current process. */ 
+    int next_fd;                          /* Stores the next file descriptor for use. */
+};
+\end{verbatim}
+
+\tab This struct stores synchronisation information between parent and child threads.
+
 \subsubsection{B2}
 
 File descriptors are associated with open files through a hash table. Each process's thread stores a hash table which associates file descriptors with \tx{struct file\_descriptor}s. \tx{struct file\_descriptor} stores a \tx{struct file} pointer which can then be used with the file and filesystem kernel functions.
@@ -144,7 +150,7 @@ validate_user_pointer (buffer);
 \subsection{Synchronisation}
 \subsubsection{B7}
 
-The \tx{exec} system call, in our implementation call's \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The exit\_status is initialised to \tx{0xdeadbeef}.
+The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
 
 After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
 \\
@@ -178,11 +184,11 @@ To handle all three cases, in our process syncronisation shared memory structure
     bool child_is_alive;           /* A boolean to determine if the child thread is alive */
 \end{verbatim}
 
-During process\_exit, the relevant flag for the process which is exitting is set to false. I.e.: in their child's proc\_information struct, the parent_is_alive is set to false, and in the one shared with their parent, should there be one, the child\_is\_alive flag is set to false.
+During \tx{process\_exit}, the relevant flag for the process which is exiting is set to false. I.e.: in their child's \tx{proc\_information} struct, the \tx{parent\_is\_alive} flag is set to false, and in the one shared with their parent, should there be one, the \tx{child\_is\_alive} flag is set to false.
 
 Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
 
-In process\_wait, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
+In \tx{process\_wait}, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
 
 This has the side benefit of next time we call \texttt{process\_wait} on the same process tid, it is ensured that we return \texttt{-1}, as it is no longer a member of the process's child process list.
 
@@ -191,8 +197,8 @@ Thus all cases are hit and cause memory to be cleaned up correctly. For a walkth
 \begin{enumerate}
 \item P(arent) calls wait(C) before C exits - wait calls \texttt{cond\_wait}; C calls \texttt{process\_exit}; C checks P is still alive and signals it, then exits; P cleans up memory and returns the \texttt{exit\_status} from wait(C).
 \item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits; when P calls wait(C), it see's P is not alive and clean's up the shared memory, returning the \texttt{exit\_status}.
-\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it see's that P is dead and memory still there, so it cleans it up.
-\item P terminates without waiting, before C - when P exits, it see's that C is still alive and exit's without cleaning up memory; when C exits, it see's P is not alive and cleans up the memory.
+\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it sees that C was(P) \emph{sure????} is dead and memory still there, so it cleans it up.
+\item P terminates without waiting, before C - when P exits, it sees that C is still alive and exit's without cleaning up memory; when C exits, it sees P is not alive and cleans up the memory.
 \end{enumerate}
 
 
@@ -203,7 +209,8 @@ Thus all cases are hit and cause memory to be cleaned up correctly. For a walkth
 
 As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which automatically optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
 \\
-However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.
+However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.\\
+Moreover, consider the case where two processes were to communicate using a file..
 
 \subsubsection{B11}
 The identity mapping between \tx{pid\_t} and \tx{tid\_t} in Pintos is a viable solution since the kernel does support only single-threaded processes. Moreover, it becomes the only way to identify a process, since there is no \tx{struct process} used to store information about the process itself. 
