@@ -165,27 +165,31 @@ validate_user_pointer (buffer);
 
 The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
 \\\\
-After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock \tx{anchor}, and checks to see if the exit\_status is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
+After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock \tx{anchor}, and checks to see if the \tx{exit\_status} is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
 \\\\
-After \texttt{load} is called by the child thread, the lock is acquired. The exit\_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
+After \texttt{load} is called by the child thread, the lock is acquired. The \tx{exit\_status} is set to \tx{-1} (so an unexpected interrupt returns exit status \tx{-1}). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns \tx{-1} from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
 
 In code:
 
 \begin{verbatim}
+... process_execute (process.c) ...
     lock_acquire(&proc_info->anchor);
     if (proc_info->exit_status == (int)UNINITIALISED_EXIT_STATUS) // 0xdeadbeef
       cond_wait(&proc_info->condvar_process_sync, &proc_info->anchor);
     if (!proc_info->child_started_correctly)
       tid = EXCEPTION_EXIT_STATUS;
     lock_release(&proc_info->anchor);
+...
 \end{verbatim}
 
 \begin{verbatim}
+... start_process (process.c) ...
   lock_acquire(&cur->proc_info->anchor);
   cur->proc_info->exit_status = EXCEPTION_EXIT_STATUS; // -1
   cur->proc_info->child_started_correctly = success;
   cond_signal(&cur->proc_info->condvar_process_syncs, &cur->proc_info->anchor);
   lock_release(&cur->proc_info->anchor);
+...
 \end{verbatim}
 
 \subsubsection{B8}
@@ -205,13 +209,13 @@ In \tx{process\_wait}, we wait for the child via a check on it's boolean conditi
 \\\\
 This has the side benefit of returning \tx{-1} as required the next time we call \texttt{process\_wait} on the same process pid, as the child's pid is no longer a member of the process's children process list.
 \\\\
-Thus all cases are covered and cause memory to be cleaned up correctly. For a walkthrough of logic in the major cases see below:- P represents the \texttt{parent} process and C the \texttt{child}
+Thus all cases are covered and cause memory to be cleaned up correctly. For a walkthrough of logic in the major cases see below:- P represents the \texttt{parent} process and C the \texttt{child}.
 
 \begin{enumerate}
-\item P calls wait(C) before C exits - wait calls \texttt{cond\_wait}; C calls \texttt{process\_exit}; C checks P is still alive and signals it, then exits; P cleans up memory and returns the \texttt{exit\_status} from wait(C).
-\item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits; when P calls wait(C), it sees C is not alive and cleans up the shared memory, returning the \texttt{exit\_status}.
-\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it sees that C is dead and the allocated memory is still there, so it cleans it up.
-\item P terminates without waiting, before C - when P exits, it sees that C is still alive and exit's without cleaning up memory; when C exits, it sees P is not alive and cleans up the memory.
+\item P calls wait(C) before C exits - wait calls \texttt{cond\_wait}; C calls \texttt{process\_exit}; C checks P is still alive and signals it, then exits without cleanup; P resumes executing and cleans up memory and returns the \texttt{exit\_status} from wait(C).
+\item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits without shared memory cleanup; when P calls wait(C), it sees C is not alive and cleans up the shared memory, returning the \texttt{exit\_status}.
+\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits without shared memory cleanup; when P exits it sees that C is dead and the allocated memory is still there, so it cleans it up.
+\item P terminates without waiting, before C - when P exits, it sees that C is still alive and exit's without shared memory cleanup; when C exits, it sees P is not alive and cleans up the memory.
 \end{enumerate}
 
 
