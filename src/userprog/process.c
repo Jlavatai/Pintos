@@ -60,7 +60,7 @@ process_init (void)
 
 #define MAX_MEMORY 4096 //4KB
 
-pid_t
+tid_t
 process_execute (const char *file_name)
 {
     ASSERT(strlen(file_name) <= PGSIZE);
@@ -179,7 +179,7 @@ process_execute (const char *file_name)
   		tid = EXCEPTION_EXIT_STATUS;
   	lock_release(&proc_info->anchor);
 
-    return (pid_t)tid;
+    return tid;
 }
 
 
@@ -354,7 +354,7 @@ esp_not_in_boundaries(void *esp)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (pid_t child_pid)
+process_wait (tid_t child_tid)
 {
 	struct thread * cur = thread_current();
 	struct list_elem * e;
@@ -363,7 +363,7 @@ process_wait (pid_t child_pid)
 	     e = list_next (e))
 	{
 		struct proc_information *procInfo = list_entry (e, struct proc_information, elem);
-		if (procInfo->pid == child_pid) {
+		if (procInfo->pid == child_tid) {
 			lock_acquire(&procInfo->anchor);
 			// If we were blocked by acquire, we might have deleted the thread struct
 			if (procInfo->child_is_alive)
@@ -399,9 +399,11 @@ process_exit (void)
 
     if (cur->proc_info) {
       printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
-      /* Destroy the file descriptor table */
+
+      /* Destroy the file descriptor table */      
       hash_destroy(&cur->proc_info->file_descriptor_table,
                    &file_descriptor_table_destroy_func);
+
       lock_acquire(&cur->proc_info->anchor);
       cur->proc_info->child_is_alive = false;
       if (cur->proc_info->parent_is_alive) {
