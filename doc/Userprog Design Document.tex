@@ -131,15 +131,17 @@ Modified in \tx{thread.h}:
                                               file this thread's code is contained in */
       struct proc_information * proc_info; /* A pointer to the parent's information struct
                                               containing information on this child */
-      struct list children;                /* Holds the list of processes started by this
-                                              process. */
+      struct list children;                /* Holds the list of child processes 
+                                              (via their struct proc_information) started
+                                              by this process. */
+                                              
       /* Owned by userprog/process.c. */
       uint32_t *pagedir;                  /* Page directory. */
   #endif
     ...
   }
 \end{verbatim}
-This information added to \tx{struct thread} stores information on parent and child threads to allow for synchronisation, and the location of the executing code on the file system.
+\tx{Struct thread} is modified to hold pointer to the parent and child \tx{proc\_information} structs, and file pointers for its own executing code location.
 
 \subsubsection{B2}
 
