@@ -153,9 +153,12 @@ We don't see much room for improvement. If we ensured that memory pages were con
 
 \subsubsection{B5}
 
-Our implementation of the wait system call is done via a call to the kernel function \texttt{process\_wait}, with an argument of the process id (\texttt{pid}). This function looks through a linked-list of processes spawned by the calling process (that haven't been cleaned up yet), and returns -1 if it can't find the given \texttt{pid}.
+Our implementation of the wait system call is done via a call to the kernel function \texttt{process\_wait}, with an argument of the process id (\texttt{pid}).
 \\\\
-If it can find the \texttt{pid}, a check is then performed to see if the process has already finished. This is implemented by a boolean flag set to \texttt{true} by the child process when it finishes. If it has already finished, it returns the \texttt{exit\_status} that the process had when it finished. If it hasn't it performs a \texttt{cond\_wait} until the child process signals that it is finished. We avoid race conditions via a \texttt{lock}, meaning that as soon as the child's pid is found in the children's list, the operations become atomical.
+This function looks through a linked-list of processes spawned by the calling process (that haven't been cleaned up yet), and returns -1 if it can't find the given \texttt{pid}.
+\\\\
+If it can find the \texttt{pid}, a check is then performed to see if the process has already finished. This is implemented by a boolean flag set to \texttt{true} by the child process when it finishes. \\\\
+If it has already finished, it returns the \texttt{exit\_status} that the process had when it finished. If it hasn't it performs a \texttt{cond\_wait} until the child process signals that it is finished. We avoid race conditions via a \texttt{lock}: before checking or setting the \tx{exit\_status} or flags, the \tx{Parent} or \tx{Child} should acquire this lock. This ensures that these operation is atomic.
 \\\\
 Finally, after either the \texttt{child\_is\_alive} check passes or the process is signalled, the process memory is cleaned up, and the child information struct is removed from the linked list.
 
@@ -186,12 +189,12 @@ validate_user_pointer (buffer);
 \subsection{Synchronisation}
 \subsubsection{B7}
 
-The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
+The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate heap memory for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
 \\\\
 After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock \tx{anchor}, and checks to see if the \tx{exit\_status} is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
 \\\\
 After \texttt{load} is called by the child thread, the lock is acquired. The \tx{exit\_status} is set to \tx{-1} (so an unexpected interrupt returns exit status \tx{-1}). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns \tx{-1} from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
-
+\\
 In code:
 
 \begin{verbatim}
