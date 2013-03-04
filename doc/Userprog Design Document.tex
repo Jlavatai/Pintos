@@ -227,6 +227,8 @@ Thus all cases are hit and cause memory to be cleaned up correctly. For a walkth
 \subsection{Rationale}
 \subsubsection{B9}
 
+We chose to implement access to user memory in the way we did because it allowed our system call implementations to easily validate accesses to user memory in only one function call. Because we exit (using \tx{thread\_exit()} if the memory access is invalid, this also means that the function does not have to return a value, because returning to the function implementing the function call from \tx{validate\_user\_pointer()} means that the memory access was valid. This means that the calling code is a lot cleaner, and doesn't have to use conditionals. The fact we call \tx{thread\_exit()} on a bad memory access means that we can also perform any cleanup operations before terminating that we'd want to do when exiting a thread normally anyway (such as ensuring that the user program isn't still holding the filesystem lock).
+
 \subsubsection{B10}
 
 As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which automatically optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
