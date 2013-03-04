@@ -22,7 +22,7 @@ Added to \tx{process.c}:
          struct list_elem token_list_elem;
      };
 \end{verbatim}
-\tab The struct represent an argument, which \tx{char *token} is pointing to. This struct can be added to a list struct.
+This struct represents an argument, which \tx{char *token} is pointing to. This struct can be added to a list struct.
 \\
 \tab \begin{verbatim}
      struct stack_setup_data
@@ -46,27 +46,37 @@ Overflowing the stack is avoided by checking the esp value every time it is modi
 \subsubsection{A3}
 The main difference between the functions \tx{strtok()} and \tx{strtok\_r()} is that the latter has an extra parameter, another \tx{char *}, which stores, after each tokenization, the pointer to the new location. This way, a subsequent call to the same function will tokenize the rest of the list starting from the previous address. The function \tx{strtok}, instead, stores the new location in an internal variable. Since Pintos might switch threads to run while this tokenisation is taking place, the value of this internal variable would be lost, making any further tokenisation impossible, while possibly causing illegal memory accesses.
 \subsubsection{A4}
-A disadvantage of the Pintos method is that, before the tokenisation, the command passed is copied into a memory page to avoid race conditions. This imposes a 4KB limit on the command line, which is not present in UNIX. \\
-Moreover, if something goes wrong  in the argument parsing in Pintos, the whole kernel would panic and interrupt the execution. Parsing the arguments at a higher stage allows to identify errors before they make the whole kernel crash.\\
+A disadvantage of the Pintos method is that, before the tokenisation, the command passed is copied into a memory page to avoid race conditions. This imposes a 4KB limit on the command line, which is not present in UNIX.
+\\\\
+Moreover, if something goes wrong  in the argument parsing in Pintos, the whole kernel would panic and interrupt the execution. Parsing the arguments at a higher stage allows to identify errors before they make the whole kernel crash.
+\\\\
 By argument parsing in a terminal, Unix can perform more parsing of command strings by preprocessing it before it sends information to the kernel. This allows for more advanced manipulation of process execution, with features such a semicolon (`;') allowing multiple commands in a single line, and piping.
 
 \section{System Calls}
 \subsection{Data Structures}
 \subsubsection{B1}
 
+Added to \tx{syscall.h}:
+\begin{verbatim}
+     struct file_descriptor {
+       int fd;
+       struct file *file;
+       struct hash_elem hash_elem;
+     };
+\end{verbatim}
+This is the struct used in the file descriptor hash table for each process.
+\\\\
 Added to \tx{syscall.c}:
 
 \begin{verbatim}
      static struct lock file_system_lock;
 \end{verbatim}
-
-\tab A lock used to ensure that only one file system operation is performed at any one time.
+A lock used to ensure that only one file system operation is performed at any one time.
 
 \begin{verbatim}
      typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
 \end{verbatim}
-
-\tab The function type used by all functions which implement the system calls.
+The function type used by all functions which implement the system calls.
 
 \begin{verbatim}
      static const SYSCALL_HANDLER syscall_handlers[] = {
@@ -85,9 +95,9 @@ Added to \tx{syscall.c}:
        &close_handler
      };
 \end{verbatim}
-
-\tab A static array of function pointers used for system calls indexed by their respective system call number.
-
+A static array of function pointers used for system calls indexed by their respective system call number.
+\\\\
+Added to \tx{process.h}:
 \begin{verbatim}
 struct proc_information { 
     struct list_elem elem;                  /* To provide linked list functionality */
@@ -109,9 +119,9 @@ struct proc_information {
     int next_fd;                          /* Stores the next file descriptor for use. */
 };
 \end{verbatim}
-
-\tab This struct stores synchronisation information between parent and child threads.
-
+This struct stores synchronisation information between parent and child threads.
+\\\\
+Modified in \tx{thread.h}:
 \begin{verbatim}
   struct thread
   {
@@ -129,8 +139,7 @@ struct proc_information {
     ...
   }
 \end{verbatim}
-
-\tab This added information to \  tx{struct thread} stores information on parent and child threads to allow for synchronisation, and the location of the executing code on the file system.
+This information added to \tx{struct thread} stores information on parent and child threads to allow for synchronisation, and the location of the executing code on the file system.
 
 \subsubsection{B2}
 
@@ -152,9 +161,9 @@ In both the functions, if the file descriptor identifies an actual file on the f
 \subsubsection{B4}
 
 The least number of calls to \tx{pagedir\_get\_page()} that could result would be 1, if all of the data that was being copied from user space to the kernel was stored in a single page, from address 0 within that page. The maximum number of calls to \tx{pagedir\_get\_page()} would be 4096, if each byte that was being copied was stored in a different page. If this block of data is contiguous (i.e. one byte after another), then the maximum would be two.
-
+\\\\
 For a call that only copies 2 bytes of data, the least number of calls to \tx{pagedir\_get\_page()} that could result would again be 1, if the 2 bytes were stored in the same page. The maximum would be 2 this time, if both bytes were stored in different pages.
-
+\\\\
 There is room for improvement if we ensure that the block of memory stored is contiguous, as opposed to randomly stored in multiple pages. If that is the case then 4096 bytes could be split over a maximum of two pages of memory, requiring only two inspections, which is a large improvement. The 2-byte case maximum would still stay at two, though (if one byte is stored in the last byte of a page, and the second byte in another page). There are downsides to this model though, such as fragmentation.
 
 \subsubsection{B5}
@@ -178,9 +187,8 @@ We have separated the different parts of the system calls cleanly into a few par
 \item \tx{syscall\_handler()} is the entry point for all of our system calls; at this point we first validate \tx{esp} before dereferencing it using \tx{validate\_user\_pointer()}. As mentioned in 1), this is only a single function call, with no return value. After this, we invoke the correct system call handler function (by looking at the correct element in \tx{syscall\_handlers}). This single call to \tx{validate\_user\_pointer()} is the only user memory address validation we do in this function.
 \item For each system call handler function, we retrieve the arguments on the stack by calling \tx{get\_stack\_argument()}, which takes two arguments: the interrupt frame for the system call and the argument index. This function evaluates the address which this argument should be stored at (based on the \tx{esp} value stored in the interrupt frame), then calls \tx{validate\_user\_pointer()} with this address, then returns the dereferenced value at that address. The fact that argument retrieval is handled in another function means that the system call functions are very clean, and do not contain a swathe of address checking or error handling code. Any pointer arguments which then also require validation can be checked in the system call handler with \tx{validate\_user\_pointer()}.
 \end{enumerate}
-
 Given that we call \tx{thread\_exit()} if a user program tries to access an invalid user memory address, this ensures that we free any resources used for that process. For example, we ensure to release the file system lock if it is still held by the offending process (otherwise this could lead to a deadlock).
-
+\\\\
 The separation of these different parts of the error handling code ensures that the system call implementations are very clean and are not distracted by lots of error checking. For example, the code in the \tx{write} system call handler which validates the stack arguments is as such:
 
 \begin{verbatim}
@@ -235,11 +243,10 @@ To handle all cases, in our process syncronisation shared memory structure, we h
     bool parent_is_alive;          /* A boolean to determine if the parent thread is alive */
     bool child_is_alive;           /* A boolean to determine if the child thread is alive */
 \end{verbatim}
-
 During \tx{process\_exit}, the relevant flag for the process which is exiting is set to false. I.e.: in their child's \tx{proc\_information} struct, the \tx{parent\_is\_alive} flag is set to false, and in the one shared with their parent, should there be one, the \tx{child\_is\_alive} flag is set to false.
-
+\\\\
 Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
-
+\\\\
 In \tx{process\_wait}, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
 \\\\
 This has the side benefit of returning \tx{-1} as required the next time we call \texttt{process\_wait} on the same process pid, as the child's pid is no longer a member of the process's children process list.
@@ -268,5 +275,6 @@ However, the fact that each process has a hash table containing open files for t
 
 \subsubsection{B11}
 The identity mapping between \tx{pid\_t} and \tx{tid\_t} in Pintos is a viable solution since the kernel does support only single-threaded processes. Moreover, it becomes the only way to identify a process, since there is no \tx{struct process} used to store information about the process itself. 
-\\ A possible advantage of creating a more complex mapping could be that the distinction between user processes and kernel threads would become easier, for example by reserving the first $n$ identifiers to kernel threads and mapping them to values outside those range. When dealing with a identifier would then be much easier to determine its type, and choose the appropriate actions. However, one would have to suitably allocate space for storing this information, and the process of resolving this mapping could cause time loss.  
+\\\\
+A possible advantage of creating a more complex mapping could be that the distinction between user processes and kernel threads would become easier, for example by reserving the first $n$ identifiers to kernel threads and mapping them to values outside those range. When dealing with a identifier would then be much easier to determine its type, and choose the appropriate actions. However, one would have to suitably allocate space for storing this information, and the process of resolving this mapping could cause time loss.  
 \end{document}
