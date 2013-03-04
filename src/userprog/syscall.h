@@ -3,6 +3,13 @@
 
 #include "userprog/process.h"
 
+/* Struct used when mapping file descriptors to struct file*s. */
+struct file_descriptor {
+  int fd;
+  struct file *file;
+  struct hash_elem hash_elem;
+};
+
 void syscall_init (void);
 
 /* Publicly visible system calls. */
