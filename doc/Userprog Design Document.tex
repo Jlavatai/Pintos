@@ -174,12 +174,14 @@ Finally, after either the \texttt{child\_is\_alive} check passes or the process 
 We have separated the different parts of the system calls cleanly into a few parts:
 
 \begin{enumerate}
-\item We have encapsulated the code which validates user memory addresses into a function in \tx{syscall.c}, \tx{validate\_user\_pointer()}. This method checks whether the pointer is valid, and if not calls \tx{exit()} with a status code of \tx{-1}. Because it simply terminates if the memory address is invalid, this means that it does not have to return a value. If execution continues beyond a call to \tx{validate\_user\_pointer()}, it means that the memory address is a valid user memory address. If it was not, then \tx{exit()} would have been called, taking care of freeing all the process's resources, and execution of the user program would not have continued.
+\item We have encapsulated the code which validates user memory addresses into a function in \tx{syscall.c}, \tx{validate\_user\_pointer()}. This method checks whether the pointer is valid, and if not calls \tx{exit\_syscall()} with a status code of \tx{-1}. Because it simply terminates if the memory address is invalid, this means that it does not have to return a value. If execution continues beyond a call to \tx{validate\_user\_pointer()}, it means that the memory address is a valid user memory address. If it was not, then \tx{exit\_syscall()} would have been called, terminating the current process, and execution of the user program would not have continued.
 \item \tx{syscall\_handler()} is the entry point for all of our system calls; at this point we first validate \tx{esp} before dereferencing it using \tx{validate\_user\_pointer()}. As mentioned in 1), this is only a single function call, with no return value. After this, we invoke the correct system call handler function (by looking at the correct element in \tx{syscall\_handlers}). This single call to \tx{validate\_user\_pointer()} is the only user memory address validation we do in this function.
 \item For each system call handler function, we retrieve the arguments on the stack by calling \tx{get\_stack\_argument()}, which takes two arguments: the interrupt frame for the system call and the argument index. This function evaluates the address which this argument should be stored at (based on the \tx{esp} value stored in the interrupt frame), then calls \tx{validate\_user\_pointer()} with this address, then returns the dereferenced value at that address. The fact that argument retrieval is handled in another function means that the system call functions are very clean, and do not contain a swathe of address checking or error handling code. Any pointer arguments which then also require validation can be checked in the system call handler with \tx{validate\_user\_pointer()}.
 \end{enumerate}
 
-For example, the code in the \tx{write} system call handler which validates the stack arguments is very minimal:
+Given that we call \tx{thread\_exit()} if a user program tries to access an invalid user memory address, this ensures that we free any resources used for that process. For example, we ensure to release the file system lock if it is still held by the offending process (otherwise this could lead to a deadlock).
+
+The separation of these different parts of the error handling code ensures that the system call implementations are very clean and are not distracted by lots of error checking. For example, the code in the \tx{write} system call handler which validates the stack arguments is as such:
 
 \begin{verbatim}
 // From write_handler() in syscall.c.
@@ -255,13 +257,13 @@ Thus all cases are covered and cause memory to be cleaned up correctly. For a wa
 \subsection{Rationale}
 \subsubsection{B9}
 
-We chose to implement access to user memory in the way we did because it allowed our system call implementations to easily validate accesses to user memory in only one function call. Because we exit (using \tx{thread\_exit()} if the memory access is invalid, this also means that the function does not have to return a value, because returning to the function implementing the function call from \tx{validate\_user\_pointer()} means that the memory access was valid. This means that the calling code is a lot cleaner, and doesn't have to use conditionals. The fact we call \tx{thread\_exit()} on a bad memory access means that we can also perform any cleanup operations before terminating that we'd want to do when exiting a thread normally anyway (such as ensuring that the user program isn't still holding the filesystem lock).
+We chose to implement access to user memory in the way we did because it allowed our system call implementations to easily validate accesses to user memory in only one function call. Because we exit (using \tx{thread\_exit()}) if the memory access is invalid, this also means that the function does not have to return a value, because returning to the function implementing the function call from \tx{validate\_user\_pointer()} means that the memory access was valid. This means that the calling code is a lot cleaner, and doesn't have to use conditionals. The fact we call \tx{thread\_exit()} on a bad memory access means that we can also perform any cleanup operations before terminating that we'd want to do when exiting a thread normally anyway (such as ensuring that the user program isn't still holding the file system lock).
 
 \subsubsection{B10}
 
 As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which automatically optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
-\\
-However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.\\
+\\\\
+However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes, \\
 
 
 \subsubsection{B11}
