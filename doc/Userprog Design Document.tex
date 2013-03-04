@@ -42,9 +42,9 @@ Overflowing the stack is avoided by checking the esp value every time it is modi
 
 \subsection{Rationale}
 \subsubsection{A3}
-The main difference between the functions \tx{strtok()} and \tx{strtok\_r()} is that the latter has an extra parameter, another \tx{char *}, which stores, after every tokenization, the pointer to the new location, to be used in the next call of the same function. the function \tx{strtok}, instead, stores the new location within an internal variable. Since Pintos might switch threads to run while this tokenization is taking place, the value of this internal variable would be lost, or could cause illegal memory accesses.
+The main difference between the functions \tx{strtok()} and \tx{strtok\_r()} is that the latter has an extra parameter, another \tx{char *}, which stores, after each tokenization, the pointer to the new location. This way, a subsequent call to the same function will tokenize the rest of the list starting from the previous address. The function \tx{strtok}, instead, stores the new location in an internal variable. Since Pintos might switch threads to run while this tokenisation is taking place, the value of this internal variable would be lost, making any further tokenisation impossible, while possibly causing illegal memory accesses.
 \subsubsection{A4}
-A disadvantage of the Pintos method is that, before the tokenization, the command passed is copied into a memory page to avoid race conditions. This impose a 4KB limit on the command line, which is not present in UNIX. \\
+A disadvantage of the Pintos method is that, before the tokenisation, the command passed is copied into a memory page to avoid race conditions. This impose a 4KB limit on the command line, which is not present in UNIX. \\
 Moreover, if something goes wrong  in the argument parsing in Pintos, the whole kernel would panic and interrupt the execution. Parsing the arguments at a higher stage allows to identify errors before they make the whole kernel crash.
 
 \section{System Calls}
@@ -124,7 +124,7 @@ File descriptors are unique within a single process, as there is no need for the
 
 Our implementation of the wait system call is done via a call to the kernel function \texttt{process\_wait}, with an argument of the process id (\texttt{pid}). This function looks through a linked-list of processes spawned by the calling process (that haven't been cleaned up yet), and returns -1 if it can't find the given \texttt{pid}.
 \\\\
-If it can find the \texttt{pid}, a check is then performed to see if the process has already finished. This is implemented by a boolean flag set to \texttt{true} by the child process when it finishes. If it has already finished, it returns the \texttt{exit\_status} that the process had when it finished. If it hasn't it performs a \texttt{cond\_wait} until the child process signals that it is finished. We avoid race conditions via a \texttt{lock}.
+If it can find the \texttt{pid}, a check is then performed to see if the process has already finished. This is implemented by a boolean flag set to \texttt{true} by the child process when it finishes. If it has already finished, it returns the \texttt{exit\_status} that the process had when it finished. If it hasn't it performs a \texttt{cond\_wait} until the child process signals that it is finished. We avoid race conditions via a \texttt{lock}, meaning that as soon as the child's pid is found in the children's list, the operations become atomical.
 \\\\
 Finally, after either the \texttt{child\_is\_alive} check passes or the process is signalled, the process memory is cleaned up, and the child information struct is removed from the linked list.
 
@@ -133,7 +133,7 @@ Finally, after either the \texttt{child\_is\_alive} check passes or the process 
 We have separated the different parts of the system calls cleanly into a few parts:
 
 \begin{enumerate}
-\item We have encapsulated the code which validates user memory addresses into a function in \tx{syscall.c}, \tx{validate\_user\_pointer()}. This method checks whether the pointer is valid, and if not calls \tx{exit()} with a status code of \tx{-1}. Because it simply terminates if the memory address is invalid, this means that it does not have to return a value. If execution continues beyond a call to \tx{validate\_user\_pointer()}, it means that the memory address is a valid user memory address. If it was not, then \tx{exit()} would have been called and execution of the user program would not have continued.
+\item We have encapsulated the code which validates user memory addresses into a function in \tx{syscall.c}, \tx{validate\_user\_pointer()}. This method checks whether the pointer is valid, and if not calls \tx{exit()} with a status code of \tx{-1}. Because it simply terminates if the memory address is invalid, this means that it does not have to return a value. If execution continues beyond a call to \tx{validate\_user\_pointer()}, it means that the memory address is a valid user memory address. If it was not, then \tx{exit()} would have been called, taking care of freeing all the process's resources, and execution of the user program would not have continued.
 \item \tx{syscall\_handler()} is the entry point for all of our system calls; at this point we first validate \tx{esp} before dereferencing it using \tx{validate\_user\_pointer()}. As mentioned in 1), this is only a single function call, with no return value. After this, we invoke the correct system call handler function (by looking at the correct element in \tx{syscall\_handlers}). This single call to \tx{validate\_user\_pointer()} is the only user memory address validation we do in this function.
 \item For each system call handler function, we retrieve the arguments on the stack by calling \tx{get\_stack\_argument()}, which takes two arguments: the interrupt frame for the system call and the argument index. This function evaluates the address which this argument should be stored at (based on the \tx{esp} value stored in the interrupt frame), then calls \tx{validate\_user\_pointer()} with this address, then returns the dereferenced value at that address. The fact that argument retrieval is handled in another function means that the system call functions are very clean, and do not contain a swathe of address checking or error handling code. Any pointer arguments which then also require validation can be checked in the system call handler with \tx{validate\_user\_pointer()}.
 \end{enumerate}
@@ -156,10 +156,8 @@ validate_user_pointer (buffer);
 \subsubsection{B7}
 
 The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
-
-The \tx{exec} system call, in our implementation call's \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The exit\_status is initialised to \tx{0xdeadbeef}.
 \\\\
-After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
+After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock \tx{anchor}, and checks to see if the exit\_status is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
 \\\\
 After \texttt{load} is called by the child thread, the lock is acquired. The exit\_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
 
@@ -196,21 +194,15 @@ During \tx{process\_exit}, the relevant flag for the process which is exiting is
 Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
 
 In \tx{process\_wait}, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
-
-During process\_exit, the relevant flag for the process which is exitting is set to false. I.e.: in their child's proc\_information struct, the parent\_is\_alive is set to false, and in the one shared with their parent, should there be one, the child\_is\_alive flag is set to false.
 \\\\
-Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
+This has the side benefit of returning \tx{-1} as required the next time we call \texttt{process\_wait} on the same process pid, as the child's pid is no longer a member of the process's children process list.
 \\\\
-In process\_wait, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
-\\\\
-This has the side benefit of next time we call \texttt{process\_wait} on the same process tid, it is ensured that we return \texttt{-1}, as it is no longer a member of the process's child process list.
-\\\\
-Thus all cases are hit and cause memory to be cleaned up correctly. For a walkthrough of logic in the major cases see below:- P represents the \texttt{parent} process and C the \texttt{child}
+Thus all cases are covered and cause memory to be cleaned up correctly. For a walkthrough of logic in the major cases see below:- P represents the \texttt{parent} process and C the \texttt{child}
 
 \begin{enumerate}
 \item P calls wait(C) before C exits - wait calls \texttt{cond\_wait}; C calls \texttt{process\_exit}; C checks P is still alive and signals it, then exits; P cleans up memory and returns the \texttt{exit\_status} from wait(C).
-\item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits; when P calls wait(C), it see's P is not alive and clean's up the shared memory, returning the \texttt{exit\_status}.
-\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it sees that C is dead and memory still there, so it cleans it up.
+\item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits; when P calls wait(C), it sees C is not alive and cleans up the shared memory, returning the \texttt{exit\_status}.
+\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it sees that C is dead and the allocated memory is still there, so it cleans it up.
 \item P terminates without waiting, before C - when P exits, it sees that C is still alive and exit's without cleaning up memory; when C exits, it sees P is not alive and cleans up the memory.
 \end{enumerate}
 
@@ -223,7 +215,7 @@ Thus all cases are hit and cause memory to be cleaned up correctly. For a walkth
 As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which automatically optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
 \\
 However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.\\
-Moreover, consider the case where two processes were to communicate using a file..
+Moreover, consider the case where two processes were to communicate using a file. In this case, the need for a shared file descriptor table would arise, since at this point there is no way for two processes to identify the same file using the same file descriptor. 
 
 \subsubsection{B11}
 The identity mapping between \tx{pid\_t} and \tx{tid\_t} in Pintos is a viable solution since the kernel does support only single-threaded processes. Moreover, it becomes the only way to identify a process, since there is no \tx{struct process} used to store information about the process itself. 
