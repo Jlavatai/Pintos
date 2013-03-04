@@ -29,7 +29,7 @@ static void seek_handler      (struct intr_frame *f);
 static void tell_handler      (struct intr_frame *f);
 static void close_handler     (struct intr_frame *f);
 
-static struct lock file_system_lock;
+
 
 uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (const void *pointer);
@@ -97,16 +97,16 @@ exec_handler (struct intr_frame *f)
   const char *cmd_line = (const char*)get_stack_argument (f, 0); 
   validate_user_pointer ((void *)cmd_line);
 
-  int tid = process_execute(cmd_line);
+  pid_t pid = process_execute(cmd_line);
 
-  f->eax = tid;
+  f->eax = pid;
 
 }
 
 static void
 wait_handler (struct intr_frame *f)
 {
-	int pid = (int)get_stack_argument (f, 0);
+	pid_t pid = (pid_t)get_stack_argument (f, 0);
 	f->eax = process_wait(pid);
 }
 
@@ -206,7 +206,7 @@ read_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   void *buffer = (void *)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-
+  validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
 
   if (fd == 0) {
@@ -245,7 +245,7 @@ write_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   const void *buffer = (const void*)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-
+  validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
 
   if (fd == 1) {
@@ -366,6 +366,7 @@ close_syscall (struct file_descriptor *file_descriptor,
       hash_delete (&thread_current ()->proc_info->file_descriptor_table,
                    &descriptor.hash_elem);
     }
+    free(file_descriptor);
   }
 
   end_file_system_access ();
