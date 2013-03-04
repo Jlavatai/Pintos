@@ -158,10 +158,8 @@ validate_user_pointer (buffer);
 
 The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
 
-=======
 The \tx{exec} system call, in our implementation call's \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The exit\_status is initialised to \tx{0xdeadbeef}.
 \\\\
->>>>>>> d2a1a6fa40194f26886e933b5438833bfa877db6
 After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock, and checks to see if the exit\_status is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
 \\\\
 After \texttt{load} is called by the child thread, the lock is acquired. The exit\_status is set to -1 (so an unexpected interrupt returns exit status -1). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns -1 from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
@@ -200,14 +198,12 @@ Then, if and only if both of these are set to false, the shared memory structure
 
 In \tx{process\_wait}, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
 
-=======
 During process\_exit, the relevant flag for the process which is exitting is set to false. I.e.: in their child's proc\_information struct, the parent\_is\_alive is set to false, and in the one shared with their parent, should there be one, the child\_is\_alive flag is set to false.
 \\\\
 Then, if and only if both of these are set to false, the shared memory structure is cleaned up. The logic is also within the shared memory structure's lock such that the logical checks are atomic.
 \\\\
 In process\_wait, we wait for the child via a check on it's boolean condition \texttt{child\_is\_alive}, and a \texttt{cond\_wait} if true. After this, we save it's \texttt{exit\_status} variable, remove references to the shared memory struct, and cleanup the memory.
 \\\\
->>>>>>> d2a1a6fa40194f26886e933b5438833bfa877db6
 This has the side benefit of next time we call \texttt{process\_wait} on the same process tid, it is ensured that we return \texttt{-1}, as it is no longer a member of the process's child process list.
 \\\\
 Thus all cases are hit and cause memory to be cleaned up correctly. For a walkthrough of logic in the major cases see below:- P represents the \texttt{parent} process and C the \texttt{child}
