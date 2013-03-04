@@ -3,7 +3,6 @@
 
 #include "threads/thread.h"
 
-typedef int tid_t;
 typedef int pid_t;
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
