@@ -211,7 +211,7 @@ Thus all cases are hit and cause memory to be cleaned up correctly. For a walkth
 \begin{enumerate}
 \item P calls wait(C) before C exits - wait calls \texttt{cond\_wait}; C calls \texttt{process\_exit}; C checks P is still alive and signals it, then exits; P cleans up memory and returns the \texttt{exit\_status} from wait(C).
 \item P calls wait(C) after C exits - when C exits, it sees P is still alive and exits; when P calls wait(C), it see's P is not alive and clean's up the shared memory, returning the \texttt{exit\_status}.
-\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it sees that C was(P) \emph{sure????} is dead and memory still there, so it cleans it up.
+\item P terminates without waiting, after C - when C exits, it sees P is still alive and exits; when P exits it sees that C is dead and memory still there, so it cleans it up.
 \item P terminates without waiting, before C - when P exits, it sees that C is still alive and exit's without cleaning up memory; when C exits, it sees P is not alive and cleans up the memory.
 \end{enumerate}
 
