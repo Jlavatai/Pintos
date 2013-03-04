@@ -151,11 +151,11 @@ In both the functions, if the file descriptor identifies an actual file on the f
 
 \subsubsection{B4}
 
-The least number of calls to \tx{pagedir\_get\_page()} that could result would be 1, if all of the data that was being copied from user space to the kernel was stored in a single page, from address 0 within that page. The maximum number of calls to \tx{pagedir\_get\_page()} would be 4,096, if each byte that was being copied was stored in a different page.
+The least number of calls to \tx{pagedir\_get\_page()} that could result would be 1, if all of the data that was being copied from user space to the kernel was stored in a single page, from address 0 within that page. The maximum number of calls to \tx{pagedir\_get\_page()} would be 4096, if each byte that was being copied was stored in a different page.
 
 For a call that only copies 2 bytes of data, the least number of calls to \tx{pagedir\_get\_page()} that could result would again be 1, if the 2 bytes were stored in the same page. The maximum would be 2 this time, if both bytes were stored in different pages.
 
-We don't see much room for improvement. If we ensured that memory pages were contiguous, a 4096 bytes could be split over a maximum 2 pages of memory, requiring only two inspections. This cannot be ensured however, as fragmentation naturally occurs with the current implementation.
+There is room for improvement if we ensure that the block of memory stored is contiguous, as opposed to randomly stored in multiple pages. If that is the case then 4096 bytes could be split over a maximum of two pages of memory, requiring only two inspections, which is a large improvement. The 2-byte case maximum would still stay at two, though (if one byte is stored in the last byte of a page, and the second byte in another page). There are downsides to this model though, such as fragmentation.
 
 \subsubsection{B5}
 
