@@ -6,7 +6,7 @@
 
 \begin{document}
 
-\title{OS 211 \\ Task2: User Programs \\ Design Document}
+\title{OS 211 \\ Task 2: User Programs \\ Design Document}
 \author{Francesco Di Mauro, Thomas Rooney, Alex Rozanski}
 \date{\today}
 \maketitle
@@ -35,17 +35,20 @@ This struct stores the data needed to setup the stack in \tx{start\_process}, na
 
 \subsection{Algorithms}
 \subsubsection{A2}
-Argument parsing is divided between the functions \tx{process\_execute} and \tx{start\_process}. \\
-At the beginning of \tx{process\_execute}, a fresh memory page is allocated and zeroed: this page will store the setup data information. A copy of the pointer to this page, \tx{thread\_page\_ptr}, will be increased every time of the required amount, in order to properly store the information needed without corrupting memory. Afterwards, the file name passed as an argument to the Pintos command is tokenized, the pointer to each token is stored into a \tx{struct argument}, and then added to the \tx{argv} list. Each struct is pushed at the front of the list, so that at the end the arguments will already be in reverse order, as needed. \\
-The function \tx{start\_process}, will take care of pushing the arguments onto the stack. As a first thing, it will save the pointer to the name of the process, which will be needed in order to free the \tx{fn\_copy} memory page where the file name is stored, at the end of the stack setup. Then, after setting up the interrupt frame, the function will iterate over the list of arguments a first time: in this first "pass", the string value of each argument will be copied onto the stack, modifying the location the \tx{esp} is pointing to depending on the length of the string. The iteration will be from the front to the end of the list, since the arguments are already in reverse order. Moreover, the \tx{char} pointers pointing to the arguments in the \tx{fn\_copy} memory page, will be substituted with their corresponding pointers on the stack (the address the \tx{esp} is pointing to). The function will then push an all-zero byte as a word alignment, and a \tx{NULL} pointer, in order to respect the convention that \tx{argv[argc] = NULL}. Afterwards, the function will iterate over the same list again, this time pushing the pointers to the strings in the same (reverse) order. Finally, the pointer to the first argument will be pushed, followed by \tx{argc} and the "fake" return address. Before returning, the fuction will free both the allocated memory pages. \\
-Overflowing the stack is avoided by checking the esp value every time it is modified: if the difference between \tx{PHYS-BASE} and the current esp is bigger than 4KB, the process stops with an error code.   
+
+Argument parsing is divided between the functions \tx{process\_execute} and \tx{start\_process}. \\\\
+At the beginning of \tx{process\_execute}, a fresh memory page is allocated and zeroed: this page will store the setup data information. A copy of the pointer to this page, \tx{thread\_page\_ptr}, will be increased every time of the required amount, in order to properly store the information needed without corrupting memory. Afterwards, the file name passed as an argument to the Pintos command is tokenized, the pointer to each token is stored into a \tx{struct argument}, and then added to the \tx{argv} list. Each struct is pushed at the front of the list, so that at the end the arguments will already be in reverse order, as needed. \\\\
+The function \tx{start\_process}, takes care of pushing the arguments onto the stack. Firstly, it saves the pointer to the name of the process, which will be needed in order to free the \tx{fn\_copy} memory page, where the file name and arguments are stored, at the end of the stack setup. Then, after setting up the interrupt frame, the function iterates over the list of arguments a first time: in this first ``pass'', the string value of each argument will be copied onto the stack, modifying the location that the \tx{esp} is pointing to depending on the length of the string. The iteration will be from the front to the end of the list, since the arguments are already in reverse order. Moreover, the \tx{char} pointers pointing to the arguments in the \tx{fn\_copy} memory page, will be substituted with their corresponding pointers on the stack (the address the \tx{esp} is pointing to). The function will then push an all-zero (\tx{NULL}) byte as a word alignment, and a \tx{NULL} pointer, in order to respect the convention that \tx{argv[argc] = NULL}. Afterwards, the function will iterate over the same list again, this time pushing the pointers to the strings in the same (reverse) order. Finally, the pointer to the first argument will be pushed, followed by \tx{argc} and the ``fake'' return address. Before returning, the fuction will free both the allocated memory pages. \\\\
+Overflowing the stack is avoided by checking the esp value every time it is modified: if the difference between \tx{PHYS-BASE} and the current esp is bigger than 4KB, the process stops with an error code.
+
 
 \subsection{Rationale}
 \subsubsection{A3}
 The main difference between the functions \tx{strtok()} and \tx{strtok\_r()} is that the latter has an extra parameter, another \tx{char *}, which stores, after each tokenization, the pointer to the new location. This way, a subsequent call to the same function will tokenize the rest of the list starting from the previous address. The function \tx{strtok}, instead, stores the new location in an internal variable. Since Pintos might switch threads to run while this tokenisation is taking place, the value of this internal variable would be lost, making any further tokenisation impossible, while possibly causing illegal memory accesses.
 \subsubsection{A4}
-A disadvantage of the Pintos method is that, before the tokenisation, the command passed is copied into a memory page to avoid race conditions. This impose a 4KB limit on the command line, which is not present in UNIX. \\
-Moreover, if something goes wrong  in the argument parsing in Pintos, the whole kernel would panic and interrupt the execution. Parsing the arguments at a higher stage allows to identify errors before they make the whole kernel crash.
+A disadvantage of the Pintos method is that, before the tokenisation, the command passed is copied into a memory page to avoid race conditions. This imposes a 4KB limit on the command line, which is not present in UNIX. \\
+Moreover, if something goes wrong  in the argument parsing in Pintos, the whole kernel would panic and interrupt the execution. Parsing the arguments at a higher stage allows to identify errors before they make the whole kernel crash.\\
+By argument parsing in a terminal, Unix can perform more parsing of command strings by preprocessing it before it sends information to the kernel. This allows for more advanced manipulation of process execution, with features such a semicolon (`;') allowing multiple commands in a single line, and piping.
 
 \section{System Calls}
 \subsection{Data Structures}
@@ -109,6 +112,26 @@ struct proc_information {
 
 \tab This struct stores synchronisation information between parent and child threads.
 
+\begin{verbatim}
+  struct thread
+  {
+    ...
+    #ifdef USERPROG
+      struct file * file;                  /* A pointer to the struct holding the executing 
+                                              file this thread's code is contained in */
+      struct proc_information * proc_info; /* A pointer to the parent's information struct
+                                              containing information on this child */
+      struct list children;                /* Holds the list of processes started by this
+                                              process. */
+      /* Owned by userprog/process.c. */
+      uint32_t *pagedir;                  /* Page directory. */
+  #endif
+    ...
+  }
+\end{verbatim}
+
+\tab This added information to \  tx{struct thread} stores information on parent and child threads to allow for synchronisation, and the location of the executing code on the file system.
+
 \subsubsection{B2}
 
 File descriptors are associated with open files through a hash table. Each process's thread stores a hash table which associates file descriptors with \tx{struct file\_descriptor}s. \tx{struct file\_descriptor} stores a \tx{struct file} pointer which can then be used with the file and filesystem kernel functions.
@@ -118,15 +141,13 @@ File descriptors are unique within a single process, as there is no need for the
 \subsection{Algorithms}
 \subsubsection{B3}
 
-The reading and writing operations are managed by the two system calls \tx{read} and \tx{write}, and in our specific implementation, by the functions \tx{read\_handler} and \tx{write\_handler}, part of the array of function pointers \tx{syscall-handlers}. 
-\\
-Both of the functions start by retrieving from the stack the file descriptor, the buffer the OS will read form/write to and the number of bytes to read/write. Secondly, they check both the start and end of the buffer (where the point to the end of the buffer is given by the expression \tx{buffer + size}). This is because of the virtual memory layout of a user process: if either the buffer start pointer or the end pointer are invalid, it means that at a certain point we have fallen into kernel memory, therefore the operation is not legal. If these checks are successful, the execution continues.  \\\\
-The function \tx{read\_handler} checks whether the file descriptor refers to standard input (\tx{fd == 0}), and if so reads one byte into the buffer, using the function \tx{input\_getc()}, but only if the buffer is big enough. The number of bytes read (either zero or one) is then stored in \tx{eax} and the function returns.
-\\
-The function \tx{write\_handler} performs a similar check on the file descriptor, checking if the output buffer is the standard output (\tx{fd == 1}). If so, it prints all the contents of the buffer to the console with a single call of the function \tx{putbuf()}.\\\\
-In both the functions, if the file descriptor identifies an actual file on the file system, the file descriptor lock is acquired, the corresponding \tx{file\_descriptor struct} is retrieved from the file descriptor hash table of the process, and from there, the actual \tx{file struct}. Using the functions \tx{file\_read} or \tx{file\_write}, the operation is then performed, and the file descriptor lock released.\\
-Both of the functions return the number of bytes copied, number which is stored in a variable \tx{bytes\_written}. This variable is initialised as \tx{-1}, such that if the file is not found, or the operation doesn't end properly, the correct value will be stored in \tx{eax}.
-
+The reading and writing operations are managed by the two system calls \tx{read} and \tx{write}, and in our specific implementation, by the functions \tx{read\_handler} and \tx{write\_handler}, part of the array of function pointers \tx{syscall\_handlers}. 
+\\\\
+Both of the functions start by retrieving the file descriptor, the buffer the OS will read from/write to and the number of bytes to read/write from the stack. Secondly, they check both the start and end of the buffer (where the pointer to the end of the buffer is given by the expression \tx{buffer + size}) are valid user memory addresses with calls to \tx{validate\_user\_pointer()}. This is because of the virtual memory layout of a user process: if either the buffer start pointer or the end pointer are invalid, it means that at a certain point we have fallen into kernel memory, therefore the operation is not legal. If these checks are successful, execution continues
+\\\\
+Both functions allow reading from/writing to standard input and standard output. \tx{read\_handler()} reads from standard input if the file descriptor passed in is \tx{0}, and if so reads one byte into the buffer, using the function \tx{input\_getc()} (if the buffer is big enough). The number of bytes read (either zero or one) is then stored in the system call interrupt frame's \tx{eax} member and then returns. \tx{write\_handler()} performs a similar check on the file descriptor, checking if the file descriptor passed in represents standard output (an \tx{fd} of \tx{1}). If so, it prints all the contents of the buffer to the console with a single call of the function \tx{putbuf()}.
+\\\\
+In both the functions, if the file descriptor identifies an actual file on the file system, the file descriptor lock is acquired, the corresponding \tx{file\_descriptor struct} is retrieved from the file descriptor hash table for the process, and from there, the actual \tx{struct file}. Using the functions \tx{file\_read()} or \tx{file\_write()}, the file system operation is then performed, and the file descriptor lock released. Both of the functions return the number of bytes copied (or -1 on error) by storing the value in the interrupt frame's \tx{eax} member.
 
 \subsubsection{B4}
 
@@ -134,11 +155,17 @@ The least number of calls to \tx{pagedir\_get\_page()} that could result would b
 
 For a call that only copies 2 bytes of data, the least number of calls to \tx{pagedir\_get\_page()} that could result would again be 1, if the 2 bytes were stored in the same page. The maximum would be 2 this time, if both bytes were stored in different pages.
 
+We don't see much room for improvement. If we ensured that memory pages were contiguous, a 4096 bytes could be split over a maximum 2 pages of memory, requiring only two inspections. This cannot be ensured however, as fragmentation naturally occurs with the current implementation.
+
 \subsubsection{B5}
 
-Our implementation of the wait system call is done via a call to the kernel function \texttt{process\_wait}, with an argument of the process id (\texttt{pid}). This function looks through a linked-list of processes spawned by the calling process (that haven't been cleaned up yet), and returns -1 if it can't find the given \texttt{pid}.
+
+Our implementation of the wait system call is done via a call to the kernel function \texttt{process\_wait}, with an argument of the process id (\texttt{pid}).
 \\\\
-If it can find the \texttt{pid}, a check is then performed to see if the process has already finished. This is implemented by a boolean flag set to \texttt{true} by the child process when it finishes. If it has already finished, it returns the \texttt{exit\_status} that the process had when it finished. If it hasn't it performs a \texttt{cond\_wait} until the child process signals that it is finished. We avoid race conditions via a \texttt{lock}, meaning that as soon as the child's pid is found in the children's list, the operations become atomical.
+This function looks through a linked-list of processes spawned by the calling process (that haven't been cleaned up yet), and returns -1 if it can't find the given \texttt{pid}.
+\\\\
+If it can find the \texttt{pid}, a check is then performed to see if the process has already finished. This is implemented by a boolean flag set to \texttt{true} by the child process when it finishes. \\\\
+If it has already finished, it returns the \texttt{exit\_status} that the process had when it finished. If it hasn't it performs a \texttt{cond\_wait} until the child process signals that it is finished. We avoid race conditions via a \texttt{lock}: before checking or setting the \tx{exit\_status} or flags, the \tx{Parent} or \tx{Child} should acquire this lock. This ensures that these operation is atomic.
 \\\\
 Finally, after either the \texttt{child\_is\_alive} check passes or the process is signalled, the process memory is cleaned up, and the child information struct is removed from the linked list.
 
@@ -169,12 +196,12 @@ validate_user_pointer (buffer);
 \subsection{Synchronisation}
 \subsubsection{B7}
 
-The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate a heap memory structure for a shared memory structure between parent and children threads. This memory structure has pointers from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
+The \tx{exec} system call, in our implementation calls \tx{process\_execute}, alike a kernel call to start a new process. In \tx{process\_execute}, we allocate heap memory for a shared memory structure between parent and children threads. This memory structure is pointed to from both parent and child thread structs. It contains a few boolean flags for specific situations, an \tx{exit\_status}, a lock (called anchor) and condition variable. The \tx{exit\_status} is initialised to \tx{0xdeadbeef}.
 \\\\
-After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock \tx{anchor}, and checks to see if the \tx{exit\_status} is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, to be signalled when the created thread has started correctly.
+After the \tx{thread\_create} function has been called by the parent thread, the parent thread acquires the shared lock \tx{anchor}, and checks to see if the \tx{exit\_status} is still \tx{0xdeadbeef}. If so, it calls \tx{cond\_wait}, until it is signalled when the created thread has started correctly.
 \\\\
-After \texttt{load} is called by the child thread, the lock is acquired. The \tx{exit\_status} is set to \tx{-1} (so an unexpected interrupt returns exit status \tx{-1}). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns \tx{-1} from the \texttt{exec} system call. Else it returns the tid. The parent is finally signalled by the condition variable and the lock released.
-
+After \texttt{load} is called by the child thread in \tx{start\_process}, the lock is acquired. The \tx{exit\_status} is set to \tx{-1} (so an unexpected interrupt returns exit status \tx{-1}). Furthermore a boolean flag is set to tell the parent process if the child process started correctly or not. If it didn't, the parent process returns \tx{-1} from the \texttt{exec} system call. Else it returns the pid. The parent is finally signalled by the condition variable and the lock released.
+\\
 In code:
 
 \begin{verbatim}
@@ -200,7 +227,7 @@ In code:
 
 \subsubsection{B8}
 
-To handle all three cases, in our process syncronisation shared memory structure, we have two boolean flags:
+To handle all cases, in our process syncronisation shared memory structure, we have two boolean flags:
 
 \begin{verbatim}
     bool parent_is_alive;          /* A boolean to determine if the parent thread is alive */
@@ -235,7 +262,7 @@ We chose to implement access to user memory in the way we did because it allowed
 As we use a hash table, our implementation of file descriptors is very efficient for lookup (the hash function is just the identity function). It is also space efficient, as it is a dynamically sized data structure which automatically optimises for space efficiency. As each process has its own hash table storing \tx{struct file}s which are open for that process, closing open files when the process exits is very easy (we just destroy the hash table, clearing out the contents and closing the open files).
 \\
 However, the fact that each process has a hash table containing open files for that process uses more memory than if we only used a single hash table which was shared between all processes.\\
-Moreover, consider the case where two processes were to communicate using a file. In this case, the need for a shared file descriptor table would arise, since at this point there is no way for two processes to identify the same file using the same file descriptor. 
+
 
 \subsubsection{B11}
 The identity mapping between \tx{pid\_t} and \tx{tid\_t} in Pintos is a viable solution since the kernel does support only single-threaded processes. Moreover, it becomes the only way to identify a process, since there is no \tx{struct process} used to store information about the process itself. 
