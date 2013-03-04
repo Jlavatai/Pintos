@@ -118,7 +118,15 @@ File descriptors are unique within a single process, as there is no need for the
 \subsection{Algorithms}
 \subsubsection{B3}
 
+Reading and writing user data from the kernel is managed by the system calls which we implemented for this task. The system call interrupt handler (\tx{syscall\_handler()}) is the entry point for all of our system calls. In this function, we first get the system call number, which is stored at the addresss pointed to by the \tx{esp} member in the interrupt frame.
+
+We have a mapping between system call numbers and functions which we have implemented to provide the functionality for each system call. This mapping is performed through an array of function pointers, \tx{syscall\_handlers}, which is stored in \tx{syscall.c}. The pointer to the function which implements a particular system call is indexed by the system call number; for example, the \tx{exec} system call has system call number \tx{2}, so the function \tx{exec\_handler()} which implements this system call is stored at index 2 in the \tx{syscall\_handlers} array.
+
 \subsubsection{B4}
+
+The least number of calls to \tx{pagedir\_get\_page()} that could result would be 1, if all of the data that was being copied from user space to the kernel was stored in a single page, from address 0 within that page. The maximum number of calls to \tx{pagedir\_get\_page()} would be 4,096, if each byte that was being copied was stored in a different page.
+
+For a call that only copies 2 bytes of data, the least number of calls to \tx{pagedir\_get\_page()} that could result would again be 1, if the 2 bytes were stored in the same page. The maximum would be 2 this time, if both bytes were stored in different pages.
 
 \subsubsection{B5}
 
