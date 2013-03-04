@@ -110,6 +110,26 @@ struct proc_information {
 
 \tab This struct stores synchronisation information between parent and child threads.
 
+\begin{verbatim}
+  struct thread
+  {
+    ...
+    #ifdef USERPROG
+      struct file * file;                  /* A pointer to the struct holding the executing 
+                                              file this thread's code is contained in */
+      struct proc_information * proc_info; /* A pointer to the parent's information struct
+                                              containing information on this child */
+      struct list children;                /* Holds the list of processes started by this
+                                              process. */
+      /* Owned by userprog/process.c. */
+      uint32_t *pagedir;                  /* Page directory. */
+  #endif
+    ...
+  }
+\end{verbatim}
+
+\tab This added information to \tx{struct thread} stores information on parent and child threads to allow for synchronisation, and the location of the executing code on the file system.
+
 \subsubsection{B2}
 
 File descriptors are associated with open files through a hash table. Each process's thread stores a hash table which associates file descriptors with \tx{struct file\_descriptor}s. \tx{struct file\_descriptor} stores a \tx{struct file} pointer which can then be used with the file and filesystem kernel functions.
