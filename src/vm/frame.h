@@ -9,4 +9,6 @@ struct frame {
 	struct page *page;				/* Stores the page mapped into this frame */
 };
 
+void frame_init(void);
+
 #endif /* vm/frame.h */
