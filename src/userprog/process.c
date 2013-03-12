@@ -77,7 +77,8 @@ process_execute (const char *file_name)
     {
         return TID_ERROR;
     }
-    thread_page = palloc_get_page (0);
+    thread_page = palloc_get_page (PAL_USER);
+  
     if (thread_page == NULL)
     {
       palloc_free_page(fn_copy);
@@ -736,7 +737,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
 
-   Return true if successful, false if a memory allocatlock_acquire(&file_system_lock);ion error
+   Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,

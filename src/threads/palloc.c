@@ -10,6 +10,8 @@
 #include "threads/loader.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
+#include "threads/init.h"
 
 /* Page allocator.  Hands out memory in page-size (or
    page-multiple) chunks.  See malloc.h for an allocator that
@@ -61,6 +63,29 @@ palloc_init (size_t user_page_limit)
              user_pages, "user pool");
 }
 
+// void *
+// palloc_allocate_mult_frames(enum palloc_flags flags, size_t page_cnt)
+// {
+//   void *kernel_addr = palloc_get_multiple(flags, page_cnt);
+
+//   if(flags & PAL_USER) 
+//   {
+      
+//  // printf("-----The virtual address I have been allocated is %x\n", vaddr);
+
+//   struct frame *new_fr = NULL;
+//      new_fr = malloc(sizeof(struct frame));
+//      new_fr->frame_addr = kernel_addr;
+//      new_fr->page = vaddr;
+//      hash_insert(&frame_table, &new_fr->hash_elem);
+//   }
+
+ 
+//      return vaddr;
+// }
+
+
+
 /* Obtains and returns a group of PAGE_CNT contiguous free pages.
    If PAL_USER is set, the pages are obtained from the user pool,
    otherwise from the kernel pool.  If PAL_ZERO is set in FLAGS,
@@ -82,7 +107,10 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
   lock_release (&pool->lock);
 
   if (page_idx != BITMAP_ERROR)
-    pages = pool->base + PGSIZE * page_idx;
+  {
+    pages = pool->base + PGSIZE * page_idx;  
+  }
+
   else
     pages = NULL;
 

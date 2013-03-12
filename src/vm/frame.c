@@ -2,7 +2,6 @@
 
 #include <debug.h>
 
-struct hash frame_table;
 
 static unsigned frame_hash(const struct hash_elem *e, void *aux);
 static bool frame_less (const struct hash_elem *a,
@@ -11,10 +10,35 @@ static bool frame_less (const struct hash_elem *a,
 
 /* Initialises the frame table. */
 void
-frame_init(void)
+frame_table_init(void)
 {
 	hash_init (&frame_table, frame_hash, frame_less, NULL);
 }
+
+void frame_map(void * frame_addr, size_t page_index)
+{	
+	struct page *new_page = NULL;
+	new_page = malloc (sizeof(struct frame));
+	if(new_page == NULL) 
+	{
+		PANIC("Failed to malloc memory for struct page");
+	}
+
+	new_page->page_index = page_index;
+
+	struct frame *new_fr = NULL;
+	new_fr = malloc (sizeof(struct frame));
+	if(new_fr == NULL) 
+	{
+		PANIC("Failed to malloc memory for struct frame");
+	}
+
+	new_fr->page = new_page;
+	new_fr->frame_addr = frame_addr;
+
+	hash_insert(&frame_table, &new_fr->hash_elem);
+}
+
 
 /* Hash function for the frame table. */
 static unsigned
