@@ -125,6 +125,18 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
         PANIC ("palloc_get: out of pages");
     }
 
+  if (flags & PAL_USER) {
+    size_t i;
+
+    /* Map all of the frames used to their page indexes. */
+    for (i = 0; i < page_cnt; ++i) {
+      void *frame_addr = pages + i * PGSIZE;
+      size_t page_index = page_idx + i;
+
+      frame_map (frame_addr, page_index);
+    }
+  }
+
   return pages;
 }
 
