@@ -13,11 +13,14 @@ static bool frame_less (const struct hash_elem *a,
 						const struct hash_elem *b,
 						void *aux);
 
+struct lock frame_table_lock;
+
 /* Initialises the frame table. */
 void
 frame_table_init(void)
 {
 	hash_init (&frame_table, frame_hash, frame_less, NULL);
+	lock_init (&frame_table_lock);
 }
 
 void frame_map(void * frame_addr, void *user_vaddr)
@@ -41,7 +44,9 @@ void frame_map(void * frame_addr, void *user_vaddr)
 	new_fr->page = new_page;
 	new_fr->frame_addr = frame_addr;
 
+	lock_acquire (&frame_table_lock);
 	hash_insert(&frame_table, &new_fr->hash_elem);
+	lock_release (&frame_table_lock);
 }
 
 void frame_unmap(void *frame_addr)
@@ -49,7 +54,9 @@ void frame_unmap(void *frame_addr)
 	struct frame f;
 	f.frame_addr = frame_addr;
 
+	lock_acquire (&frame_table_lock);
 	hash_delete (&frame_table, &f.hash_elem);
+	lock_release (&frame_table_lock);
 }
 
 
