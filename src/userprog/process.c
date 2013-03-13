@@ -78,8 +78,8 @@ process_execute (const char *file_name)
     if (fn_copy == NULL)
     {
         return TID_ERROR;
-    }
-    thread_page = palloc_get_page (PAL_USER);
+    }    
+    thread_page = palloc_get_page (0);
   
     if (thread_page == NULL)
     {
@@ -766,17 +766,33 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
         /* Get a user page */
+        #ifdef VM
         uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+        #else
+        uint8_t *kpage = palloc_get_page(PAL_USER);
+        #endif
         if (kpage == NULL)
           return false;
 
         /* Load this page. */
         if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
+            #ifdef VM
             frame_allocator_free_user_page (kpage);
+            #else
+            palloc_free_page(kpage);
+            #endif
             return false;
         }
         memset (kpage + page_read_bytes, 0, page_zero_bytes);
+        #ifndef VM
+        /* Add the page to the process's address space. */
+        if (!install_page (upage, kpage, writable))
+        {
+            palloc_free_page (kpage);
+            return false;
+        } 
+        #endif
 
         /* Advance. */
         read_bytes -= page_read_bytes;
@@ -794,12 +810,25 @@ setup_stack (void **esp)
     uint8_t *kpage;
     bool success = false;
 
+    #ifdef VM
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
     kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
+    #else
+    kpage = palloc_get_page(PAL_ZERO);
+    #endif
     if (kpage != NULL)
     {
+      #ifdef VM
       *esp = PHYS_BASE;
       success = true;
+      #else
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      if (success)
+          *esp = PHYS_BASE;
+      else
+          palloc_free_page (kpage);
+      #endif
+
     }
     return success;
 } 
