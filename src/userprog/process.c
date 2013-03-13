@@ -755,7 +755,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
         /* Get a user page */
-        uint8_t *kpage = frame_allocator_get_user_page(upage, 0, false);
+        uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
         if (kpage == NULL)
           return false;
 
