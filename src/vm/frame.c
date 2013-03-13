@@ -2,11 +2,11 @@
 
 #include <debug.h>
 
-#include "threads/palloc.h"
 #include "threads/vaddr.h"
 
 
 void frame_map(void * frame_addr, void *user_vaddr);
+void frame_unmap(void *frame_addr);
 
 static unsigned frame_hash(const struct hash_elem *e, void *aux);
 static bool frame_less (const struct hash_elem *a,
@@ -44,6 +44,14 @@ void frame_map(void * frame_addr, void *user_vaddr)
 	hash_insert(&frame_table, &new_fr->hash_elem);
 }
 
+void frame_unmap(void *frame_addr)
+{
+	struct frame f;
+	f.frame_addr = frame_addr;
+
+	hash_delete (&frame_table, &f.hash_elem);
+}
+
 
 /* Hash function for the frame table. */
 static unsigned
@@ -66,15 +74,19 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 
 /* Getting user frames */
 void *
-frame_allocator_get_user_page(void *user_vaddr)
+frame_allocator_get_user_page(void *user_vaddr, enum palloc_flags flags,
+							  bool writable)
 {
-	return frame_allocator_get_user_page_multiple(user_vaddr, 1);
+	return frame_allocator_get_user_page_multiple(user_vaddr, 1, flags, writable);
 }
 
 void *
-frame_allocator_get_user_page_multiple(void *user_vaddr, unsigned int num_frames)
+frame_allocator_get_user_page_multiple(void *user_vaddr,
+									   unsigned int num_frames,
+									   enum palloc_flags flags,
+									   bool writable)
 {
-	void *kernel_vaddr = palloc_get_page (PAL_USER);
+	void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
 	if (kernel_vaddr == NULL) {
 		PANIC("No more user frames available.");
 	}
@@ -86,7 +98,7 @@ frame_allocator_get_user_page_multiple(void *user_vaddr, unsigned int num_frames
       void *page_user_vaddr = user_vaddr + i * PGSIZE;
       void *page_kernel_vaddr = kernel_vaddr + i * PGSIZE;
 
-      if (!install_page(page_user_vaddr, page_kernel_vaddr, false)) {
+      if (!install_page(page_user_vaddr, page_kernel_vaddr, writable)) {
       	PANIC("Could not install user page %p", page_user_vaddr);
       }
 
@@ -94,4 +106,11 @@ frame_allocator_get_user_page_multiple(void *user_vaddr, unsigned int num_frames
     }
 
 	return kernel_vaddr;
+}
+
+void
+frame_allocator_free_user_page(void *kernel_vaddr)
+{
+	palloc_free_page (kernel_vaddr);
+	frame_unmap (kernel_vaddr);
 }
