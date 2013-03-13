@@ -1,6 +1,6 @@
 #! /bin/sh
 
-cd ../src/userprog/build
+cd ../src/vm/build
 
 # Path to GDB macros file.  Customize for your site.
 GDBMACROS=/vol/lab/secondyear/lib/gdb-macros
