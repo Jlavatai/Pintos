@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 struct argument
 {
@@ -167,7 +168,6 @@ process_execute (const char *file_name)
 		t->proc_info = proc_info;
 		// Store this in the parent's child struct
 		list_push_back(&thread_current()->children, &proc_info->elem);
-
 	}
     intr_set_level(old_level);
 
@@ -572,6 +572,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
     t->pagedir = pagedir_create ();
     if (t->pagedir == NULL)
         goto done;
+
+#ifdef VM
+    hash_init (&t->supplemental_page_table,
+               supplemental_page_table_hash,
+               supplemental_page_table_less,
+               NULL);
+#endif
+
     process_activate ();
 
     /* Open executable file. */

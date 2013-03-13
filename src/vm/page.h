@@ -8,4 +8,10 @@ struct page {
 	void *user_vaddr;				/* The address of the page in user virtual memory. */
 };
 
+unsigned supplemental_page_table_hash (const struct hash_elem *e,
+									   void *aux);
+bool supplemental_page_table_less (const struct hash_elem *a,
+							  	   const struct hash_elem *b,
+							  	   void *aux);
+
 #endif /* vm/page.h */
