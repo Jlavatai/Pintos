@@ -2,6 +2,7 @@
 
 #include <debug.h>
 
+#include "threads/synch.h"
 #include "threads/vaddr.h"
 
 
