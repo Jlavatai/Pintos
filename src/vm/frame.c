@@ -6,7 +6,7 @@
 #include "threads/vaddr.h"
 
 
-void frame_map(void * frame_addr, void *user_vaddr);
+void frame_map(void * frame_addr, void *vaddr);
 void frame_unmap(void *frame_addr);
 
 static unsigned frame_hash(const struct hash_elem *e, void *aux);
@@ -24,7 +24,7 @@ frame_table_init(void)
 	lock_init (&frame_table_lock);
 }
 
-void frame_map(void * frame_addr, void *user_vaddr)
+void frame_map(void * frame_addr, void *vaddr)
 {	
 	struct page *new_page = NULL;
 	new_page = malloc (sizeof(struct frame));
@@ -33,7 +33,7 @@ void frame_map(void * frame_addr, void *user_vaddr)
 		PANIC("Failed to malloc memory for struct page");
 	}
 
-	new_page->user_vaddr = user_vaddr;
+	new_page->vaddr = vaddr;
 
 	struct frame *new_fr = NULL;
 	new_fr = malloc (sizeof(struct frame));

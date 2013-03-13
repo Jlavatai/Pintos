@@ -10,6 +10,9 @@
 #include "filesys/file.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
+#ifdef VM
+#include "vm/page.h"
+#endif
 
 typedef void (*SYSCALL_HANDLER)(struct intr_frame *f);
 
@@ -324,15 +327,31 @@ close_handler (struct intr_frame *f)
 static void
 validate_user_pointer (const void *pointer)
 {
+#ifndef VM
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
       || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) {
     exit_syscall (-1);
-
-    /* As we terminate, we shouldn't reach this point. */
     NOT_REACHED ();
   }
+#else
+  
+  if (pointer == NULL
+      || !is_user_vaddr (pointer))
+    exit_syscall (-1);
+  // If the address is valid for our supplemental page table
+  if (pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) {
+    struct page p;
+    p.vaddr = pg_round_down(pointer);
+    if (hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem) == NULL) {
+      exit_syscall (-1);
+      NOT_REACHED ();
+    }
+  }
+#endif
+    
+  
 }
 
 uint32_t

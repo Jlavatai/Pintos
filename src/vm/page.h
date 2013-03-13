@@ -13,8 +13,9 @@ enum page_status {
 
 struct page {
 	struct hash_elem hash_elem;		/* Used to store the frame in the page table. */
-	void *user_vaddr;				/* The address of the page in user virtual memory. */	
-	enum page_status page_status;   /* Used to store where the page actually exists */
+	void *vaddr;	    			/* The address of the page in user virtual memory. */
+	void *aux;						/* */
+	enum page_status page_status;   /* Used to store the page's current status. */
 };
 
 unsigned supplemental_page_table_hash (const struct hash_elem *e,
@@ -22,5 +23,7 @@ unsigned supplemental_page_table_hash (const struct hash_elem *e,
 bool supplemental_page_table_less (const struct hash_elem *a,
 							  	   const struct hash_elem *b,
 							  	   void *aux);
+
+struct page * mmap_page_load(struct page * page);
 
 #endif /* vm/page.h */
