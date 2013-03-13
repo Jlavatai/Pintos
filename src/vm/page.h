@@ -5,7 +5,7 @@
 
 struct page {
 	struct hash_elem hash_elem;		/* Used to store the frame in the page table. */
-	size_t page_index;
+	void *user_vaddr;				/* The address of the page in user virtual memory. */
 };
 
 #endif /* vm/page.h */

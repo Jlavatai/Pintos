@@ -2,6 +2,11 @@
 
 #include <debug.h>
 
+#include "threads/palloc.h"
+#include "threads/vaddr.h"
+
+
+void frame_map(void * frame_addr, void *user_vaddr);
 
 static unsigned frame_hash(const struct hash_elem *e, void *aux);
 static bool frame_less (const struct hash_elem *a,
@@ -15,7 +20,7 @@ frame_table_init(void)
 	hash_init (&frame_table, frame_hash, frame_less, NULL);
 }
 
-void frame_map(void * frame_addr, size_t page_index)
+void frame_map(void * frame_addr, void *user_vaddr)
 {	
 	struct page *new_page = NULL;
 	new_page = malloc (sizeof(struct frame));
@@ -24,7 +29,7 @@ void frame_map(void * frame_addr, size_t page_index)
 		PANIC("Failed to malloc memory for struct page");
 	}
 
-	new_page->page_index = page_index;
+	new_page->user_vaddr = user_vaddr;
 
 	struct frame *new_fr = NULL;
 	new_fr = malloc (sizeof(struct frame));
@@ -59,15 +64,34 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 	return frame_a->frame_addr < frame_b->frame_addr;
 }
 
-/* Getting frames */
+/* Getting user frames */
+void *
+frame_allocator_get_user_page(void *user_vaddr)
+{
+	return frame_allocator_get_user_page_multiple(user_vaddr, 1);
+}
 
 void *
-frame_allocator_get_user_frame(void)
+frame_allocator_get_user_page_multiple(void *user_vaddr, unsigned int num_frames)
 {
-	void *addr = palloc_get_page (PAL_USER);
-	if (addr == NULL) {
+	void *kernel_vaddr = palloc_get_page (PAL_USER);
+	if (kernel_vaddr == NULL) {
 		PANIC("No more user frames available.");
 	}
 
-	return addr;
+    size_t i;
+
+    /* Map all of the frames used to their page virtual addresses. */
+    for (i = 0; i < num_frames; ++i) {
+      void *page_user_vaddr = user_vaddr + i * PGSIZE;
+      void *page_kernel_vaddr = kernel_vaddr + i * PGSIZE;
+
+      if (!install_page(page_user_vaddr, page_kernel_vaddr, false)) {
+      	PANIC("Could not install user page %p", page_user_vaddr);
+      }
+
+      frame_map (page_kernel_vaddr, page_user_vaddr);
+    }
+
+	return kernel_vaddr;
 }

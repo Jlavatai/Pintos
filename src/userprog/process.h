@@ -22,6 +22,7 @@ struct proc_information {
 };
 
 
+bool install_page (void *upage, void *kpage, bool writable);
 
 pid_t process_execute (const char *file_name);
 
