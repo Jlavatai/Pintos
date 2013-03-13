@@ -444,6 +444,9 @@ process_exit (void)
       end_file_system_access ();
     }
 
+#ifdef VM
+    hash_destroy (&cur->supplemental_page_table, NULL);
+#endif
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
