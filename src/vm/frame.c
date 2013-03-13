@@ -58,3 +58,16 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 
 	return frame_a->frame_addr < frame_b->frame_addr;
 }
+
+/* Getting frames */
+
+void *
+frame_allocator_get_user_frame(void)
+{
+	void *addr = palloc_get_page (PAL_USER);
+	if (addr == NULL) {
+		PANIC("No more user frames available.");
+	}
+
+	return addr;
+}

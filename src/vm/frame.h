@@ -14,4 +14,6 @@ struct frame {
 void frame_table_init(void);
 void frame_map(void * frame_addr, size_t page_index);
 
+void *frame_allocator_get_user_frame(void);
+
 #endif /* vm/frame.h */
