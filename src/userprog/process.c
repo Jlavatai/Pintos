@@ -757,6 +757,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     ASSERT (ofs % PGSIZE == 0);
 
     file_seek (file, ofs);
+
+    size_t page_index = 0;
+
     while (read_bytes > 0 || zero_bytes > 0)
     {
         /* Calculate how to fill this page.
@@ -766,38 +769,63 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
         /* Get a user page */
+        uint8_t *kpage = NULL;
+        bool should_read_into_page = true;
+
         #ifdef VM
-        uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+        /* We only want to read the first page-worth of data from the executable. */ 
+        should_read_into_page = ofs == 0 && page_index == 0;
+
+        if (should_read_into_page) {
+          kpage = frame_allocator_get_user_page(upage, 0, true);
+        }
+        else {
+          struct page *page_info = malloc (sizeof (struct page));
+          page_info->vaddr = upage;
+          page_info->page_status = PAGE_FILESYS;
+
+          struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
+          filesys_info->file = file;
+          filesys_info->offset = page_index * PGSIZE;
+
+          page_info->aux = filesys_info;
+          struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+          hash_insert (supplemental_page_table, &page_info->hash_elem);
+        }
         #else
-        uint8_t *kpage = palloc_get_page(PAL_USER);
-        #endif
+        kpage = palloc_get_page(PAL_USER);
         if (kpage == NULL)
           return false;
-
-        /* Load this page. */
-        if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-            #ifdef VM
-            frame_allocator_free_user_page (kpage);
-            #else
-            palloc_free_page(kpage);
-            #endif
-            return false;
-        }
-        memset (kpage + page_read_bytes, 0, page_zero_bytes);
-        #ifndef VM
-        /* Add the page to the process's address space. */
-        if (!install_page (upage, kpage, writable))
-        {
-            palloc_free_page (kpage);
-            return false;
-        } 
         #endif
+
+        if (should_read_into_page) {
+          /* Load this page. */
+          if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+          {
+              #ifdef VM
+              frame_allocator_free_user_page (kpage);
+              #else
+              palloc_free_page(kpage);
+              #endif
+              return false;
+          }
+          memset (kpage + page_read_bytes, 0, page_zero_bytes);
+          #ifndef VM
+          /* Add the page to the process's address space. */
+          if (!install_page (upage, kpage, writable))
+          {
+              palloc_free_page (kpage);
+              return false;
+          } 
+          #endif
+        }
 
         /* Advance. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
         upage += PGSIZE;
+
+        ++page_index;
     }
     return true;
 }

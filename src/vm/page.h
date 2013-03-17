@@ -11,6 +11,11 @@ enum page_status {
 	PAGE_UNDEFINED
 };
 
+struct page_filesys_info {
+	struct file *file;
+	size_t offset;
+};
+
 struct page {
 	struct hash_elem hash_elem;		/* Used to store the frame in the page table. */
 	void *vaddr;	    			/* The address of the page in user virtual memory. */
