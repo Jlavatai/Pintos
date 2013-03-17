@@ -4,11 +4,11 @@
 #include <hash.h>
 
 enum page_status {
+	PAGE_UNDEFINED = 0,
 	PAGE_FILESYS,
 	PAGE_SWAP,
 	PAGE_MEMORY,
 	PAGE_ZERO,
-	PAGE_UNDEFINED
 };
 
 struct page_filesys_info {
