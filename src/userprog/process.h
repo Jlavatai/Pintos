@@ -36,7 +36,7 @@ struct file_descriptor *process_get_file_descriptor_struct(int fd);
 void start_file_system_access(void);
 void end_file_system_access(void);
 
-bool load_executable_page(struct file *file, void *kpage, size_t page_read_bytes,
-                          size_t page_zero_bytes);
+bool load_executable_page(struct file *file, size_t offset, void *kpage,
+                          size_t page_read_bytes, size_t page_zero_bytes);
 
 #endif /* userprog/process.h */

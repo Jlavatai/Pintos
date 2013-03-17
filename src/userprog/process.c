@@ -784,7 +784,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         /* Get a user page */
         if (should_read_into_page) {
           uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
-          if (!load_executable_page (file, kpage, page_read_bytes, page_zero_bytes))
+          if (!load_executable_page (file, ofs + page_index * PGSIZE,
+                                     kpage, page_read_bytes, page_zero_bytes))
             return false;
         }
         else {
@@ -815,9 +816,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 bool
-load_executable_page(struct file *file, void *kpage, size_t page_read_bytes,
+load_executable_page(struct file *file, size_t offset, void *kpage, size_t page_read_bytes,
                      size_t page_zero_bytes)
 {
+  file_seek (file, offset);
+
   /* Load this page. */
   if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
   {
