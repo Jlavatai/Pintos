@@ -6,9 +6,12 @@
 #include "threads/thread.h"
 #include "vm/page.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
+
+struct lock pagefault_lock;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
@@ -31,6 +34,8 @@ static void page_fault (struct intr_frame *);
 void
 exception_init (void) 
 {
+  lock_init(&pagefault_lock);
+
   /* These exceptions can be raised explicitly by a user program,
      e.g. via the INT, INT3, INTO, and BOUND instructions.  Thus,
      we set DPL==3, meaning that user programs are allowed to
@@ -138,12 +143,9 @@ page_fault (struct intr_frame *f)
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-  /* Turn interrupts back on (they were only off so that we could
+    /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
-
-  /* Count page faults. */
-  page_fault_cnt++;
 
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
@@ -153,14 +155,20 @@ page_fault (struct intr_frame *f)
   // /* To implement virtual memory, delete the rest of the function
   //    body, and replace it with code that brings in the page to
   //    which fault_addr refers. */
+  void *vaddr = pg_round_down(fault_addr);
 
   struct thread *t = thread_current ();
   struct page p;
-  p.vaddr = fault_addr;
+  p.vaddr = vaddr;
 
+  lock_acquire(&pagefault_lock);
   struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
+  lock_release(&pagefault_lock);
 
   if (e == NULL) {
+  /* Count page faults. */
+  page_fault_cnt++;
+
     printf ("Page fault at %p: %s error %s page in %s context.\n",
             fault_addr,
             not_present ? "not present" : "rights violation",
@@ -171,9 +179,9 @@ page_fault (struct intr_frame *f)
     
   struct page *page = hash_entry (e, struct page, hash_elem);
 
-  ASSERT(page != NULL);
+  ASSERT (page != NULL);
 
-  switch(page->page_status)
+  switch (page->page_status)
   {
     case PAGE_FILESYS:
     {
@@ -181,17 +189,19 @@ page_fault (struct intr_frame *f)
 
       struct file *file = filesys_info->file;
       size_t ofs = filesys_info->offset;
-      uint8_t *kpage = frame_allocator_get_user_page(fault_addr, 0, true);
+      uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, true);
       if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
           kill(f);
-      pagedir_set_page(t->pagedir, fault_addr, kpage, true);
-        
     }
+    break;
 
     case PAGE_ZERO:
     {
-     // uint8_t
+      frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
     }
+    break;
   }
+
+
 }
 
