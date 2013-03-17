@@ -19,3 +19,28 @@ supplemental_page_table_less (const struct hash_elem *a,
 
 	return page_a->vaddr < page_b->vaddr;
 }
+
+void
+supplemental_page_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
+{
+  struct page *page =  hash_entry (e,
+                                                    struct page,
+                                                    hash_elem);
+
+  switch(page->page_status){
+	case PAGE_FILESYS:
+		free(page->aux);
+		break;
+	case PAGE_SWAP:
+		break;
+	case PAGE_IN_MEMORY:
+		break;
+	case PAGE_ZERO:
+		break;
+	case PAGE_MEMORY_MAPPED:
+		break;
+  	default:
+  		break;
+  }
+
+}

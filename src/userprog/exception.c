@@ -170,7 +170,7 @@ page_fault (struct intr_frame *f)
   page_fault_cnt++;
 
     printf ("Page fault at %p: %s error %s page in %s context.\n",
-            fault_addr,
+            fault_addr,  
             not_present ? "not present" : "rights violation",
             write ? "writing" : "reading",
             user ? "user" : "kernel");
@@ -201,6 +201,7 @@ page_fault (struct intr_frame *f)
     }
     break;
   }
+  // page->page_status = PAGE_IN_MEMORY;
 
 
 }

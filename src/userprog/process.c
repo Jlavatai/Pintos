@@ -398,6 +398,7 @@ process_exit (void)
     struct thread *cur = thread_current ();
     struct list_elem *e;
     uint32_t *pd;
+    pid_t pid = thread_current()->tid;  
 
     if (cur->proc_info) {
       printf ("%s: exit(%d)\n", cur->name, cur->proc_info->exit_status);
@@ -444,9 +445,10 @@ process_exit (void)
       end_file_system_access ();
     }
 
-#ifdef VM
-    hash_destroy (&cur->supplemental_page_table, NULL);
-#endif
+  #ifdef VM
+    hash_destroy (&cur->supplemental_page_table,
+                   supplemental_page_table_destroy_func);
+  #endif
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */

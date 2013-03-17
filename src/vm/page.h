@@ -7,7 +7,8 @@ enum page_status {
 	PAGE_UNDEFINED = 0,
 	PAGE_FILESYS,
 	PAGE_SWAP,
-	PAGE_MEMORY,
+	PAGE_MEMORY_MAPPED,
+	PAGE_IN_MEMORY,
 	PAGE_ZERO,
 };
 
@@ -28,6 +29,7 @@ unsigned supplemental_page_table_hash (const struct hash_elem *e,
 bool supplemental_page_table_less (const struct hash_elem *a,
 							  	   const struct hash_elem *b,
 							  	   void *aux);
+void supplemental_page_table_destroy_func (struct hash_elem *e, void *aux);
 
 struct page * mmap_page_load(struct page * page);
 
