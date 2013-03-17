@@ -782,18 +782,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
 
         /* Get a user page */
-        uint8_t *kpage = NULL;
-
         if (should_read_into_page) {
-          kpage = frame_allocator_get_user_page(upage, 0, true);
-
-          /* Load this page. */
-          if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-          {
-              frame_allocator_free_user_page (kpage);
-              return false;
-          }
-          memset (kpage + page_read_bytes, 0, page_zero_bytes);
+          uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+          if (!load_executable_page (file, kpage, page_read_bytes, page_zero_bytes))
+            return false;
         }
         else {
           struct page *page_info = malloc (sizeof (struct page));
@@ -822,10 +814,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     return true;
 }
 
-static bool
-load_executable_page()
+bool
+load_executable_page(struct file *file, void *kpage, size_t page_read_bytes,
+                     size_t page_zero_bytes)
 {
+  /* Load this page. */
+  if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+  {
+      return false;
+  }
 
+  memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+  return true;
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
