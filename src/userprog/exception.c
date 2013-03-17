@@ -4,6 +4,8 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "vm/page.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -148,14 +150,48 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  // /* To implement virtual memory, delete the rest of the function
+  //    body, and replace it with code that brings in the page to
+  //    which fault_addr refers. */
+
+  struct thread *t = thread_current ();
+  struct page p;
+  p.vaddr = fault_addr;
+
+  struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
+
+  if (e == NULL) {
+    printf ("Page fault at %p: %s error %s page in %s context.\n",
+            fault_addr,
+            not_present ? "not present" : "rights violation",
+            write ? "writing" : "reading",
+            user ? "user" : "kernel");
+    kill (f);
+  }
+    
+  struct page *page = hash_entry (e, struct page, hash_elem);
+
+  ASSERT(page != NULL);
+
+  switch(page->page_status)
+  {
+    case PAGE_FILESYS:
+    {
+      struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
+
+      struct file *file = filesys_info->file;
+      size_t ofs = filesys_info->offset;
+      uint8_t *kpage = frame_allocator_get_user_page(fault_addr, 0, true);
+      if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
+          kill(f);
+      pagedir_set_page(t->pagedir, fault_addr, kpage, true);
+        
+    }
+
+    case PAGE_ZERO:
+    {
+     // uint8_t
+    }
+  }
 }
 
