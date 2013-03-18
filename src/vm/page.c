@@ -52,6 +52,7 @@ void
 stack_grow (struct thread * t, void * fault_ptr) {
     // Get the user page of fault_addr
     void * new_page_virtual = pg_round_down (fault_ptr);
+    ASSERT(is_user_vaddr(fault_ptr));
     // Allocate a new frame
     void * page_ptr_frame = frame_allocator_get_user_page(new_page_virtual, PAL_ZERO, true);
     if (page_ptr_frame == NULL)

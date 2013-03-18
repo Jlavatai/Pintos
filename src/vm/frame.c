@@ -94,6 +94,7 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
 									   enum palloc_flags flags,
 									   bool writable)
 {
+	ASSERT(is_user_vaddr(user_vaddr));
 	void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
 	if (kernel_vaddr == NULL) {
 		PANIC("No more user frames available.");
@@ -106,6 +107,8 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
       void *page_user_vaddr = user_vaddr + i * PGSIZE;
       void *page_kernel_vaddr = kernel_vaddr + i * PGSIZE;
 
+      ASSERT(is_user_vaddr(page_user_vaddr));
+      
       if (!install_page(page_user_vaddr, page_kernel_vaddr, writable)) {
       	PANIC("Could not install user page %p", page_user_vaddr);
       }

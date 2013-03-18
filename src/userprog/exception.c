@@ -157,58 +157,68 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  // /* To implement virtual memory, delete the rest of the function
-  //    body, and replace it with code that brings in the page to
-  //    which fault_addr refers. */
-  void *vaddr = pg_round_down(fault_addr);
 
-  struct thread *t = thread_current ();
-  struct page p;
-  p.vaddr = vaddr;
+  // These are the cases we want to look at in detail. For everything else,
+  // Goto the pagefault message
+  if (not_present && fault_addr && is_user_vaddr(fault_addr)) {
+    // /* To implement virtual memory, delete the rest of the function
+    //    body, and replace it with code that brings in the page to
+    //    which fault_addr refers. */
+    void *vaddr = pg_round_down(fault_addr);
 
-  lock_acquire(&pagefault_lock);
-  struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
-  lock_release(&pagefault_lock);
-  
-  // Check if stack needs to grow
-  if (!e && is_in_vstack(fault_addr, f->esp)) {
-      stack_grow(thread_current(), fault_addr);
-      return;
-  }
-  // If we don't have a supplementary page table entry
-  if (e == NULL && !stack_growth) {
-  /* Count page faults. */
-    page_fault_cnt++;
+    struct thread *t = thread_current ();
+    struct page p;
+    p.vaddr = vaddr;
 
-    printf ("Page fault at %p: %s error %s page in %s context.\n",
-            fault_addr,  
-            not_present ? "not present" : "rights violation",
-            write ? "writing" : "reading",
-            user ? "user" : "kernel");
-    kill (f);
-  }
-  // Supplementary Page Table pointer    
-  struct page *page = hash_entry (e, struct page, hash_elem);
+    lock_acquire(&pagefault_lock);
+    struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
+    lock_release(&pagefault_lock);
+    
+    // If we don't have a supplementary page table entry
+    if (!e) {
+      // Check if stack needs to grow
+      ASSERT(is_user_vaddr(fault_addr));
+      if (is_in_vstack(fault_addr, f->esp)) {
+        stack_grow(thread_current(), fault_addr);
+        return;
+      }
+      goto page_fault;
+    } else {
+      // Supplementary Page Table pointer    
+      struct page *page = hash_entry (e, struct page, hash_elem);
 
-  switch (page->page_status)
-  {
-    case PAGE_FILESYS:
-    {
-      struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
+      switch (page->page_status)
+      {
+        case PAGE_FILESYS:
+        {
+          struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
 
-      struct file *file = filesys_info->file;
-      size_t ofs = filesys_info->offset;
-      uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, true);
-      if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
-          kill(f);
+          struct file *file = filesys_info->file;
+          size_t ofs = filesys_info->offset;
+          uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, true);
+          if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
+              kill(f);
+        }
+        break;
+
+        case PAGE_ZERO:
+        {
+          frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+        }
+        break;
+      }
     }
-    break;
+  } else {
+    page_fault:
+    /* Count page faults. */
+      page_fault_cnt++;
 
-    case PAGE_ZERO:
-    {
-      frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
-    }
-    break;
+      printf ("Page fault at %p: %s error %s page in %s context.\n",
+              fault_addr,  
+              not_present ? "not present" : "rights violation",
+              write ? "writing" : "reading",
+              user ? "user" : "kernel");
+      kill (f);
   }
   // page->page_status = PAGE_IN_MEMORY;
 
@@ -216,6 +226,5 @@ page_fault (struct intr_frame *f)
 }
 
 bool is_in_vstack(void *ptr, uint32_t esp) {
-  return (ptr >= (esp - 32) && 
-            (PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE);
+  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && ptr >= (esp - 32));
 }
