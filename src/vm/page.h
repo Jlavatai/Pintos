@@ -23,6 +23,7 @@ struct page {
 	void *vaddr;	    			/* The address of the page in user virtual memory. */
 	void *aux;						/* */
 	enum page_status page_status;   /* Used to store the page's current status. */
+	bool writable;					/* Stores if a page is writable or not */
 };
 
 

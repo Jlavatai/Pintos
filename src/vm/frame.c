@@ -6,7 +6,7 @@
 #include "threads/vaddr.h"
 
 
-void frame_map(void * frame_addr, void *vaddr);
+void frame_map(void * frame_addr, void *vaddr, bool writable);
 void frame_unmap(void *frame_addr);
 
 static unsigned frame_hash(const struct hash_elem *e, void *aux);
@@ -24,14 +24,16 @@ frame_table_init(void)
 	lock_init (&frame_table_lock);
 }
 
-void frame_map(void * frame_addr, void *vaddr)
+void frame_map(void * frame_addr, void *vaddr, bool writable)
 {	
 	struct page *new_page = NULL;
-	new_page = malloc (sizeof(struct frame));
+	new_page = malloc (sizeof(struct page));
 	if(new_page == NULL) 
 	{
 		PANIC("Failed to malloc memory for struct page");
 	}
+
+	new_page->writable = writable;
 
 	new_page->vaddr = vaddr;
 
@@ -113,7 +115,7 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
       	PANIC("Could not install user page %p", page_user_vaddr);
       }
 
-      frame_map (page_kernel_vaddr, page_user_vaddr);
+      frame_map (page_kernel_vaddr, page_user_vaddr, writable);
     }
 
 	return kernel_vaddr;

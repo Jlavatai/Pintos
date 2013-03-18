@@ -799,7 +799,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
             struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
             filesys_info->file = file;
             filesys_info->offset = page_index * PGSIZE;
-
             page_info->aux = filesys_info;
           }
 

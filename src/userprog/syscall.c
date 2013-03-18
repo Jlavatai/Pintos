@@ -211,6 +211,14 @@ read_handler (struct intr_frame *f)
   unsigned size = (unsigned)get_stack_argument (f, 2);
   validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
+  
+  // Lookup buffer in the supplemental page table and ensure it isn't writable
+  struct page p;
+  p.vaddr = pg_round_down(buffer);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  if (found && !p.writable)
+    exit_syscall(-1);
+
 
   if (fd == 0) {
     uint8_t value = input_getc();
@@ -341,14 +349,15 @@ validate_user_pointer (const void *pointer)
       || !is_user_vaddr (pointer))
     exit_syscall (-1);
   // If the address is valid for our supplemental page table
-  if (pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) {
-    struct page p;
-    p.vaddr = pg_round_down(pointer);
-    if (hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem) == NULL) {
-      exit_syscall (-1);
-      NOT_REACHED ();
-    }
-  }
+  void * page = pagedir_get_page(thread_current ()->pagedir, pointer);
+  struct page p;
+  p.vaddr = pg_round_down(pointer);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+
+  if ((page == NULL && found == NULL) || !p.writable) {
+    exit_syscall (-1);
+    NOT_REACHED ();
+  } 
 #endif
     
   
