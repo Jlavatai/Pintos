@@ -195,7 +195,7 @@ page_fault (struct intr_frame *f)
 
           struct file *file = filesys_info->file;
           size_t ofs = filesys_info->offset;
-          uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, true);
+          uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, false);
           if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
               kill(f);
         }
