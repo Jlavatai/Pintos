@@ -2,6 +2,7 @@
 #define VM_PAGE_H
 
 #include <hash.h>
+#include "threads/thread.h"
 
 enum page_status {
 	PAGE_UNDEFINED = 0,
@@ -23,6 +24,9 @@ struct page {
 	void *aux;						/* */
 	enum page_status page_status;   /* Used to store the page's current status. */
 };
+
+
+void stack_grow (struct thread * t, void * fault_ptr);
 
 unsigned supplemental_page_table_hash (const struct hash_elem *e,
 									   void *aux);

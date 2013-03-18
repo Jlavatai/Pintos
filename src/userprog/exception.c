@@ -16,6 +16,8 @@ struct lock pagefault_lock;
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
+// Utility function for testing if we need to grow stack
+bool is_in_vstack(void *ptr, uint32_t esp);
 /* Registers handlers for interrupts that can be caused by user
    programs.
 
@@ -132,8 +134,11 @@ page_fault (struct intr_frame *f)
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
+  bool stack_growth;  /* True: stack has grown, false: stack has not grown */
   void *fault_addr;  /* Fault address. */
 
+
+  stack_growth = false; // flag init
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
@@ -164,10 +169,16 @@ page_fault (struct intr_frame *f)
   lock_acquire(&pagefault_lock);
   struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
   lock_release(&pagefault_lock);
-
-  if (e == NULL) {
+  
+  // Check if stack needs to grow
+  if (!e && is_in_vstack(fault_addr, f->esp)) {
+      stack_grow(thread_current(), fault_addr);
+      return;
+  }
+  // If we don't have a supplementary page table entry
+  if (e == NULL && !stack_growth) {
   /* Count page faults. */
-  page_fault_cnt++;
+    page_fault_cnt++;
 
     printf ("Page fault at %p: %s error %s page in %s context.\n",
             fault_addr,  
@@ -176,10 +187,8 @@ page_fault (struct intr_frame *f)
             user ? "user" : "kernel");
     kill (f);
   }
-    
+  // Supplementary Page Table pointer    
   struct page *page = hash_entry (e, struct page, hash_elem);
-
-  ASSERT (page != NULL);
 
   switch (page->page_status)
   {
@@ -206,3 +215,7 @@ page_fault (struct intr_frame *f)
 
 }
 
+bool is_in_vstack(void *ptr, uint32_t esp) {
+  return (ptr >= (esp - 32) && 
+            (PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE);
+}
