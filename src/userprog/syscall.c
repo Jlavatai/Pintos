@@ -225,12 +225,11 @@ read_handler (struct intr_frame *f)
   struct page p;
   p.vaddr = pg_round_down(buffer);
   struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
-  
-  if(found != NULL)
-  {
+  if (!found) {
+    exit_syscall(-1);
+  } else {
     struct page *page = hash_entry(found, struct page, hash_elem);
     if (!page->writable) {
-    printf("---It was not writable \n");
       exit_syscall(-1);
     }
   }
