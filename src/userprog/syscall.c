@@ -69,7 +69,6 @@ syscall_handler (struct intr_frame *f)
   /* A bad esp value could be used, so validate this first. */
   int32_t *esp = (int32_t*)f->esp;
   validate_user_pointer (esp);
-
   /* The syscall number is stored at esp. */
   int32_t syscall_number = *esp;
 
@@ -213,15 +212,22 @@ read_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   void *buffer = (void *)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-  validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
-  
-  // Lookup buffer in the supplemental page table and ensure it isn't writable
+  validate_user_pointer (buffer+size);
+
+ // Lookup buffer in the supplemental page table and ensure it is writable
   struct page p;
   p.vaddr = pg_round_down(buffer);
   struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
-  if (found && !p.writable)
-    exit_syscall(-1);
+  
+  if(found != NULL)
+  {
+    struct page *page = hash_entry(found, struct page, hash_elem);
+    if (!page->writable) {
+    printf("---It was not writable \n");
+      exit_syscall(-1);
+    }
+  }
 
 
   if (fd == 0) {
@@ -366,7 +372,8 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) {
+      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) 
+  {
     exit_syscall (-1);
     NOT_REACHED ();
   }
@@ -375,16 +382,20 @@ validate_user_pointer (const void *pointer)
   if (pointer == NULL
       || !is_user_vaddr (pointer))
     exit_syscall (-1);
-  // If the address is valid for our supplemental page table
-  void * page = pagedir_get_page(thread_current ()->pagedir, pointer);
-  struct page p;
-  p.vaddr = pg_round_down(pointer);
-  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  // If the address is valid for the page table
 
-  if ((page == NULL && found == NULL) || !p.writable) {
-    exit_syscall (-1);
-    NOT_REACHED ();
-  } 
+ // //  void * page = pagedir_get_page(thread_current ()->pagedir, pointer);
+ //  struct page p;
+ //  p.vaddr = pg_round_down(pointer);
+
+ //  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+ // // struct 
+
+ //  if (found == NULL) /*&& found == NULL) || !p.writable*/ {
+ //    printf("failed for 0x%x\n", p.vaddr);
+ //    exit_syscall (-1);
+ //    NOT_REACHED ();
+ //  } 
 #endif
     
   

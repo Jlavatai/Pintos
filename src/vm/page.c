@@ -82,6 +82,7 @@ insert_filesys_page_info (struct hash *supplemental_page_table,
 	struct page *page_info = malloc (sizeof (struct page));
    	page_info->page_status = PAGE_FILESYS;	
    	page_info->aux = filesys_info;
+    page_info->writable = false;
 
    	insert_page_info (supplemental_page_table, vaddr, page_info);
 }
@@ -93,12 +94,14 @@ insert_zero_page_info (struct hash *supplemental_page_table,
 	struct page *page_info = malloc (sizeof (struct page));
 	page_info->page_status = PAGE_ZERO;
 	page_info->aux = NULL;
+    page_info->writable = true;
 
 	insert_page_info (supplemental_page_table, vaddr, page_info);
 }
 
 void
 stack_grow (struct thread * t, void * fault_ptr) {
+    printf("Growing stack 0x%x\n", fault_ptr);
     // Get the user page of fault_addr
     void * new_page_virtual = pg_round_down (fault_ptr);
     ASSERT(is_user_vaddr(fault_ptr));
@@ -106,6 +109,7 @@ stack_grow (struct thread * t, void * fault_ptr) {
     void * page_ptr_frame = frame_allocator_get_user_page(new_page_virtual, PAL_ZERO, true);
     if (page_ptr_frame == NULL)
     {
-        PANIC("Stack Grow Fault");
+        PANIC("Stack Growth Fault");
     }
+    insert_zero_page_info(&t->supplemental_page_table, new_page_virtual);
 }

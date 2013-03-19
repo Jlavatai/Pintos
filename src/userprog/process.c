@@ -121,9 +121,9 @@ process_execute (const char *file_name)
         arg->token = token;
         list_push_front(&setup_data->argv, &arg->token_list_elem);
         setup_data->argc++;
-        // printf("argc: %d\n", setup_data->argc);
     }
-    // printf("After argc: %d\n", setup_data->argc);
+    
+
 
     struct argument *fst_arg = list_entry(list_back(&setup_data->argv), struct argument, token_list_elem);
 
@@ -217,6 +217,7 @@ start_process (void *setup_data_)
   
   struct thread *cur = thread_current();
 
+
   // Signal the parent process about the execution's validity
 
   lock_acquire(&cur->proc_info->anchor);
@@ -248,11 +249,11 @@ start_process (void *setup_data_)
       struct argument *arg = list_entry (e, struct argument, token_list_elem);
       char *curr_arg = arg->token;
       if_.esp -= (strlen(curr_arg) + 1);
-      if(esp_not_in_boundaries(if_.esp)) {
-        palloc_free_page(pg_round_down(fst_arg_saved));
-        palloc_free_page(pg_round_down(setup_data_));
-        thread_exit();
-      }
+      // if(esp_not_in_boundaries(if_.esp)) {
+      //   palloc_free_page(pg_round_down(fst_arg_saved));
+      //   palloc_free_page(pg_round_down(setup_data_));
+      //   thread_exit();
+      // }
       strlcpy (if_.esp, curr_arg, strlen(curr_arg) + 1);
       arg->token = if_.esp;
   }
@@ -261,22 +262,22 @@ start_process (void *setup_data_)
 
   uint8_t align = 0;
   if_.esp -= (sizeof(uint8_t));
-  if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(pg_round_down(fst_arg_saved));
-    palloc_free_page(pg_round_down(setup_data_));
-    thread_exit();
-  }
+  // if(esp_not_in_boundaries(if_.esp)) {
+  //   palloc_free_page(pg_round_down(fst_arg_saved));
+  //   palloc_free_page(pg_round_down(setup_data_));
+  //   thread_exit();
+  // }
   *(uint8_t *)if_.esp = align;
 
   /*Pushing a null pointer to respect the convention argv[argc] = NULL*/
 
   char *last_arg_ptr  = NULL;
   if_.esp-= (sizeof(char *));
-  if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(pg_round_down(fst_arg_saved));
-    palloc_free_page(pg_round_down(setup_data_));
-    thread_exit();
-  }
+  // if(esp_not_in_boundaries(if_.esp)) {
+  //   palloc_free_page(pg_round_down(fst_arg_saved));
+  //   palloc_free_page(pg_round_down(setup_data_));
+  //   thread_exit();
+  // }
   *(int32_t *)if_.esp = (int32_t)last_arg_ptr;
 
    /*Iterating over the same list pushing the ptrs to the arguments strings
@@ -295,33 +296,33 @@ start_process (void *setup_data_)
 
   char **fst_arg_ptr = if_.esp;
   if_.esp -= (sizeof(char **));
-  if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(pg_round_down(fst_arg_saved));
-    palloc_free_page(pg_round_down(setup_data_));
-    thread_exit();
-  }
+  // if(esp_not_in_boundaries(if_.esp)) {
+  //   palloc_free_page(pg_round_down(fst_arg_saved));
+  //   palloc_free_page(pg_round_down(setup_data_));
+  //   thread_exit();
+  //}
 
   *(int32_t *)if_.esp = (int32_t)fst_arg_ptr;
    
   /*Pushing argc*/
   // printf("Pushing argc: %d\n", setup_data->argc);
   if_.esp -=(sizeof(setup_data->argc));
-  if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(pg_round_down(fst_arg_saved));
-    palloc_free_page(pg_round_down(setup_data_));
-    thread_exit();
-  }
+  // if(esp_not_in_boundaries(if_.esp)) {
+  //   palloc_free_page(pg_round_down(fst_arg_saved));
+  //   palloc_free_page(pg_round_down(setup_data_));
+  //   thread_exit();
+  // }
   *(int32_t *)if_.esp = setup_data->argc;
      
 
    /*Pushing the fake return address*/
   void *fake_return  = 0;
   if_.esp -= (sizeof(void *));
-  if(esp_not_in_boundaries(if_.esp)) {
-    palloc_free_page(pg_round_down(fst_arg_saved));
-    palloc_free_page(pg_round_down(setup_data_));
-    thread_exit();
-  }
+  // if(esp_not_in_boundaries(if_.esp)) {
+  //   palloc_free_page(pg_round_down(fst_arg_saved));
+  //   palloc_free_page(pg_round_down(setup_data_));
+  //   thread_exit();
+  // }
   *(int32_t *)if_.esp = (int32_t)fake_return;
 
 
@@ -345,6 +346,7 @@ esp_not_in_boundaries(void *esp)
 {
   return ((uint32_t *)PHYS_BASE - (uint32_t *)esp) > MAX_MEMORY;
 }
+
 
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
@@ -851,6 +853,8 @@ setup_stack (void **esp)
     #ifdef VM
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
     kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
+    struct thread* cur = thread_current();
+    insert_zero_page_info (&cur->supplemental_page_table, user_vaddr);
     #else
     kpage = palloc_get_page(PAL_ZERO);
     #endif
