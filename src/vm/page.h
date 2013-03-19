@@ -3,6 +3,7 @@
 
 #include <hash.h>
 #include "threads/thread.h"
+#include "lib/user/syscall.h"
 
 enum page_status {
 	PAGE_UNDEFINED = 0,
@@ -18,6 +19,13 @@ struct page_filesys_info {
 	size_t offset;
 };
 
+struct page_mmap_info {
+	mapid_t mapping;				/* The mmap() mapid. */
+	struct file *file;				/* The file pointer. */
+	size_t offset;					/* The offset into the file. */
+	size_t length;					/* The number of bytes of the file stored in this page. */
+};
+
 struct page {
 	struct hash_elem hash_elem;		/* Used to store the frame in the page table. */
 	void *vaddr;	    			/* The address of the page in user virtual memory. */
@@ -31,6 +39,9 @@ void insert_filesys_page_info (struct hash *supplemental_page_table,
 							   struct page_filesys_info *filesys_info);
 void insert_zero_page_info (struct hash *supplemental_page_table,
 					   		void *vaddr);
+void insert_mmap_page_info (struct hash *supplemental_page_table,
+					   		void *vaddr,
+					   		struct page_mmap_info *mmap_info);
 
 void stack_grow (struct thread * t, void * fault_ptr);
 

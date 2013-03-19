@@ -3,9 +3,7 @@
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
-#include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include "threads/loader.h"
 #include "threads/synch.h"
@@ -41,6 +39,7 @@ static struct pool kernel_pool, user_pool;
 static void init_pool (struct pool *, void *base, size_t page_cnt,
                        const char *name);
 static bool page_from_pool (const struct pool *, void *page);
+static struct pool *get_pool_for_flags (enum palloc_flags flags);
 
 /* Initializes the page allocator.  At most USER_PAGE_LIMIT
    pages are put into the user pool. */
@@ -84,7 +83,11 @@ palloc_init (size_t user_page_limit)
 //      return vaddr;
 // }
 
-
+static struct pool*
+get_pool_for_flags (enum palloc_flags flags)
+{
+  return flags & PAL_USER ? &user_pool : &kernel_pool;
+}
 
 /* Obtains and returns a group of PAGE_CNT contiguous free pages.
    If PAL_USER is set, the pages are obtained from the user pool,
@@ -95,7 +98,7 @@ palloc_init (size_t user_page_limit)
 void *
 palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
 {
-  struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool;
+  struct pool *pool = get_pool_for_flags (flags);
   void *pages;
   size_t page_idx;
 
@@ -103,29 +106,45 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
     return NULL;
 
   lock_acquire (&pool->lock);
-  page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
+  page_idx = bitmap_scan (pool->used_map, 0, page_cnt, false);
   lock_release (&pool->lock);
 
   if (page_idx != BITMAP_ERROR)
-  {
     pages = pool->base + PGSIZE * page_idx;  
+  else
+    return NULL;
+
+  if (palloc_get_multiple_from_address (pages, flags, page_cnt))
+    return pages;
+
+  return NULL;
+}
+
+bool
+palloc_get_multiple_from_address(void *vaddr, enum palloc_flags flags, size_t page_cnt)
+{
+  struct pool *pool = get_pool_for_flags (flags);
+  size_t page_idx = (uint8_t*)((int)vaddr / PGSIZE) - pool->base;
+
+  lock_acquire (&pool->lock);
+
+  /* Ensure that all the pages are free. */
+  if (!bitmap_none (pool->used_map, page_idx, page_cnt)) {
+    if (flags & PAL_ASSERT)
+        PANIC ("palloc_get: out of pages");
+
+    lock_release (&pool->lock);
+    return false;
   }
 
-  else
-    pages = NULL;
+  /* Set the bits to 1 in the used pages bitmap */
+  bitmap_set_multiple (pool->used_map, page_idx, page_cnt, true);
+  lock_release (&pool->lock);
 
-  if (pages != NULL) 
-    {
-      if (flags & PAL_ZERO)
-        memset (pages, 0, PGSIZE * page_cnt);
-    }
-  else 
-    {
-      if (flags & PAL_ASSERT)
-        PANIC ("palloc_get: out of pages");
-    }
+  if (flags & PAL_ZERO)
+    memset (vaddr, 0, PGSIZE * page_cnt);
 
-  return pages;
+  return true;
 }
 
 /* Obtains a single free page and returns its kernel virtual

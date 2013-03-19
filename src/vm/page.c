@@ -87,6 +87,18 @@ insert_filesys_page_info (struct hash *supplemental_page_table,
 }
 
 void
+insert_mmap_page_info (struct hash *supplemental_page_table,
+					   void *vaddr,
+					   struct page_mmap_info *mmap_info)
+{
+	struct page *page_info = malloc (sizeof (struct page));
+	page_info->page_status = PAGE_MEMORY_MAPPED;
+	page_info->aux = mmap_info;
+
+	insert_page_info (supplemental_page_table, vaddr, page_info);
+}
+
+void
 insert_zero_page_info (struct hash *supplemental_page_table,
 					   void *vaddr)
 {

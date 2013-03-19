@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "threads/malloc.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -11,6 +12,7 @@
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "lib/user/syscall.h"
+#include "threads/palloc.h"
 #ifdef VM
 #include "vm/page.h"
 #endif
@@ -174,6 +176,9 @@ open_handler (struct intr_frame *f)
 
     // Create the file_descriptor entry to put into the hash table.
     struct file_descriptor *descriptor = malloc (sizeof (struct file_descriptor));
+    if (!descriptor)
+      exit_syscall (-1);
+
     descriptor->fd = (t->proc_info->next_fd)++;
     descriptor->file = file;
 
@@ -338,17 +343,58 @@ static void
 mmap_handler (struct intr_frame *f)
 {
   int fd = (int)get_stack_argument (f, 0);
-  void *addr = get_stack_argument (f, 1);
+  void *addr = (void *)get_stack_argument (f, 1);
   validate_user_pointer (addr);
+
+  /* Ensure that addr is page-aligned. */
+  if ((size_t)addr % PGSIZE != 0) {
+    f->eax = -1;
+    return;
+  }
 
   /* Locate the file open with fd 'fd' */
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
-  if (descriptor == NULL)
-    return -1;
+  if (descriptor == NULL) {
+    f->eax = -1;
+    return;
+  }
 
   struct file *file = descriptor->file;
   off_t length = file_length (file);
-  size_t num_pages = ceil((float)length / (float)PGSIZE);
+  size_t num_pages = length / PGSIZE;
+  if (length % PGSIZE)
+    num_pages++;
+
+  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
+  /* Get a contiguous block of user virtual memory */
+
+  void *kpage = (void *)vtop (addr);
+  if (!palloc_get_multiple_from_address (kpage, PAL_USER, num_pages)) {
+    palloc_free_multiple (kpage, num_pages);
+    PANIC("Could not allocate contiguous user virtual pages for mmap()");
+  }
+
+  /* Add the mapping entries to the supplemental page table */
+  size_t i;
+  size_t bytes_into_file = 0;
+  void *uaddr = addr;
+
+  for (i = 0; i < num_pages; ++i) {
+    struct page_mmap_info *mmap_info = malloc (sizeof (struct page_mmap_info));
+    if (!mmap_info)
+      exit_syscall (-1);
+
+    mmap_info->file = file;
+    mmap_info->offset = bytes_into_file;
+    mmap_info->length = length - bytes_into_file < PGSIZE ? length - bytes_into_file :
+                                                                 PGSIZE;
+
+    insert_mmap_page_info (supplemental_page_table, uaddr, mmap_info);
+
+    bytes_into_file += PGSIZE;
+    uaddr += PGSIZE;
+  }
 }
 
 static void
