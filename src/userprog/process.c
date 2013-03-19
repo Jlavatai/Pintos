@@ -49,6 +49,12 @@ static bool esp_not_in_boundaries(void *esp);
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
 
+unsigned mmap_hash (const struct hash_elem *e, void *aux UNUSED);
+bool mmap_less (const struct hash_elem *a,
+                const struct hash_elem *b,
+                void *aux UNUSED);
+void mmap_table_destroy_func (struct hash_elem *e, void *aux);
+
 void
 process_init (void)
 {
@@ -449,7 +455,9 @@ process_exit (void)
 
   #ifdef VM
     hash_destroy (&cur->supplemental_page_table,
-                   supplemental_page_table_destroy_func);
+                  supplemental_page_table_destroy_func);
+    hash_destroy (&cur->mmap_table,
+                  mmap_table_destroy_func);
   #endif
 
     /* Destroy the current process's page directory and switch back
@@ -585,6 +593,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
                supplemental_page_table_hash,
                supplemental_page_table_less,
                NULL);
+
+    hash_init (&t->mmap_table, mmap_hash, mmap_less, NULL);
+    t->next_mmapid = MIN_MMAPID;
 #endif
 
     process_activate ();
@@ -966,4 +977,35 @@ void
 end_file_system_access(void)
 {
   lock_release(&file_system_lock);
+}
+
+unsigned
+mmap_hash (const struct hash_elem *e, void *aux UNUSED)
+{
+  const struct mmap_mapping *mapping = hash_entry (e, struct mmap_mapping, hash_elem);
+  return hash_bytes (&mapping->mapid, sizeof (mapping->mapid));
+}
+
+bool
+mmap_less (const struct hash_elem *a,
+           const struct hash_elem *b,
+           void *aux UNUSED)
+{
+  const struct mmap_mapping *mapping_a = hash_entry (a, struct mmap_mapping, hash_elem);
+  const struct mmap_mapping *mapping_b = hash_entry (b, struct mmap_mapping, hash_elem);
+
+  return mapping_a->mapid < mapping_b->mapid;
+}
+
+void
+mmap_table_destroy_func (struct hash_elem *e, void *aux)
+{
+  struct mmap_mapping *mapping =  hash_entry (e,
+                                              struct mmap_mapping,
+                                              hash_elem);
+
+  ASSERT (mapping->file != NULL);
+
+  // Close the file descriptor for the open file.
+  close_syscall (mapping->file, false);  
 }

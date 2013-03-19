@@ -5,9 +5,11 @@
 #include "filesys/file.h"
 
 typedef int pid_t;
+typedef int mapid_t;
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
 #define EXCEPTION_EXIT_STATUS -1
+#define MIN_MMAPID 2
 
 struct proc_information { 
     struct list_elem elem;                  /* To provide linked list functionality */
@@ -20,6 +22,12 @@ struct proc_information {
     bool child_started_correctly;            /* A boolean to determine if the child thread started correctly (i.e. loaded executable etc) */
     struct hash file_descriptor_table;  	/* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        	/* Stores the next file descriptor for use. */
+};
+
+struct mmap_mapping {
+  struct hash_elem hash_elem;
+  mapid_t mapid;
+  struct file *file;
 };
 
 
