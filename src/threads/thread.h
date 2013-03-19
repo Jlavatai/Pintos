@@ -119,6 +119,7 @@ struct thread
 
 #ifdef VM
     struct hash supplemental_page_table;
+    struct hash mmap_table;
 #endif
 
     /* Owned by thread.c. */

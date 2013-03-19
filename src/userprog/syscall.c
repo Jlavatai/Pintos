@@ -59,6 +59,7 @@ static const SYSCALL_HANDLER syscall_handlers[] = {
   &munmap_handler
 };
 
+
 void
 syscall_init (void) 
 {
@@ -346,6 +347,8 @@ mmap_handler (struct intr_frame *f)
   void *addr = (void *)get_stack_argument (f, 1);
   validate_user_pointer (addr);
 
+  struct thread *cur = thread_current ();
+
   /* Trying to map stdin or stdout is disallowed. */
   if (addr == 0 || fd == 0 || fd == 1) {
     f->eax = -1;
@@ -393,7 +396,6 @@ mmap_handler (struct intr_frame *f)
     if (!mmap_info)
       exit_syscall (-1);
 
-    mmap_info->file = file;
     mmap_info->offset = bytes_into_file;
     mmap_info->length = length - bytes_into_file < PGSIZE ? length - bytes_into_file :
                                                                  PGSIZE;
