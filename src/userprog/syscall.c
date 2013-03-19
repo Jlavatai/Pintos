@@ -379,6 +379,11 @@ mmap_handler (struct intr_frame *f)
   struct file *file = file_reopen (descriptor->file);
 
   off_t length = file_length (file);
+  if (length == 0) {
+    f->eax = -1;
+    return;
+  }
+
   size_t num_pages = length / PGSIZE;
   if (length % PGSIZE)
     num_pages++;
@@ -386,9 +391,8 @@ mmap_handler (struct intr_frame *f)
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
   /* Get a contiguous block of user virtual memory */
-  void *kpage = (void *)vtop (addr);
-  if (!palloc_get_multiple_from_address (kpage, PAL_USER, num_pages)) {
-    palloc_free_multiple (kpage, num_pages);
+  void *kpage = palloc_get_multiple (PAL_USER, num_pages);
+  if (kpage == NULL) {
     PANIC("Could not allocate contiguous user virtual pages for mmap()");
   }
 
@@ -418,6 +422,7 @@ mmap_handler (struct intr_frame *f)
 
   mapping->mapid = cur->next_mmapid++;
   mapping->file = file;
+  mapping->kernel_vaddr = kpage;
 
   hash_insert (&cur->mmap_table, &mapping->hash_elem);
 }
