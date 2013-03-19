@@ -405,6 +405,15 @@ mmap_handler (struct intr_frame *f)
     bytes_into_file += PGSIZE;
     uaddr += PGSIZE;
   }
+
+  struct mmap_mapping *mapping = malloc (sizeof (struct mmap_mapping));
+  if (!mapping)
+    exit_syscall (-1);
+
+  mapping->mapid = cur->next_mmapid++;
+  mapping->file = file;
+
+  hash_insert (&cur->mmap_table, &mapping->hash_elem);
 }
 
 static void

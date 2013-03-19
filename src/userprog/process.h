@@ -9,6 +9,7 @@ typedef int mapid_t;
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
 #define EXCEPTION_EXIT_STATUS -1
+#define MIN_MMAPID 2
 
 struct proc_information { 
     struct list_elem elem;                  /* To provide linked list functionality */

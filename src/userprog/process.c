@@ -593,6 +593,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                NULL);
 
     hash_init (&t->mmap_table, mmap_hash, mmap_less, NULL);
+    t->next_mmapid = MIN_MMAPID;
 #endif
 
     process_activate ();
