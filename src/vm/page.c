@@ -4,6 +4,11 @@
 #include "threads/vaddr.h"
 
 
+static void insert_page_info (struct hash *supplemental_page_table,
+				  			  void *vaddr, struct page *page);
+static struct page *get_page_info (struct hash *supplemental_page_table,
+								   void *vaddr);
+
 unsigned
 supplemental_page_table_hash (const struct hash_elem *e, void *aux UNUSED)
 {
@@ -46,6 +51,50 @@ supplemental_page_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
         break;
   }
 
+}
+
+static void
+insert_page_info (struct hash *supplemental_page_table,
+				  void *vaddr, struct page *page)
+{
+	page->vaddr = vaddr;
+	hash_insert (supplemental_page_table, &page->hash_elem);
+}
+
+static struct page *
+get_page_info (struct hash *supplemental_page_table, void *vaddr)
+{
+	struct page p;
+	p.vaddr = vaddr;
+
+	struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
+	if (e == NULL)
+		return NULL;
+
+	return hash_entry (e, struct page, hash_elem);
+}
+
+void
+insert_filesys_page_info (struct hash *supplemental_page_table,
+						  void *vaddr,
+						  struct page_filesys_info *filesys_info)
+{
+	struct page *page_info = malloc (sizeof (struct page));
+   	page_info->page_status = PAGE_FILESYS;	
+   	page_info->aux = filesys_info;
+
+   	insert_page_info (supplemental_page_table, vaddr, page_info);
+}
+
+void
+insert_zero_page_info (struct hash *supplemental_page_table,
+					   void *vaddr)
+{
+	struct page *page_info = malloc (sizeof (struct page));
+	page_info->page_status = PAGE_ZERO;
+	page_info->aux = NULL;
+
+	insert_page_info (supplemental_page_table, vaddr, page_info);
 }
 
 void

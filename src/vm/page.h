@@ -26,6 +26,11 @@ struct page {
 	bool writable;					/* Stores if a page is writable or not */
 };
 
+void insert_filesys_page_info (struct hash *supplemental_page_table,
+							   void *vaddr,
+							   struct page_filesys_info *filesys_info);
+void insert_zero_page_info (struct hash *supplemental_page_table,
+					   		void *vaddr);
 
 void stack_grow (struct thread * t, void * fault_ptr);
 

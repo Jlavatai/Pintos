@@ -791,19 +791,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
             return false;
         }
         else {
-          struct page *page_info = malloc (sizeof (struct page));
-          page_info->vaddr = upage;
-          page_info->page_status = status;
-
-          if (status == PAGE_FILESYS) {
-            struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
-            filesys_info->file = file;
-            filesys_info->offset = page_index * PGSIZE;
-            page_info->aux = filesys_info;
-          }
-
           struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
-          hash_insert (supplemental_page_table, &page_info->hash_elem);
+
+          switch (status) {
+            case PAGE_FILESYS:
+            {
+              struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
+              filesys_info->file = file;
+              filesys_info->offset = page_index * PGSIZE;
+
+              insert_filesys_page_info (supplemental_page_table, upage, filesys_info);
+            }
+            break;
+
+            case PAGE_ZERO:
+              insert_zero_page_info (supplemental_page_table, upage);
+            break;
+
+            default:
+            break;
+          }
         }
 
         /* Advance. */

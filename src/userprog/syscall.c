@@ -341,7 +341,14 @@ mmap_handler (struct intr_frame *f)
   void *addr = get_stack_argument (f, 1);
   validate_user_pointer (addr);
 
+  /* Locate the file open with fd 'fd' */
+  struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
+  if (descriptor == NULL)
+    return -1;
 
+  struct file *file = descriptor->file;
+  off_t length = file_length (file);
+  size_t num_pages = ceil((float)length / (float)PGSIZE);
 }
 
 static void
