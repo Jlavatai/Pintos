@@ -359,7 +359,10 @@ mmap_handler (struct intr_frame *f)
     return;
   }
 
-  struct file *file = descriptor->file;
+  /* As the memory map stays around even if the original file is
+     closed or removed, we need to use our own file handle to the file. */
+  struct file *file = file_reopen (descriptor->file);
+
   off_t length = file_length (file);
   size_t num_pages = length / PGSIZE;
   if (length % PGSIZE)
