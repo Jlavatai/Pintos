@@ -124,7 +124,7 @@ bool
 palloc_get_multiple_from_address(void *vaddr, enum palloc_flags flags, size_t page_cnt)
 {
   struct pool *pool = get_pool_for_flags (flags);
-  size_t page_idx = (uint8_t*)((int)vaddr / PGSIZE) - pool->base;
+  size_t page_idx = ((int)vaddr - (int)pool->base) / PGSIZE;
 
   lock_acquire (&pool->lock);
 
