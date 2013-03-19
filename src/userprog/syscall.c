@@ -352,6 +352,12 @@ mmap_handler (struct intr_frame *f)
     return;
   }
 
+  /* Trying to map stdin or stdout is disallowed. */
+  if (fd == 0 || fd == 1) {
+    f->eax = -1;
+    return;
+  }
+
   /* Locate the file open with fd 'fd' */
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor == NULL) {
@@ -371,7 +377,6 @@ mmap_handler (struct intr_frame *f)
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
   /* Get a contiguous block of user virtual memory */
-
   void *kpage = (void *)vtop (addr);
   if (!palloc_get_multiple_from_address (kpage, PAL_USER, num_pages)) {
     palloc_free_multiple (kpage, num_pages);
