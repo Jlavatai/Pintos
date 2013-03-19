@@ -346,14 +346,14 @@ mmap_handler (struct intr_frame *f)
   void *addr = (void *)get_stack_argument (f, 1);
   validate_user_pointer (addr);
 
-  /* Ensure that addr is page-aligned. */
-  if ((size_t)addr % PGSIZE != 0) {
+  /* Trying to map stdin or stdout is disallowed. */
+  if (addr == 0 || fd == 0 || fd == 1) {
     f->eax = -1;
     return;
   }
 
-  /* Trying to map stdin or stdout is disallowed. */
-  if (fd == 0 || fd == 1) {
+  /* Ensure that addr is page-aligned. */
+  if ((size_t)addr % PGSIZE != 0) {
     f->eax = -1;
     return;
   }
