@@ -10,6 +10,7 @@
 #include "filesys/file.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
+#include "lib/user/syscall.h"
 #ifdef VM
 #include "vm/page.h"
 #endif
@@ -31,7 +32,8 @@ static void write_handler     (struct intr_frame *f);
 static void seek_handler      (struct intr_frame *f);
 static void tell_handler      (struct intr_frame *f);
 static void close_handler     (struct intr_frame *f);
-
+static void mmap_handler      (struct intr_frame *f);
+static void munmap_handler    (struct intr_frame *f);
 
 
 uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
@@ -50,7 +52,9 @@ static const SYSCALL_HANDLER syscall_handlers[] = {
   &write_handler,
   &seek_handler,
   &tell_handler,
-  &close_handler
+  &close_handler,
+  &mmap_handler,
+  &munmap_handler
 };
 
 void
@@ -328,6 +332,22 @@ close_handler (struct intr_frame *f)
 
   struct file_descriptor *open_file_descriptor = process_get_file_descriptor_struct (fd);
   close_syscall (open_file_descriptor, true);
+}
+
+static void
+mmap_handler (struct intr_frame *f)
+{
+  int fd = (int)get_stack_argument (f, 0);
+  void *addr = get_stack_argument (f, 1);
+  validate_user_pointer (addr);
+
+
+}
+
+static void
+munmap_handler (struct intr_frame *f)
+{
+  mapid_t mapping = (mapid_t)get_stack_argument (f, 0);
 }
 
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
