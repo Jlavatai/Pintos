@@ -99,6 +99,7 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
 	ASSERT(is_user_vaddr(user_vaddr));
 	void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
 	if (kernel_vaddr == NULL) {
+		// Try and evict a page
 		PANIC("No more user frames available.");
 	}
 
