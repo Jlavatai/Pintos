@@ -33,16 +33,19 @@ struct page {
 	bool writable;					/* Stores if a page is writable or not */
 };
 
-void insert_filesys_page_info (struct hash *supplemental_page_table,
-							   void *vaddr,
-							   struct page_filesys_info *filesys_info);
-void insert_zero_page_info (struct hash *supplemental_page_table,
-					   		void *vaddr);
-void insert_in_memory_page_info (struct hash *supplemental_page_table,
-					   			 void *vaddr, bool writable);
-void insert_mmap_page_info (struct hash *supplemental_page_table,
-					   		void *vaddr,
-					   		struct page_mmap_info *mmap_info);
+void supplemental_insert_filesys_page_info (struct hash *supplemental_page_table,
+							   				void *vaddr,
+							   				struct page_filesys_info *filesys_info);
+void supplemental_insert_zero_page_info (struct hash *supplemental_page_table,
+					   					 void *vaddr);
+void supplemental_insert_in_memory_page_info (struct hash *supplemental_page_table,
+					   			 			  void *vaddr,
+					   			 			  bool writable);
+void supplemental_insert_mmap_page_info (struct hash *supplemental_page_table,
+					   					 void *vaddr,
+					   					 struct page_mmap_info *mmap_info);
+
+void supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr);
 
 void stack_grow (struct thread * t, void * fault_ptr);
 
@@ -54,7 +57,5 @@ bool supplemental_page_table_less (const struct hash_elem *a,
 void supplemental_page_table_destroy_func (struct hash_elem *e, void *aux);
 
 struct page * mmap_page_load(struct page * page);
-
-void supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr);
 
 #endif /* vm/page.h */

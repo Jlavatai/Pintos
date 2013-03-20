@@ -783,20 +783,46 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-        bool should_read_into_page = true;
+        bool should_read_into_page = false;
         enum page_status status;
 
+        /* Three cases for loading a page from an executable. */
         if (page_read_bytes == PGSIZE) {
           should_read_into_page = false;
           status = PAGE_FILESYS;
         }
-
-        if (page_zero_bytes == PGSIZE) {
+        else if (page_zero_bytes == PGSIZE) {
           should_read_into_page = false;
           status = PAGE_ZERO;
         }
+        else {
+          should_read_into_page = true;
+          status = PAGE_FILESYS;
+        }
 
-        /* Get a user page */
+        /* Add information about the page to the supplemental page table. */
+        switch (status) {
+          case PAGE_FILESYS:
+          {
+            struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
+            filesys_info->file = file;
+            filesys_info->offset = page_index * PGSIZE;
+
+            supplemental_insert_filesys_page_info (supplemental_page_table,
+                                                   upage,
+                                                   filesys_info);
+          }
+          break;
+
+          case PAGE_ZERO:
+            supplemental_insert_zero_page_info (supplemental_page_table,
+                                                upage);
+          break;
+
+          default: break;
+        }
+
+        /* Allocate a frame for the page if need be. */
         if (should_read_into_page) {
           uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
 
@@ -804,27 +830,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
                                      kpage, page_read_bytes, page_zero_bytes))
             return false;
 
-          insert_in_memory_page_info (supplemental_page_table, upage, false);
-        }
-        else {
-          switch (status) {
-            case PAGE_FILESYS:
-            {
-              struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
-              filesys_info->file = file;
-              filesys_info->offset = page_index * PGSIZE;
-
-              insert_filesys_page_info (supplemental_page_table, upage, filesys_info);
-            }
-            break;
-
-            case PAGE_ZERO:
-              insert_zero_page_info (supplemental_page_table, upage);
-            break;
-
-            default:
-            break;
-          }
+          /* Mark that we have allocated a frame for this page in memory. */
+          supplemental_mark_page_in_memory (supplemental_page_table, upage);
         }
 
         /* Advance. */
@@ -865,7 +872,7 @@ setup_stack (void **esp)
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
     kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
     struct thread* cur = thread_current();
-    insert_zero_page_info (&cur->supplemental_page_table, user_vaddr);
+    supplemental_insert_zero_page_info (&cur->supplemental_page_table, user_vaddr);
 
     if (kpage != NULL) 
     {
@@ -874,6 +881,23 @@ setup_stack (void **esp)
     }
     return success;
 } 
+
+void
+stack_grow (struct thread * t, void * fault_ptr)
+{
+    // Get the user page of fault_addr
+    void * new_page_virtual = pg_round_down (fault_ptr);
+    ASSERT(is_user_vaddr(fault_ptr));
+    // Allocate a new frame
+    void * page_ptr_frame = frame_allocator_get_user_page(new_page_virtual, PAL_ZERO, true);
+    if (page_ptr_frame == NULL)
+    {
+        PANIC("Stack Growth Fault");
+    }
+
+    supplemental_insert_zero_page_info (&t->supplemental_page_table, new_page_virtual);
+    supplemental_mark_page_in_memory (&t->supplemental_page_table, new_page_virtual);
+}
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.

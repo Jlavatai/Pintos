@@ -47,5 +47,6 @@ void end_file_system_access(void);
 
 bool load_executable_page(struct file *file, size_t offset, void *kpage,
                           size_t page_read_bytes, size_t page_zero_bytes);
+void stack_grow (struct thread * t, void * fault_ptr);
 
 #endif /* userprog/process.h */

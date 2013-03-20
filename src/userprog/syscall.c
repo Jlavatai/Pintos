@@ -417,7 +417,9 @@ mmap_handler (struct intr_frame *f)
     mmap_info->length = length - bytes_into_file < PGSIZE ? length - bytes_into_file :
                                                                  PGSIZE;
 
-    insert_mmap_page_info (supplemental_page_table, uaddr, mmap_info);
+    supplemental_insert_mmap_page_info (supplemental_page_table,
+                                        uaddr,
+                                        mmap_info);
 
     bytes_into_file += PGSIZE;
     uaddr += PGSIZE;
