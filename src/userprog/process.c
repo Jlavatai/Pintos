@@ -444,6 +444,15 @@ process_exit (void)
       }
     }
 
+  #ifdef VM
+    /* We must destroy the mmap table first, because it needs data from the supplemental
+       page table to terminate cleanly. */
+    hash_destroy (&cur->mmap_table,
+                  mmap_table_destroy_func);
+    // hash_destroy (&cur->supplemental_page_table,
+    //               supplemental_page_table_destroy_func);
+  #endif
+
     // Close the executable file, if the file is still open somewhere, writes
     // will still be disabled.
     if (cur->file) {
@@ -451,14 +460,6 @@ process_exit (void)
       file_close(cur->file);
       end_file_system_access ();
     }
-
-  #ifdef VM
-
-    hash_destroy (&cur->supplemental_page_table,
-                  supplemental_page_table_destroy_func);
-    hash_destroy (&cur->mmap_table,
-                  mmap_table_destroy_func);
-  #endif
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -1019,5 +1020,5 @@ mmap_table_destroy_func (struct hash_elem *e, void *aux)
                                               hash_elem);
 
   ASSERT (mapping->file != NULL);
-  munmap_syscall (mapping->mapid);
+  munmap_syscall_with_mapping (mapping, false);
 }
