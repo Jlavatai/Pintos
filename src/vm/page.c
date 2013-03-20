@@ -3,12 +3,13 @@
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
-
+#include "vm/frame.h"
 
 static void supplemental_insert_page_info (struct hash *supplemental_page_table,
                                            void *vaddr, struct page *page);
 static struct page *supplemental_get_page_info (struct hash *supplemental_page_table,
                                                 void *vaddr);
+static void free_user_page(void* upage);
 
 unsigned
 supplemental_page_table_hash (const struct hash_elem *e, void *aux UNUSED)
@@ -43,6 +44,7 @@ supplemental_page_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
   case PAGE_SWAP:
     break;
   case PAGE_IN_MEMORY:
+    free_user_page(page);
     break;
   case PAGE_ZERO:
     break;
@@ -122,6 +124,15 @@ supplemental_insert_in_memory_page_info (struct hash *supplemental_page_table,
   page_info->writable = writable;
 
   supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+}
+
+
+static void 
+free_user_page(void* upage)
+{
+    struct thread *t = thread_current();
+    void* kpage = pagedir_get_page(&t->pagedir, upage);
+    frame_allocator_free_user_page(kpage);
 }
 
 void
