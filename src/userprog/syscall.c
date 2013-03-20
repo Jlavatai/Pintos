@@ -37,9 +37,10 @@ static void close_handler     (struct intr_frame *f);
 static void mmap_handler      (struct intr_frame *f);
 static void munmap_handler    (struct intr_frame *f);
 
-
 uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (const void *pointer);
+static bool is_writable_in_supp_table(const void *pointer);
+static bool is_in_supp_table(const void *pointer);
 
 static const SYSCALL_HANDLER syscall_handlers[] = {
   &halt_handler,
@@ -232,6 +233,9 @@ read_handler (struct intr_frame *f)
     if (!page->writable) {
       exit_syscall(-1);
     }
+
+  if (!is_writable_in_supp_table(buffer)) 
+      exit_syscall(-1);
   }
 
 
@@ -273,6 +277,9 @@ write_handler (struct intr_frame *f)
   unsigned size = (unsigned)get_stack_argument (f, 2);
   validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
+
+  // TODO: Copy pasta, abstract this
+  // Lookup buffer in the supplemental page table
 
   if (fd == 1) {
     putbuf (buffer, size);
@@ -378,6 +385,11 @@ mmap_handler (struct intr_frame *f)
   struct file *file = file_reopen (descriptor->file);
 
   off_t length = file_length (file);
+  if (length == 0) {
+    f->eax = -1;
+    return;
+  }
+
   size_t num_pages = length / PGSIZE;
   if (length % PGSIZE)
     num_pages++;
@@ -417,6 +429,7 @@ mmap_handler (struct intr_frame *f)
 
   mapping->mapid = cur->next_mmapid++;
   mapping->file = file;
+  mapping->kernel_vaddr = kpage;
 
   hash_insert (&cur->mmap_table, &mapping->hash_elem);
 }
@@ -432,37 +445,20 @@ munmap_handler (struct intr_frame *f)
 static void
 validate_user_pointer (const void *pointer)
 {
-#ifndef VM
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) 
+      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL
+      #ifdef VM
+      && !is_in_supp_table(pointer)
+      #endif
+      )
   {
+    // Check pointer is not in supplementary page table
     exit_syscall (-1);
     NOT_REACHED ();
   }
-#else
-  
-  if (pointer == NULL
-      || !is_user_vaddr (pointer))
-    exit_syscall (-1);
-  // If the address is valid for the page table
 
- // //  void * page = pagedir_get_page(thread_current ()->pagedir, pointer);
- //  struct page p;
- //  p.vaddr = pg_round_down(pointer);
-
- //  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
- // // struct 
-
- //  if (found == NULL) /*&& found == NULL) || !p.writable*/ {
- //    printf("failed for 0x%x\n", p.vaddr);
- //    exit_syscall (-1);
- //    NOT_REACHED ();
- //  } 
-#endif
-    
-  
 }
 
 uint32_t
@@ -509,4 +505,31 @@ exit_syscall (int status)
   t->proc_info->exit_status = status;
 
   thread_exit();
+}
+
+bool 
+is_in_supp_table(const void *ptr) {
+  struct page p;
+  p.vaddr = pg_round_down(ptr);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  if (!found) {
+    return false;
+  } 
+  return true;
+}
+
+bool 
+is_writable_in_supp_table(const void *ptr) {
+  struct page p;
+  p.vaddr = pg_round_down(ptr);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  if (!found) {
+    return false;
+  } else {
+    struct page *page = hash_entry(found, struct page, hash_elem);
+    if (!page->writable) {
+      return false;
+    }
+  } 
+  return true;
 }

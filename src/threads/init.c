@@ -39,6 +39,7 @@
 #endif
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/swap.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -134,6 +135,8 @@ main (void)
 #ifdef VM
   /* Initialise the frame table. */
   frame_table_init ();
+  /* Initialise the swap partition and table. */
+  swap_init ();
 #endif
 
   printf ("Boot complete.\n");
@@ -144,6 +147,10 @@ main (void)
   /* Finish up. */
   shutdown ();
   thread_exit ();
+
+  #ifdef VM
+  swap_destroy();
+  #endif
 }
 
 /* Clear the "BSS", a segment that should be initialized to

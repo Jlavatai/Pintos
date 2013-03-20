@@ -206,6 +206,36 @@ page_fault (struct intr_frame *f)
           frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
         }
         break;
+
+        case PAGE_MEMORY_MAPPED:
+        {
+          struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
+          void *kpage = frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+
+
+          struct mmap_mapping lookup;
+          lookup.mapid = mmap_info->mapping;
+
+          struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
+          if (!e)
+            goto page_fault;
+
+          struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
+          struct file *file = m->file;
+          size_t ofs = mmap_info->offset;
+          size_t length = mmap_info->length;
+
+          file_seek (file, ofs);
+          memset (kpage, 0, PGSIZE);
+
+          if (file_read (file, kpage, length) != length)
+            goto page_fault;
+        }
+        break;
+
+        default:
+          goto page_fault;
+        break;
       }
     }
   } else {
