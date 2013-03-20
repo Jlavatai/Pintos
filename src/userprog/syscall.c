@@ -224,9 +224,18 @@ read_handler (struct intr_frame *f)
 
  // Lookup buffer in the supplemental page table and ensure it is writable
   struct page p;
+  p.vaddr = pg_round_down(buffer);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
   
-  if (!is_writable_in_supp_table(buffer)) {
-    exit_syscall(-1);
+  if(found != NULL)
+  {
+    struct page *page = hash_entry(found, struct page, hash_elem);
+    if (!page->writable) {
+      exit_syscall(-1);
+    }
+
+  if (!is_writable_in_supp_table(buffer)) 
+      exit_syscall(-1);
   }
 
 
@@ -388,8 +397,9 @@ mmap_handler (struct intr_frame *f)
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
   /* Get a contiguous block of user virtual memory */
-  void *kpage = palloc_get_multiple (PAL_USER, num_pages);
-  if (kpage == NULL) {
+  void *kpage = (void *)vtop (addr);
+  if (!palloc_get_multiple_from_address (kpage, PAL_USER, num_pages)) {
+    palloc_free_multiple (kpage, num_pages);
     PANIC("Could not allocate contiguous user virtual pages for mmap()");
   }
 

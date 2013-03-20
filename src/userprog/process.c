@@ -311,7 +311,6 @@ start_process (void *setup_data_)
   *(int32_t *)if_.esp = (int32_t)fst_arg_ptr;
    
   /*Pushing argc*/
-  // printf("Pushing argc: %d\n", setup_data->argc);
   if_.esp -=(sizeof(setup_data->argc));
   // if(esp_not_in_boundaries(if_.esp)) {
   //   palloc_free_page(pg_round_down(fst_arg_saved));
