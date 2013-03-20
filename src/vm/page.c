@@ -79,8 +79,8 @@ get_page_info (struct hash *supplemental_page_table, void *vaddr)
 
 void
 insert_filesys_page_info (struct hash *supplemental_page_table,
-              void *vaddr,
-              struct page_filesys_info *filesys_info)
+                          void *vaddr,
+                          struct page_filesys_info *filesys_info)
 {
   struct page *page_info = malloc (sizeof (struct page));
   page_info->page_status = PAGE_FILESYS;  
@@ -92,8 +92,8 @@ insert_filesys_page_info (struct hash *supplemental_page_table,
 
 void
 insert_mmap_page_info (struct hash *supplemental_page_table,
-             void *vaddr,
-             struct page_mmap_info *mmap_info)
+                       void *vaddr,
+                       struct page_mmap_info *mmap_info)
 {
   struct page *page_info = malloc (sizeof (struct page));
   page_info->page_status = PAGE_MEMORY_MAPPED;
@@ -104,7 +104,7 @@ insert_mmap_page_info (struct hash *supplemental_page_table,
 
 void
 insert_zero_page_info (struct hash *supplemental_page_table,
-             void *vaddr)
+                       void *vaddr)
 {
   struct page *page_info = malloc (sizeof (struct page));
   page_info->page_status = PAGE_ZERO;
@@ -136,3 +136,17 @@ free_user_page(void* upage)
     void* kpage = pagedir_get_page(&t->pagedir, upage);
     frame_allocator_free_user_page(kpage);
 }
+
+void
+supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr)
+{
+    struct page p;
+    p.vaddr = uaddr;
+
+    struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
+    struct page *page = hash_entry (e, struct page, hash_elem);
+
+    page->page_status |= PAGE_IN_MEMORY;
+}
+
+
