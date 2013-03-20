@@ -187,7 +187,7 @@ page_fault (struct intr_frame *f)
 
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
-    ASSERT (page->page_status & PAGE_IN_MEMORY == 0);
+    ASSERT ((page->page_status & PAGE_IN_MEMORY) == 0);
 
     switch (page->page_status)
     {
