@@ -398,7 +398,7 @@ mmap_handler (struct intr_frame *f)
   /* Ensure the space in the user virtual address is not used up. */
   size_t i;
   for (i = 0; i < num_pages; ++i) {
-    if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE)) {
+    if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE, NULL)) {
       f->eax = -1;
       return;
     }
@@ -409,7 +409,7 @@ mmap_handler (struct intr_frame *f)
     exit_syscall (-1);
 
   mapping->mapid = cur->next_mmapid++;
-  mapping->file = file;
+  mapping->file = file_reopen (file);
   mapping->uaddr = addr;
 
   /* Add the mapping entries to the supplemental page table */
@@ -435,6 +435,8 @@ mmap_handler (struct intr_frame *f)
   }
 
   hash_insert (&cur->mmap_table, &mapping->hash_elem);
+
+  f->eax = mapping->mapid;
 }
 
 static void
@@ -442,6 +444,12 @@ munmap_handler (struct intr_frame *f)
 {
   mapid_t mapid = (mapid_t)get_stack_argument (f, 0);
 
+  munmap_syscall (mapid);
+}
+
+void
+munmap_syscall (mapid_t mapid)
+{
   struct hash *mmap_table = &thread_current ()->mmap_table;
   struct mmap_mapping lookup;
   lookup.mapid = mapid;
@@ -454,6 +462,12 @@ munmap_handler (struct intr_frame *f)
   if (!mapping)
     return;
 
+  munmap_syscall_with_mapping (mapping, true);
+}
+
+void
+munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
+{
   ASSERT (mapping->file);
 
   size_t length = file_length (mapping->file);
@@ -462,10 +476,39 @@ munmap_handler (struct intr_frame *f)
     num_pages++;
 
   size_t i = 0;
+  void *uaddr = mapping->uaddr;
+
+  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
+  /* Write any pages that have been loaded back to disk. */
   for (i = 0; i < num_pages; ++i) {
+    struct page *page_info = NULL;
+    ASSERT (supplemental_entry_exists (supplemental_page_table, uaddr, &page_info));
+
+    if (page_info->page_status & PAGE_IN_MEMORY) {
+      ASSERT (page_info->page_status & PAGE_MEMORY_MAPPED);
+      struct page_mmap_info *mmap_info = (struct page_mmap_info *)page_info->aux;
+
+      void *kaddr = pagedir_get_page (thread_current ()->pagedir, uaddr);
+
+      file_seek (mapping->file, mmap_info->offset);
+      file_write (mapping->file, kaddr, mmap_info->length);
+
+      frame_allocator_free_user_page (kaddr);
+    }
+
+    supplemental_remove_page_entry (supplemental_page_table, uaddr);
+
+    uaddr += PGSIZE;
   }
 
-  hash_delete (mmap_table, &lookup.hash_elem);
+  if (should_delete) {
+    struct mmap_mapping lookup;
+    lookup.mapid = mapping->mapid;
+    hash_delete (&thread_current ()->mmap_table, &lookup.hash_elem);
+  }
+
+  file_close (mapping->file);
   free (mapping);
 }
 
@@ -477,7 +520,7 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || !supplemental_entry_exists (&thread_current ()->supplemental_page_table, pointer)
+      || !supplemental_entry_exists (&thread_current ()->supplemental_page_table, pointer, NULL)
       )
   {
     // Check pointer is not in supplementary page table

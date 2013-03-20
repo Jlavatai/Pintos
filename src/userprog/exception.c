@@ -226,8 +226,10 @@ page_fault (struct intr_frame *f)
         lookup.mapid = mmap_info->mapping;
 
         struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
-        if (!e)
+        if (!e) {
+          frame_allocator_free_user_page(kpage);
           goto page_fault;
+        }
 
         struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
         struct file *file = m->file;
@@ -237,8 +239,10 @@ page_fault (struct intr_frame *f)
         file_seek (file, ofs);
         memset (kpage, 0, PGSIZE);
 
-        if (file_read (file, kpage, length) != length)
+        if (file_read (file, kpage, length) != length) {
+          frame_allocator_free_user_page(kpage);
           goto page_fault;
+        }
 
         supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
 

@@ -1,5 +1,5 @@
 #include "vm/frame.h"
-
+#include "vm/page.h"
 #include "vm/swap.h"
 
 #include <debug.h>
@@ -150,7 +150,23 @@ void
 frame_allocator_free_user_page(void *kernel_vaddr)
 {
   palloc_free_page (kernel_vaddr);
-  frame_unmap (kernel_vaddr);
+
+  lock_acquire (&frame_allocation_lock);
+
+  uint32_t *pd = thread_current ()->pagedir;
+  struct frame lookup;
+  lookup.frame_addr = kernel_vaddr;
+
+  struct hash_elem *e = hash_find (&frame_table, &lookup.hash_elem);
+  if (!e)
+    PANIC("Frame doesn't exist in frame table.");
+
+  struct frame *f = hash_entry (e, struct frame, hash_elem);
+  if (!f)
+    PANIC ("Could not load frame info from frame table");
+  
+  pagedir_clear_page (pd, 0x10000000);
+  frame_unmap (kernel_vaddr);  
 }
 
 static void *
