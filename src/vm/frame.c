@@ -165,7 +165,7 @@ frame_allocator_evict_page() {
 }
 
 static void frame_allocator_save_frame (struct frame* f, struct swap_entry* s) {
-  // TODO
+  PANIC("I've not been implemented yet. Save me to the supplemental page table if I don't already exist, then to swap, then free my frame, and don't forget to implement page fault handling for swap to load it back in again");
 }
 
 struct frame * frame_allocator_choose_eviction_frame() {
