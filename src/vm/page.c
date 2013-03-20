@@ -113,7 +113,6 @@ insert_zero_page_info (struct hash *supplemental_page_table,
 
 void
 stack_grow (struct thread * t, void * fault_ptr) {
-    printf("Growing stack 0x%x\n", fault_ptr);
     // Get the user page of fault_addr
     void * new_page_virtual = pg_round_down (fault_ptr);
     ASSERT(is_user_vaddr(fault_ptr));

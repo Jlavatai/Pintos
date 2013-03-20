@@ -230,7 +230,6 @@ read_handler (struct intr_frame *f)
   {
     struct page *page = hash_entry(found, struct page, hash_elem);
     if (!page->writable) {
-    printf("---It was not writable \n");
       exit_syscall(-1);
     }
   }
