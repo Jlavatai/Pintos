@@ -112,6 +112,18 @@ insert_zero_page_info (struct hash *supplemental_page_table,
 }
 
 void
+insert_in_memory_page_info (struct hash *supplemental_page_table,
+                            void *vaddr, bool writable)
+{
+  struct page *page_info = malloc (sizeof (struct page));
+  page_info->page_status = PAGE_IN_MEMORY;
+  page_info->aux = NULL;
+  page_info->writable = writable;
+
+  insert_page_info (supplemental_page_table, vaddr, page_info);
+}
+
+void
 stack_grow (struct thread * t, void * fault_ptr) {
   // Get the user page of fault_addr
   void * new_page_virtual = pg_round_down (fault_ptr);

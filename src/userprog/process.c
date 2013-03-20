@@ -774,6 +774,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     file_seek (file, ofs);
 
     size_t page_index = 0;
+    struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
     while (read_bytes > 0 || zero_bytes > 0)
     {
@@ -799,13 +800,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         /* Get a user page */
         if (should_read_into_page) {
           uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+
           if (!load_executable_page (file, ofs + page_index * PGSIZE,
                                      kpage, page_read_bytes, page_zero_bytes))
             return false;
+
+          insert_in_memory_page_info (supplemental_page_table, upage, false);
         }
         else {
-          struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
-
           switch (status) {
             case PAGE_FILESYS:
             {
@@ -887,6 +889,9 @@ bool
 install_page (void *upage, void *kpage, bool writable)
 {
     struct thread *t = thread_current ();
+
+    if (0x804bbe0 > upage && 0x804bbe0 <= upage + PGSIZE)
+      printf ("here");
 
     /* Verify that there's not already a page at that virtual
        address, then map our page there. */

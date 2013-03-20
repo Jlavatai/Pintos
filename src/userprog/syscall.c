@@ -266,7 +266,7 @@ write_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   const void *buffer = (const void*)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-  validate_user_pointer (buffer+size);
+  validate_user_pointer (buffer + (size - 1));
   validate_user_pointer (buffer);
 
   // TODO: Copy pasta, abstract this
@@ -438,10 +438,9 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL
-      #ifdef VM
-      && !is_in_supp_table(pointer)
-      #endif
+      // || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL
+      // #ifdef VM
+      || !is_in_supp_table(pointer)
       )
   {
     // Check pointer is not in supplementary page table

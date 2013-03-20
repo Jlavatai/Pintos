@@ -38,6 +38,8 @@ void insert_filesys_page_info (struct hash *supplemental_page_table,
 							   struct page_filesys_info *filesys_info);
 void insert_zero_page_info (struct hash *supplemental_page_table,
 					   		void *vaddr);
+void insert_in_memory_page_info (struct hash *supplemental_page_table,
+					   			 void *vaddr, bool writable);
 void insert_mmap_page_info (struct hash *supplemental_page_table,
 					   		void *vaddr,
 					   		struct page_mmap_info *mmap_info);

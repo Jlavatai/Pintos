@@ -198,6 +198,8 @@ page_fault (struct intr_frame *f)
           uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, false);
           if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
               kill(f);
+
+          
         }
         break;
 
