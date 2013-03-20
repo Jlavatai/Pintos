@@ -26,8 +26,9 @@ struct proc_information {
 
 struct mmap_mapping {
   struct hash_elem hash_elem;
-  mapid_t mapid;
-  struct file *file;
+  mapid_t mapid;                          /* The memory map identifier. */
+  struct file *file;                      /* The file being mapped into memory. */
+  void *uaddr;                            /* The user virtual address that the file is mapped to. */
 };
 
 

@@ -400,8 +400,10 @@ mmap_handler (struct intr_frame *f)
   /* Ensure the space in the user virtual address is not used up. */
   size_t i;
   for (i = 0; i < num_pages; ++i) {
-    if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE))
-      return -1;
+    if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE)) {
+      f->eax = -1;
+      return;
+    }
   }
 
   struct mmap_mapping *mapping = malloc (sizeof (struct mmap_mapping));
@@ -410,6 +412,7 @@ mmap_handler (struct intr_frame *f)
 
   mapping->mapid = cur->next_mmapid++;
   mapping->file = file;
+  mapping->uaddr = addr;
 
   /* Add the mapping entries to the supplemental page table */
   size_t bytes_into_file = 0;
@@ -439,7 +442,33 @@ mmap_handler (struct intr_frame *f)
 static void
 munmap_handler (struct intr_frame *f)
 {
-  mapid_t mapping = (mapid_t)get_stack_argument (f, 0);
+  mapid_t mapid = (mapid_t)get_stack_argument (f, 0);
+
+  struct hash *mmap_table = &thread_current ()->mmap_table;
+  struct mmap_mapping lookup;
+  lookup.mapid = mapid;
+
+  struct hash_elem *e = hash_find (mmap_table, &lookup.hash_elem);
+  if (!e)
+    return;
+
+  struct mmap_mapping *mapping = hash_entry (e, struct mmap_mapping, hash_elem);
+  if (!mapping)
+    return;
+
+  ASSERT (mapping->file);
+
+  size_t length = file_length (mapping->file);
+  size_t num_pages = length / PGSIZE;
+  if (length % PGSIZE != 0)
+    num_pages++;
+
+  size_t i = 0;
+  for (i = 0; i < num_pages; ++i) {
+  }
+
+  hash_delete (mmap_table, &lookup.hash_elem);
+  free (mapping);
 }
 
 /* Returns whether a user pointer is valid or not. If it is invalid, the callee
