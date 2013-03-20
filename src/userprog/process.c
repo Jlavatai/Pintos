@@ -1019,7 +1019,5 @@ mmap_table_destroy_func (struct hash_elem *e, void *aux)
                                               hash_elem);
 
   ASSERT (mapping->file != NULL);
-
-  // Close the file descriptor for the open file.
-  close_syscall (mapping->file, false);  
+  munmap_syscall (mapping->mapid);
 }

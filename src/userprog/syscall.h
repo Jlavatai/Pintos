@@ -16,5 +16,6 @@ void syscall_init (void);
 void close_syscall (struct file_descriptor *file_descriptor,
                		bool remove_file_descriptor_table_entry);
 void exit_syscall (int status);
+void munmap_syscall (mapid_t mapping);
 
 #endif /* userprog/syscall.h */
