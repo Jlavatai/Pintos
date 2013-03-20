@@ -274,12 +274,25 @@ write_handler (struct intr_frame *f)
   validate_user_pointer (buffer+size);
   validate_user_pointer (buffer);
 
+  // TODO: Copy pasta, abstract this
+  // Lookup buffer in the supplemental page table
+
   if (fd == 1) {
     putbuf (buffer, size);
     f->eax = size;
     return;
   }
 
+
+  // if (&thread_current ()->proc_info) {
+    
+  //   struct page p;
+  //   p.vaddr = pg_round_down(buffer);
+  //   struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  //   if (!found) {
+  //     exit_syscall(-1);
+  //   }
+  // }
   int bytes_written = -1;
 
   /* We don't allow concurrent filesystem access. */
@@ -437,7 +450,6 @@ munmap_handler (struct intr_frame *f)
 static void
 validate_user_pointer (const void *pointer)
 {
-#ifndef VM
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
@@ -446,28 +458,7 @@ validate_user_pointer (const void *pointer)
     exit_syscall (-1);
     NOT_REACHED ();
   }
-#else
-  
-  if (pointer == NULL
-      || !is_user_vaddr (pointer))
-    exit_syscall (-1);
-  // If the address is valid for the page table
 
- // //  void * page = pagedir_get_page(thread_current ()->pagedir, pointer);
- //  struct page p;
- //  p.vaddr = pg_round_down(pointer);
-
- //  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
- // // struct 
-
- //  if (found == NULL) /*&& found == NULL) || !p.writable*/ {
- //    printf("failed for 0x%x\n", p.vaddr);
- //    exit_syscall (-1);
- //    NOT_REACHED ();
- //  } 
-#endif
-    
-  
 }
 
 uint32_t
