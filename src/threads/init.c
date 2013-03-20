@@ -147,6 +147,10 @@ main (void)
   /* Finish up. */
   shutdown ();
   thread_exit ();
+
+  #ifdef VM
+  swap_destroy();
+  #endif
 }
 
 /* Clear the "BSS", a segment that should be initialized to
