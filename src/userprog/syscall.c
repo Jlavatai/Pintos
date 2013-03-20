@@ -39,8 +39,6 @@ static void munmap_handler    (struct intr_frame *f);
 
 uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (const void *pointer);
-static bool is_writable_in_supp_table(const void *pointer);
-static bool is_in_supp_table(const void *pointer);
 
 static const SYSCALL_HANDLER syscall_handlers[] = {
   &halt_handler,
@@ -222,10 +220,12 @@ read_handler (struct intr_frame *f)
   validate_user_pointer (buffer);
   validate_user_pointer (buffer+size);
 
+  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
  // Lookup buffer in the supplemental page table and ensure it is writable
   struct page p;
   p.vaddr = pg_round_down(buffer);
-  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  struct hash_elem *found = hash_find(supplemental_page_table, &p.hash_elem);
   
   if(found != NULL)
   {
@@ -234,7 +234,7 @@ read_handler (struct intr_frame *f)
       exit_syscall(-1);
     }
 
-  if (!is_writable_in_supp_table(buffer)) 
+  if (!supplemental_is_page_writable (supplemental_page_table, buffer)) 
       exit_syscall(-1);
   }
 
@@ -357,7 +357,8 @@ mmap_handler (struct intr_frame *f)
 {
   int fd = (int)get_stack_argument (f, 0);
   void *addr = (void *)get_stack_argument (f, 1);
-  validate_user_pointer (addr);
+  if (!is_user_vaddr (addr))
+    exit_syscall (-1);
 
   struct thread *cur = thread_current ();
 
@@ -396,15 +397,21 @@ mmap_handler (struct intr_frame *f)
 
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
-  /* Get a contiguous block of user virtual memory */
-  void *kpage = (void *)vtop (addr);
-  if (!palloc_get_multiple_from_address (kpage, PAL_USER, num_pages)) {
-    palloc_free_multiple (kpage, num_pages);
-    PANIC("Could not allocate contiguous user virtual pages for mmap()");
+  /* Ensure the space in the user virtual address is not used up. */
+  size_t i;
+  for (i = 0; i < num_pages; ++i) {
+    if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE))
+      return -1;
   }
 
+  struct mmap_mapping *mapping = malloc (sizeof (struct mmap_mapping));
+  if (!mapping)
+    exit_syscall (-1);
+
+  mapping->mapid = cur->next_mmapid++;
+  mapping->file = file;
+
   /* Add the mapping entries to the supplemental page table */
-  size_t i;
   size_t bytes_into_file = 0;
   void *uaddr = addr;
 
@@ -416,6 +423,7 @@ mmap_handler (struct intr_frame *f)
     mmap_info->offset = bytes_into_file;
     mmap_info->length = length - bytes_into_file < PGSIZE ? length - bytes_into_file :
                                                                  PGSIZE;
+    mmap_info->mapping = mapping->mapid;
 
     supplemental_insert_mmap_page_info (supplemental_page_table,
                                         uaddr,
@@ -424,14 +432,6 @@ mmap_handler (struct intr_frame *f)
     bytes_into_file += PGSIZE;
     uaddr += PGSIZE;
   }
-
-  struct mmap_mapping *mapping = malloc (sizeof (struct mmap_mapping));
-  if (!mapping)
-    exit_syscall (-1);
-
-  mapping->mapid = cur->next_mmapid++;
-  mapping->file = file;
-  mapping->kernel_vaddr = kpage;
 
   hash_insert (&cur->mmap_table, &mapping->hash_elem);
 }
@@ -450,7 +450,7 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || !is_in_supp_table(pointer)
+      || !supplemental_entry_exists (&thread_current ()->supplemental_page_table, pointer)
       )
   {
     // Check pointer is not in supplementary page table
@@ -504,31 +504,4 @@ exit_syscall (int status)
   t->proc_info->exit_status = status;
 
   thread_exit();
-}
-
-bool 
-is_in_supp_table(const void *ptr) {
-  struct page p;
-  p.vaddr = pg_round_down(ptr);
-  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
-  if (!found) {
-    return false;
-  } 
-  return true;
-}
-
-bool 
-is_writable_in_supp_table(const void *ptr) {
-  struct page p;
-  p.vaddr = pg_round_down(ptr);
-  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
-  if (!found) {
-    return false;
-  } else {
-    struct page *page = hash_entry(found, struct page, hash_elem);
-    if (!page->writable) {
-      return false;
-    }
-  } 
-  return true;
 }

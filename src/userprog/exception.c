@@ -182,6 +182,7 @@ page_fault (struct intr_frame *f)
         stack_grow(thread_current(), fault_addr);
         return;
       }
+
       goto page_fault;
     }
 

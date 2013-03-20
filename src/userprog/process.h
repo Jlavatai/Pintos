@@ -28,7 +28,6 @@ struct mmap_mapping {
   struct hash_elem hash_elem;
   mapid_t mapid;
   struct file *file;
-  void *kernel_vaddr;
 };
 
 

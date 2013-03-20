@@ -46,6 +46,8 @@ void supplemental_insert_mmap_page_info (struct hash *supplemental_page_table,
 					   					 struct page_mmap_info *mmap_info);
 
 void supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr);
+bool supplemental_entry_exists (struct hash *supplemental_page_table, void *uaddr);
+bool supplemental_is_page_writable (struct hash *supplemental_page_table, void *uaddr);
 
 void stack_grow (struct thread * t, void * fault_ptr);
 

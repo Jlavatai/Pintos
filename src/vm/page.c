@@ -136,3 +136,25 @@ supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *ua
     page->page_status |= PAGE_IN_MEMORY;
 }
 
+bool 
+supplemental_entry_exists (struct hash *supplemental_page_table, void *uaddr)
+{
+  struct page p;
+  p.vaddr = pg_round_down(uaddr);
+
+  return hash_find(supplemental_page_table, &p.hash_elem);
+}
+
+bool 
+supplemental_is_page_writable (struct hash *supplemental_page_table, void *uaddr) {
+  struct page p;
+  p.vaddr = pg_round_down(uaddr);
+
+  struct hash_elem *e = hash_find(supplemental_page_table, &p.hash_elem);
+  if (!e)
+    return false;
+
+  struct page *page = hash_entry(e, struct page, hash_elem);
+
+  return page->writable; 
+}
