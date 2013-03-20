@@ -7,11 +7,11 @@
 
 enum page_status {
 	PAGE_UNDEFINED = 0,
-	PAGE_FILESYS,
-	PAGE_SWAP,
-	PAGE_MEMORY_MAPPED,
-	PAGE_IN_MEMORY,
-	PAGE_ZERO,
+	PAGE_FILESYS = 1 << 0,
+	PAGE_SWAP  = 1 << 1,
+	PAGE_MEMORY_MAPPED  = 1 << 2,
+	PAGE_IN_MEMORY = 1 << 3,
+	PAGE_ZERO = 1 << 4,
 };
 
 struct page_filesys_info {
@@ -54,5 +54,7 @@ bool supplemental_page_table_less (const struct hash_elem *a,
 void supplemental_page_table_destroy_func (struct hash_elem *e, void *aux);
 
 struct page * mmap_page_load(struct page * page);
+
+void supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr);
 
 #endif /* vm/page.h */

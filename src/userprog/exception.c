@@ -183,65 +183,73 @@ page_fault (struct intr_frame *f)
         return;
       }
       goto page_fault;
-    } else {
-      // Supplementary Page Table pointer    
-      struct page *page = hash_entry (e, struct page, hash_elem);
-
-      switch (page->page_status)
-      {
-        case PAGE_FILESYS:
-        {
-          struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
-
-          struct file *file = filesys_info->file;
-          size_t ofs = filesys_info->offset;
-          uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, false);
-          if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
-              kill(f);
-
-          
-        }
-        break;
-
-        case PAGE_ZERO:
-        {
-          frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
-        }
-        break;
-
-        case PAGE_MEMORY_MAPPED:
-        {
-          struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
-          void *kpage = frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
-
-
-          struct mmap_mapping lookup;
-          lookup.mapid = mmap_info->mapping;
-
-          struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
-          if (!e)
-            goto page_fault;
-
-          struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
-          struct file *file = m->file;
-          size_t ofs = mmap_info->offset;
-          size_t length = mmap_info->length;
-
-          file_seek (file, ofs);
-          memset (kpage, 0, PGSIZE);
-
-          if (file_read (file, kpage, length) != length)
-            goto page_fault;
-        }
-        break;
-
-        default:
-          goto page_fault;
-        break;
-      }
     }
-  } else {
-    page_fault:
+
+    // Supplementary Page Table pointer    
+    struct page *page = hash_entry (e, struct page, hash_elem);
+    ASSERT (page->page_status & PAGE_IN_MEMORY == 0);
+
+    switch (page->page_status)
+    {
+      case PAGE_FILESYS:
+      {
+        struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
+
+        struct file *file = filesys_info->file;
+        size_t ofs = filesys_info->offset;
+        uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, false);
+        if(!load_executable_page(file, ofs, kpage, PGSIZE, 0))
+            kill(f);
+
+        supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
+
+        return;
+      }
+      break;
+
+      case PAGE_ZERO:
+      {
+        frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+        supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
+
+        return;
+      }
+      break;
+
+      case PAGE_MEMORY_MAPPED:
+      {
+        struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
+        void *kpage = frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+
+        struct mmap_mapping lookup;
+        lookup.mapid = mmap_info->mapping;
+
+        struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
+        if (!e)
+          goto page_fault;
+
+        struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
+        struct file *file = m->file;
+        size_t ofs = mmap_info->offset;
+        size_t length = mmap_info->length;
+
+        file_seek (file, ofs);
+        memset (kpage, 0, PGSIZE);
+
+        if (file_read (file, kpage, length) != length)
+          goto page_fault;
+
+        supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
+
+        return;
+      }
+      break;
+
+      default:
+        break;
+    }
+
+  page_fault:
     /* Count page faults. */
       page_fault_cnt++;
 
@@ -254,9 +262,8 @@ page_fault (struct intr_frame *f)
       //         user ? "user" : "kernel");
       
       //kill (f);
-  }
   // page->page_status = PAGE_IN_MEMORY;
-
+  }
 
 }
 

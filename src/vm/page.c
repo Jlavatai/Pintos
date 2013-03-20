@@ -76,8 +76,8 @@ get_page_info (struct hash *supplemental_page_table, void *vaddr)
 
 void
 insert_filesys_page_info (struct hash *supplemental_page_table,
-              void *vaddr,
-              struct page_filesys_info *filesys_info)
+                          void *vaddr,
+                          struct page_filesys_info *filesys_info)
 {
   struct page *page_info = malloc (sizeof (struct page));
   page_info->page_status = PAGE_FILESYS;  
@@ -89,8 +89,8 @@ insert_filesys_page_info (struct hash *supplemental_page_table,
 
 void
 insert_mmap_page_info (struct hash *supplemental_page_table,
-             void *vaddr,
-             struct page_mmap_info *mmap_info)
+                       void *vaddr,
+                       struct page_mmap_info *mmap_info)
 {
   struct page *page_info = malloc (sizeof (struct page));
   page_info->page_status = PAGE_MEMORY_MAPPED;
@@ -101,7 +101,7 @@ insert_mmap_page_info (struct hash *supplemental_page_table,
 
 void
 insert_zero_page_info (struct hash *supplemental_page_table,
-             void *vaddr)
+                       void *vaddr)
 {
   struct page *page_info = malloc (sizeof (struct page));
   page_info->page_status = PAGE_ZERO;
@@ -124,7 +124,8 @@ insert_in_memory_page_info (struct hash *supplemental_page_table,
 }
 
 void
-stack_grow (struct thread * t, void * fault_ptr) {
+stack_grow (struct thread * t, void * fault_ptr)
+{
     // Get the user page of fault_addr
     void * new_page_virtual = pg_round_down (fault_ptr);
     ASSERT(is_user_vaddr(fault_ptr));
@@ -135,5 +136,17 @@ stack_grow (struct thread * t, void * fault_ptr) {
         PANIC("Stack Growth Fault");
     }
     insert_zero_page_info(&t->supplemental_page_table, new_page_virtual);
+}
+
+void
+supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr)
+{
+    struct page p;
+    p.vaddr = uaddr;
+
+    struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
+    struct page *page = hash_entry (e, struct page, hash_elem);
+
+    page->page_status |= PAGE_IN_MEMORY;
 }
 
