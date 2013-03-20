@@ -222,21 +222,21 @@ read_handler (struct intr_frame *f)
 
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
- // Lookup buffer in the supplemental page table and ensure it is writable
-  struct page p;
-  p.vaddr = pg_round_down(buffer);
-  struct hash_elem *found = hash_find(supplemental_page_table, &p.hash_elem);
+ // // Lookup buffer in the supplemental page table and ensure it is writable
+ //  struct page p;
+ //  p.vaddr = pg_round_down(buffer);
+ //  struct hash_elem *found = hash_find(supplemental_page_table, &p.hash_elem);
   
-  if(found != NULL)
-  {
-    struct page *page = hash_entry(found, struct page, hash_elem);
-    if (!page->writable) {
-      exit_syscall(-1);
-    }
+ //  if(found != NULL)
+ //  {
+ //  //   struct page *page = hash_entry(found, struct page, hash_elem);
+ //  //   if (!page->writable) {
+ //  //     exit_syscall(-1);
+ //  //   }
 
-  if (!supplemental_is_page_writable (supplemental_page_table, buffer)) 
-      exit_syscall(-1);
-  }
+ //  // if (!supplemental_is_page_writable (supplemental_page_table, buffer)) 
+ //  //     exit_syscall(-1);
+ //  }
 
 
   if (fd == 0) {

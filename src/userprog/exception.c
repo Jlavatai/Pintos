@@ -249,23 +249,19 @@ page_fault (struct intr_frame *f)
       default:
         break;
     }
-
+  }
   page_fault:
     /* Count page faults. */
       page_fault_cnt++;
 
+      printf ("Page fault at %p: %s error %s page in %s context.\n",
+              fault_addr,  
+              not_present ? "not present" : "rights violation",
+              write ? "writing" : "reading",
+              user ? "user" : "kernel");
+
 
       exit_syscall(-1);  
-      // printf ("Page fault at %p: %s error %s page in %s context.\n",
-      //         fault_addr,  
-      //         not_present ? "not present" : "rights violation",
-      //         write ? "writing" : "reading",
-      //         user ? "user" : "kernel");
-      
-      //kill (f);
-  // page->page_status = PAGE_IN_MEMORY;
-  }
-
 }
 
 bool is_in_vstack(void *ptr, uint32_t esp) {
