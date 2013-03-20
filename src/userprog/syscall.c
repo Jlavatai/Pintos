@@ -448,8 +448,6 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      // || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL
-      // #ifdef VM
       || !is_in_supp_table(pointer)
       )
   {
