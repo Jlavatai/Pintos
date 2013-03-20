@@ -37,9 +37,10 @@ static void close_handler     (struct intr_frame *f);
 static void mmap_handler      (struct intr_frame *f);
 static void munmap_handler    (struct intr_frame *f);
 
-
 uint32_t get_stack_argument(struct intr_frame *f, unsigned int index);
 static void validate_user_pointer (const void *pointer);
+static bool is_writable_in_supp_table(const void *pointer);
+static bool is_in_supp_table(const void *pointer);
 
 static const SYSCALL_HANDLER syscall_handlers[] = {
   &halt_handler,
@@ -223,15 +224,9 @@ read_handler (struct intr_frame *f)
 
  // Lookup buffer in the supplemental page table and ensure it is writable
   struct page p;
-  p.vaddr = pg_round_down(buffer);
-  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
-  if (!found) {
+  
+  if (!is_writable_in_supp_table(buffer)) {
     exit_syscall(-1);
-  } else {
-    struct page *page = hash_entry(found, struct page, hash_elem);
-    if (!page->writable) {
-      exit_syscall(-1);
-    }
   }
 
 
@@ -283,16 +278,6 @@ write_handler (struct intr_frame *f)
     return;
   }
 
-
-  // if (&thread_current ()->proc_info) {
-    
-  //   struct page p;
-  //   p.vaddr = pg_round_down(buffer);
-  //   struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
-  //   if (!found) {
-  //     exit_syscall(-1);
-  //   }
-  // }
   int bytes_written = -1;
 
   /* We don't allow concurrent filesystem access. */
@@ -453,8 +438,13 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL) 
+      || pagedir_get_page(thread_current ()->pagedir, pointer) == NULL
+      #ifdef VM
+      && !is_in_supp_table(pointer)
+      #endif
+      )
   {
+    // Check pointer is not in supplementary page table
     exit_syscall (-1);
     NOT_REACHED ();
   }
@@ -505,4 +495,31 @@ exit_syscall (int status)
   t->proc_info->exit_status = status;
 
   thread_exit();
+}
+
+bool 
+is_in_supp_table(const void *ptr) {
+  struct page p;
+  p.vaddr = pg_round_down(ptr);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  if (!found) {
+    return false;
+  } 
+  return true;
+}
+
+bool 
+is_writable_in_supp_table(const void *ptr) {
+  struct page p;
+  p.vaddr = pg_round_down(ptr);
+  struct hash_elem *found = hash_find(&thread_current ()->supplemental_page_table, &p.hash_elem);
+  if (!found) {
+    return false;
+  } else {
+    struct page *page = hash_entry(found, struct page, hash_elem);
+    if (!page->writable) {
+      return false;
+    }
+  } 
+  return true;
 }
