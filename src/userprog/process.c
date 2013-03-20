@@ -453,6 +453,7 @@ process_exit (void)
     }
 
   #ifdef VM
+
     hash_destroy (&cur->supplemental_page_table,
                   supplemental_page_table_destroy_func);
     hash_destroy (&cur->mmap_table,
