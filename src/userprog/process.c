@@ -861,27 +861,15 @@ setup_stack (void **esp)
     uint8_t *kpage;
     bool success = false;
 
-    #ifdef VM
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
     kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
     struct thread* cur = thread_current();
     insert_zero_page_info (&cur->supplemental_page_table, user_vaddr);
-    #else
-    kpage = palloc_get_page(PAL_ZERO);
-    #endif
-    if (kpage != NULL)
+
+    if (kpage != NULL) 
     {
-      #ifdef VM
       *esp = PHYS_BASE;
       success = true;
-      #else
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-          *esp = PHYS_BASE;
-      else
-          palloc_free_page (kpage);
-      #endif
-
     }
     return success;
 } 
