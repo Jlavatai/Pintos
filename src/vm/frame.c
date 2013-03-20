@@ -1,5 +1,7 @@
 #include "vm/frame.h"
 
+#include "vm/swap.h"
+
 #include <debug.h>
 
 #include "threads/synch.h"
@@ -13,8 +15,9 @@ static unsigned frame_hash(const struct hash_elem *e, void *aux);
 static bool frame_less (const struct hash_elem *a,
             const struct hash_elem *b,
             void *aux);
-static void *frame_allocator_evict_and_allocate_new_page();
+static void *frame_allocator_evict_page();
 static struct frame *frame_allocator_choose_eviction_frame();
+static void frame_allocator_save_frame (struct frame*, struct swap_entry*);
 
 struct lock frame_table_lock;
 struct lock frame_allocation_lock;
@@ -107,7 +110,19 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
-    kernel_vaddr = frame_allocator_evict_and_allocate_new_page();
+    frame_allocator_evict_page();
+    kernel_vaddr = palloc_get_page (PAL_USER | flags);
+    if (kernel_vaddr == NULL) {
+      frame_allocator_evict_page();
+      kernel_vaddr = palloc_get_page (PAL_USER | flags);
+      if (kernel_vaddr == NULL) {
+        frame_allocator_evict_page();
+        kernel_vaddr = palloc_get_page (PAL_USER | flags);
+        if (kernel_vaddr == NULL) {
+          PANIC("Sir. I've failed, and failed badly. I tried my best Sir.");
+        }
+      }
+    }
   }
 
   size_t i;
@@ -139,8 +154,18 @@ frame_allocator_free_user_page(void *kernel_vaddr)
 }
 
 static void *
-frame_allocator_evict_and_allocate_new_page() {
+frame_allocator_evict_page() {
+  struct frame * f = frame_allocator_choose_eviction_frame();
+  // Allocate some swap memory for this frame
+  struct swap_entry *s = swap_alloc();
+  if (!s) {
+    PANIC("Frame Eviction: No Swap Memory left!");
+  }
+  frame_allocator_save_frame (f, s);
+}
 
+static void frame_allocator_save_frame (struct frame* f, struct swap_entry* s) {
+  // TODO
 }
 
 struct frame * frame_allocator_choose_eviction_frame() {
