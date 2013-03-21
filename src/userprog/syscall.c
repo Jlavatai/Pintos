@@ -409,7 +409,7 @@ mmap_handler (struct intr_frame *f)
     exit_syscall (-1);
 
   mapping->mapid = cur->next_mmapid++;
-  mapping->file = file_reopen (file);
+  mapping->file = file;
   mapping->uaddr = addr;
 
   /* Add the mapping entries to the supplemental page table */
@@ -424,7 +424,7 @@ mmap_handler (struct intr_frame *f)
     mmap_info->offset = bytes_into_file;
     mmap_info->length = length - bytes_into_file < PGSIZE ? length - bytes_into_file :
                                                                  PGSIZE;
-    mmap_info->mapping = mapping->mapid;
+    mmap_info->mapid = mapping->mapid;
 
     supplemental_insert_mmap_page_info (supplemental_page_table,
                                         uaddr,

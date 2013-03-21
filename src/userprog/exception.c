@@ -223,7 +223,7 @@ page_fault (struct intr_frame *f)
         void *kpage = frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
 
         struct mmap_mapping lookup;
-        lookup.mapid = mmap_info->mapping;
+        lookup.mapid = mmap_info->mapid;
 
         struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
         if (!e) {

@@ -20,7 +20,7 @@ struct page_filesys_info {
 };
 
 struct page_mmap_info {
-	mapid_t mapping;				/* The mmap() mapid. */
+	mapid_t mapid;					/* The mmap() mapid. */
 	size_t offset;					/* The offset into the file. */
 	size_t length;					/* The number of bytes of the file stored in this page. */
 };
