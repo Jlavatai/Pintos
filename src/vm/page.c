@@ -147,6 +147,18 @@ supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *ua
     page->page_status |= PAGE_IN_MEMORY;
 }
 
+void
+supplemental_mark_page_not_in_memory (struct hash *supplemental_page_table, void *uaddr)
+{
+    struct page p;
+    p.vaddr = uaddr;
+
+    struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
+    struct page *page = hash_entry (e, struct page, hash_elem);
+
+    page->page_status &= ~PAGE_IN_MEMORY;  
+}
+
 bool 
 supplemental_entry_exists (struct hash *supplemental_page_table,
                            void *uaddr,
