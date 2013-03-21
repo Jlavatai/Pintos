@@ -1,5 +1,18 @@
 #include "vm/mmap.h"
 
+struct mmap_mapping *
+mmap_get_mapping (struct hash *mmap_table, mapid_t mapid)
+{
+	struct mmap_mapping m;
+	m.mapid = mapid; 
+
+	struct hash_elem *e = hash_find (mmap_table, &m.hash_elem);
+	if (!e)
+		return NULL;
+
+	return hash_entry (e, struct mmap_mapping, hash_elem);
+}
+
 unsigned
 mmap_hash (const struct hash_elem *e, void *aux UNUSED)
 {

@@ -13,6 +13,8 @@ struct mmap_mapping {
   void *uaddr;                            /* The user virtual address that the file is mapped to. */
 };
 
+struct mmap_mapping *mmap_get_mapping (struct hash *mmap_table, mapid_t mapid);
+
 unsigned mmap_hash (const struct hash_elem *e, void *aux UNUSED);
 bool mmap_less (const struct hash_elem *a,
                 const struct hash_elem *b,
