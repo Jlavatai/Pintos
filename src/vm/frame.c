@@ -162,8 +162,6 @@ frame_allocator_evict_page(void) {
   frame_allocator_save_frame (f);
   // Free the page
   frame_allocator_free_user_page(f->frame_addr, true);
-
-  printf("Finished Eviction of frame: %X\n",f->page->vaddr);
 }
 
 static void frame_allocator_save_frame (struct frame* f) {
@@ -174,9 +172,7 @@ static void frame_allocator_save_frame (struct frame* f) {
   if(!t)
     PANIC("Corruption of frame table");
 
-  printf("Evicting Page: %X\n", f->page->vaddr); 
   ASSERT(f->page);
-
 
   bool dirtyFlag = pagedir_is_dirty(t->pagedir, f->page->vaddr);
   // If the page is dirty, write it back to the
@@ -200,11 +196,9 @@ static void frame_allocator_save_frame (struct frame* f) {
     if (!s) {
       PANIC("Frame Eviction: No Swap Memory left!");
     }
-        printf("Previous Page Status: "BYTETOBINARYPATTERN"\n", BYTETOBINARY(f->page->page_status));
     // Set the page status to swap
     f->page->page_status = PAGE_SWAP;
     // f->page->page_status = f->page->page_status & (PAGE_IN_MEMORY);
-    printf("Page Status: "BYTETOBINARYPATTERN"\n", BYTETOBINARY(f->page->page_status));
     f->page->writable = false;
     f->page->aux = s;
     // Save the data into swap.
