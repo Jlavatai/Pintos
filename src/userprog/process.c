@@ -51,7 +51,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
 
 bool load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
-                          size_t page_zero_bytes);
+                          size_t page_zero_bytes, bool writable);
 
 void
 process_init (void)
@@ -781,7 +781,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-        if (!load_executable_page (file, offset, upage, page_read_bytes, page_zero_bytes))
+        if (!load_executable_page (file, offset, upage, page_read_bytes, page_zero_bytes, writable))
           return false;
 
         /* Advance. */
@@ -797,7 +797,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 bool
 load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
-                     size_t page_zero_bytes)
+                     size_t page_zero_bytes, bool writable)
 {
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
@@ -825,8 +825,9 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
       struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
       filesys_info->file = file;
       filesys_info->offset = offset;
+      filesys_info->length = page_read_bytes;
 
-      p = supplemental_create_filesys_page_info (upage, filesys_info);
+      p = supplemental_create_filesys_page_info (upage, filesys_info, writable);
       supplemental_insert_page_info(supplemental_page_table,p);
     }
       break;

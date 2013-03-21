@@ -219,12 +219,11 @@ read_handler (struct intr_frame *f)
   unsigned size = (unsigned)get_stack_argument (f, 2);
   validate_user_pointer (buffer);
   validate_user_pointer (buffer+size);
-
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
-  // if (!supplemental_is_page_writable (supplemental_page_table, buffer))  {
-  //     print_page_info (supplemental_page_table);
-  //     exit_syscall(-1);
-  // }
+  if (!supplemental_is_page_writable (supplemental_page_table, buffer))  {
+      // print_page_info (supplemental_page_table);
+      exit_syscall(-1);
+  }
 
 
   if (fd == 0) {
