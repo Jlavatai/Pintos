@@ -447,8 +447,10 @@ process_exit (void)
        page table to terminate cleanly. */
     hash_destroy (&cur->mmap_table,
                   mmap_table_destroy_func);
+    printf("Hash Destroy Start\n");
     hash_destroy (&cur->supplemental_page_table,
                   supplemental_page_table_destroy_func);
+    printf("Hash Destroy End\n");
   #endif
 
     // Close the executable file, if the file is still open somewhere, writes

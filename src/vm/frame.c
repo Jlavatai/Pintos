@@ -53,6 +53,7 @@ void frame_map(void * frame_addr, struct page *page, bool writable)
   new_fr->unused_count = 0;
 
   lock_acquire (&frame_table_lock);
+  printf("Inserting Frame: %X\n", page->vaddr);
   hash_insert(&frame_table, &new_fr->hash_elem);
   lock_release (&frame_table_lock);
 }
@@ -133,7 +134,7 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
 {
   if (!is_locked)
     lock_acquire (&frame_allocation_lock);
-
+  printf("Free Frame: %X\n", kernel_vaddr);
   palloc_free_page (kernel_vaddr);
 
   uint32_t *pd = thread_current ()->pagedir;
@@ -200,13 +201,12 @@ static void frame_allocator_save_frame (struct frame* f) {
     }
     // Set the page status to swap
     f->page->page_status |= PAGE_SWAP;
-    f->page->page_status |= ~(PAGE_IN_MEMORY);
+    f->page->page_status &= ~(PAGE_IN_MEMORY);
     f->page->aux = s;
     // Save the data into swap.
     swap_save(s, (void*)f->frame_addr);
   } else {
     // Delete the page
-
   }
 }
 
