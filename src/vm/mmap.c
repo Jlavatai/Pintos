@@ -28,3 +28,12 @@ mmap_table_destroy_func (struct hash_elem *e, void *aux)
   ASSERT (mapping->file != NULL);
   munmap_syscall_with_mapping (mapping, false);
 }
+
+void
+mmap_write_back_data (struct mmap_mapping *mapping, void *source, size_t offset, size_t length)
+{
+  start_file_system_access ();
+  file_seek (mapping->file, offset);
+  file_write (mapping->file, source, length);
+  end_file_system_access ();
+}

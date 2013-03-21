@@ -18,5 +18,9 @@ bool mmap_less (const struct hash_elem *a,
                 const struct hash_elem *b,
                 void *aux UNUSED);
 void mmap_table_destroy_func (struct hash_elem *e, void *aux);
+void mmap_write_back_data (struct mmap_mapping *mapping,
+						   void *source,
+						   size_t offset,
+						   size_t length);
 
 #endif VM_MMAP_H

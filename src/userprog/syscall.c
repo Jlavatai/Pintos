@@ -482,11 +482,7 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)page_info->aux;
 
       void *kaddr = pagedir_get_page (thread_current ()->pagedir, uaddr);
-
-      start_file_system_access ();
-      file_seek (mapping->file, mmap_info->offset);
-      file_write (mapping->file, kaddr, mmap_info->length);
-      end_file_system_access ();
+      mmap_write_back_data (mapping, kaddr, mmap_info->offset, mmap_info->length);
 
       frame_allocator_free_user_page (kaddr, false);
     }
