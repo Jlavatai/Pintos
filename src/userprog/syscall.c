@@ -221,18 +221,6 @@ read_handler (struct intr_frame *f)
   validate_user_pointer (buffer+size);
 
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
-
- // Lookup buffer in the supplemental page table and ensure it is writable
-  // struct page p;
-  // p.vaddr = pg_round_down(buffer);
-  // struct hash_elem *found = hash_find(supplemental_page_table, &p.hash_elem);
-  
-  // if(found != NULL)
-  // {
-  //   struct page *page = hash_entry(found, struct page, hash_elem);
-  //   if (!page->writable) {
-  //     exit_syscall(-1);
-  //   }
   if (!supplemental_is_page_writable (supplemental_page_table, buffer)) 
       exit_syscall(-1);
 
@@ -381,9 +369,12 @@ mmap_handler (struct intr_frame *f)
 
   /* As the memory map stays around even if the original file is
      closed or removed, we need to use our own file handle to the file. */
+  start_file_system_access ();
   struct file *file = file_reopen (descriptor->file);
 
   off_t length = file_length (file);
+  end_file_system_access ();
+
   if (length == 0) {
     f->eax = -1;
     return;
@@ -470,7 +461,10 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
 {
   ASSERT (mapping->file);
 
+  start_file_system_access ();
   size_t length = file_length (mapping->file);
+  end_file_system_access ();
+
   size_t num_pages = length / PGSIZE;
   if (length % PGSIZE != 0)
     num_pages++;
@@ -491,8 +485,10 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
 
       void *kaddr = pagedir_get_page (thread_current ()->pagedir, uaddr);
 
+      start_file_system_access ();
       file_seek (mapping->file, mmap_info->offset);
       file_write (mapping->file, kaddr, mmap_info->length);
+      end_file_system_access ();
 
       frame_allocator_free_user_page (kaddr);
     }
@@ -508,7 +504,10 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
     hash_delete (&thread_current ()->mmap_table, &lookup.hash_elem);
   }
 
+  start_file_system_access ();
   file_close (mapping->file);
+  end_file_system_access ();
+
   free (mapping);
 }
 
