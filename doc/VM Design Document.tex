@@ -54,7 +54,10 @@ Struct holding information about a page, stored in the supplemental page table.
 
 \subsection{Algorithms}
 \subsubsection{A2}
-
+The location of a frame is handled mainly via the supplemental page table.
+When an executable is loaded, the new function \tx{load\_executable\_page} is called. This function will take care of analysing the content of the segment that should be loaded, and instead of bringing it directly into memory, thus allocating a frame, it adds a mapping a the supplemental page table, setting the field \tx{page\_status} to the status needed depending on the nature of the segment. \\
+Upon page fault, the supplemental page table is consulted: if an entry is not present, the OS decides whether it is a memory access that requires a stack growth. But if an entry is found, then, at first, the function \tx{frame\_allocator\_get\_user\_page} is called. This function will, in turn, call \tx{palloc\_get\_page}, which will retrieve a frame from the user pool, add a page table entry for this page - frame mapping in the page table, and return the page's address. The additional work that \tx{frame\_allocator\_get\_user\_page} carries out is to create a \tx{struct frame}, recording the address of the allocated frame, the address of the page  mapped, the \tx{tid\_t} of the thread owning the frame, and then adding this struct to the frame table. The frame will then be filled with the correct information: it will be zeroed, or the content of a file in the file system will be copied \\
+Before returning from the page fault handler, the page will me marked as present in memory in the supplemental page table.
 \subsubsection{A3}
 
 \subsection{Synchronization}
