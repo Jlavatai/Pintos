@@ -6,6 +6,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "vm/page.h"
+#include "vm/mmap.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
 

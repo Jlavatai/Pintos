@@ -440,14 +440,7 @@ void
 munmap_syscall (mapid_t mapid)
 {
   struct hash *mmap_table = &thread_current ()->mmap_table;
-  struct mmap_mapping lookup;
-  lookup.mapid = mapid;
-
-  struct hash_elem *e = hash_find (mmap_table, &lookup.hash_elem);
-  if (!e)
-    return;
-
-  struct mmap_mapping *mapping = hash_entry (e, struct mmap_mapping, hash_elem);
+  struct mmap_mapping *mapping = mmap_get_mapping (mmap_table, mapid);
   if (!mapping)
     return;
 
@@ -482,11 +475,7 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)page_info->aux;
 
       void *kaddr = pagedir_get_page (thread_current ()->pagedir, uaddr);
-
-      start_file_system_access ();
-      file_seek (mapping->file, mmap_info->offset);
-      file_write (mapping->file, kaddr, mmap_info->length);
-      end_file_system_access ();
+      mmap_write_back_data (mapping, kaddr, mmap_info->offset, mmap_info->length);
 
       frame_allocator_free_user_page (kaddr, false);
     }

@@ -1,7 +1,7 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
-#include "userprog/process.h"
+#include "vm/mmap.h"
 
 /* Struct used when mapping file descriptors to struct file*s. */
 struct file_descriptor {
