@@ -4,18 +4,7 @@
 #include "vm/page.h"
 #include "threads/palloc.h"
 
-// Preprocessor Defs for testing
-#define BYTETOBINARYPATTERN "%d%d%d%d%d%d%d%d"
-#define BYTETOBINARY(byte)  \
-  (byte & 0x80 ? 1 : 0), \
-  (byte & 0x40 ? 1 : 0), \
-  (byte & 0x20 ? 1 : 0), \
-  (byte & 0x10 ? 1 : 0), \
-  (byte & 0x08 ? 1 : 0), \
-  (byte & 0x04 ? 1 : 0), \
-  (byte & 0x02 ? 1 : 0), \
-  (byte & 0x01 ? 1 : 0) 
-// end preprocessor defs
+
 
 struct hash frame_table;
 
@@ -29,12 +18,12 @@ struct frame {
 
 void frame_table_init(void);
 
-void *frame_allocator_get_user_page(void *user_vaddr, enum palloc_flags flags, bool writable);
-void *frame_allocator_get_user_page_multiple(void *user_vaddr,
+void *frame_allocator_get_user_page(struct page *page, enum palloc_flags flags, bool writable);
+void *frame_allocator_get_user_page_multiple(struct page * page,
 											 unsigned int num_frames,
 											 enum palloc_flags flags,
 											 bool writable);
-void frame_allocator_free_user_page(void *kernel_vaddr);
+void frame_allocator_free_user_page(struct page *page, bool locked);
 
 
 

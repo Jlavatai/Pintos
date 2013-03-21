@@ -5,17 +5,14 @@
 #include "threads/vaddr.h"
 #include "vm/frame.h"
 
-static void supplemental_insert_page_info (struct hash *supplemental_page_table,
-                                           void *vaddr, struct page *page);
 static struct page *supplemental_get_page_info (struct hash *supplemental_page_table,
                                                 void *vaddr);
 static void free_user_page(void* upage);
-
-static void
+  
+void
 supplemental_insert_page_info (struct hash *supplemental_page_table,
-                               void *vaddr, struct page *page)
+                               struct page *page)
 {
-  page->vaddr = vaddr;
   hash_insert (supplemental_page_table, &page->hash_elem);
 }
 
@@ -32,66 +29,72 @@ supplemental_get_page_info (struct hash *supplemental_page_table, void *vaddr)
   return hash_entry (e, struct page, hash_elem);
 }
 
-void
-supplemental_insert_filesys_page_info (struct hash *supplemental_page_table,
-                          void *vaddr,
-                          struct page_filesys_info *filesys_info)
+struct page*
+supplemental_create_filesys_page_info (void *vaddr,
+                                       struct page_filesys_info *filesys_info)
 {
   struct page *page_info = malloc (sizeof (struct page));
-  page_info->page_status = PAGE_FILESYS;  
-  page_info->aux = filesys_info;
-  page_info->writable = false;
-
-  supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+  if (page_info) {
+    page_info->page_status = PAGE_FILESYS;  
+    page_info->aux = filesys_info;
+    page_info->writable = false;
+    page_info->vaddr = vaddr;
+  }
+  return page_info;
 }
 
-void
-supplemental_insert_mmap_page_info (struct hash *supplemental_page_table,
-                       void *vaddr,
-                       struct page_mmap_info *mmap_info)
+struct page*
+supplemental_create_mmap_page_info (void *vaddr,
+                                    struct page_mmap_info *mmap_info)
 {
   struct page *page_info = malloc (sizeof (struct page));
-  page_info->page_status = PAGE_MEMORY_MAPPED;
-  page_info->aux = mmap_info;
-
-  supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+  if (page_info)
+  { 
+    page_info->page_status = PAGE_MEMORY_MAPPED;
+    page_info->aux = mmap_info;
+    page_info->vaddr = vaddr;
+  }
+  return page_info;
 }
 
-void
-supplemental_insert_zero_page_info (struct hash *supplemental_page_table,
-                                    void *vaddr)
+struct page*
+supplemental_create_zero_page_info (void *vaddr)
 {
   struct page *page_info = malloc (sizeof (struct page));
-  page_info->page_status = PAGE_ZERO;
-  page_info->aux = NULL;
-  page_info->writable = true;
-
-  supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+  if (page_info) {
+    page_info->page_status = PAGE_ZERO;
+    page_info->aux = NULL;
+    page_info->writable = true;
+    page_info->vaddr = vaddr;
+  }
+  return page_info;
 }
 
-void
-supplemental_insert_swap_page (struct hash *supplemental_page_table,
-                               void *vaddr,
+struct page*
+supplemental_create_swap_page (void *vaddr,
                                struct swap_entry *swap_page)
 {
   struct page *page_info = malloc (sizeof (struct page));
-  page_info->page_status = PAGE_SWAP;
-  page_info->aux = (void*)swap_page;
-  page_info->writable = false;
-
-  supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+  if (page_info) {
+    page_info->page_status = PAGE_SWAP;
+    page_info->aux = (void*)swap_page;
+    page_info->writable = false;
+    page_info->vaddr = vaddr;
+  }
+  return page_info;
 }
 
-void
-supplemental_insert_in_memory_page_info (struct hash *supplemental_page_table,
-                                         void *vaddr, bool writable)
+struct page*
+supplemental_create_in_memory_page_info (void *vaddr, bool writable)
 {
   struct page *page_info = malloc (sizeof (struct page));
-  page_info->page_status = PAGE_IN_MEMORY;
-  page_info->aux = NULL;
-  page_info->writable = writable;
-
-  supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+  if (page_info) {
+    page_info->page_status = PAGE_IN_MEMORY;
+    page_info->aux = NULL;
+    page_info->writable = writable;
+    page_info->vaddr = vaddr;
+  }
+  return page_info;
 }
 
 
@@ -100,7 +103,7 @@ free_user_page(void* upage)
 {
     struct thread *t = thread_current();
     void* kpage = pagedir_get_page(&t->pagedir, upage);
-    frame_allocator_free_user_page(kpage);
+    frame_allocator_free_user_page(kpage, false);
 }
 
 void

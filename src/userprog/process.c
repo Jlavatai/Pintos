@@ -830,15 +830,16 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
       filesys_info->file = file;
       filesys_info->offset = offset;
 
-      supplemental_insert_filesys_page_info (supplemental_page_table,
-                                             upage,
-                                             filesys_info);
+      struct page* p = supplemental_create_filesys_page_info (upage, filesys_info);
+      supplemental_insert_page_info(supplemental_page_table,p);
     }
-     break;
+      break;
 
     case PAGE_ZERO:
-      supplemental_insert_zero_page_info (supplemental_page_table,
-                                          upage);
+    {
+      struct page* p = supplemental_create_zero_page_info (upage);
+      supplemental_insert_page_info(supplemental_page_table,p);
+    }
       break;
 
     default:
@@ -889,7 +890,8 @@ setup_stack (void **esp)
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
     kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
     struct thread* cur = thread_current();
-    supplemental_insert_zero_page_info (&cur->supplemental_page_table, user_vaddr);
+    struct page *p = supplemental_create_zero_page_info (user_vaddr);
+    supplemental_insert_page_info(&cur->supplemental_page_table, p);
 
     if (kpage != NULL) 
     {
@@ -912,7 +914,9 @@ stack_grow (struct thread * t, void * fault_ptr)
         PANIC("Stack Growth Fault");
     }
 
-    supplemental_insert_zero_page_info (&t->supplemental_page_table, new_page_virtual);
+    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
+    supplemental_insert_page_info(&t->supplemental_page_table, p);
+
     supplemental_mark_page_in_memory (&t->supplemental_page_table, new_page_virtual);
 }
 

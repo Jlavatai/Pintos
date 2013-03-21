@@ -12,7 +12,7 @@
 
 
 
-void frame_map(void * frame_addr, void *vaddr, bool writable);
+void frame_map(void * frame_addr, struct page *page, bool writable);
 void frame_unmap(void *frame_addr);
 
 static unsigned frame_hash(const struct hash_elem *e, void *aux);
@@ -35,18 +35,10 @@ frame_table_init(void)
   lock_init (&frame_allocation_lock); // Must prevent multiple pages allocating at the same time to avoid eviction problems
 }
 
-void frame_map(void * frame_addr, void *vaddr, bool writable)
+void frame_map(void * frame_addr, struct page *page, bool writable)
 { 
-  struct page *new_page = NULL;
-  new_page = malloc (sizeof(struct page));
-  if(new_page == NULL) 
-  {
-    PANIC("Failed to malloc memory for struct page");
-  }
-
-  new_page->writable = writable;
-
-  new_page->vaddr = vaddr;
+  // Set page to be in memory
+  page->page_status |= PAGE_IN_MEMORY;
 
   struct frame *new_fr = NULL;
   new_fr = malloc (sizeof(struct frame));
@@ -54,7 +46,8 @@ void frame_map(void * frame_addr, void *vaddr, bool writable)
   {
     PANIC("Failed to malloc memory for struct frame");
   }
-  new_fr->page = new_page;
+
+  new_fr->page = page;
   new_fr->frame_addr = frame_addr;
   new_fr->owner_id = thread_current()->tid;
   new_fr->unused_count = 0;
@@ -96,61 +89,57 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 
 /* Getting user frames */
 void *
-frame_allocator_get_user_page(void *user_vaddr, enum palloc_flags flags,
+frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
                 bool writable)
 {
-  return frame_allocator_get_user_page_multiple(user_vaddr, 1, flags, writable);
-}
-
-void *
-frame_allocator_get_user_page_multiple(void *user_vaddr,
-                     unsigned int num_frames,
-                     enum palloc_flags flags,
-                     bool writable)
-{
-  ASSERT(is_user_vaddr(user_vaddr));
-
+  ASSERT(page);
+  static int c = 0;
+  c++;
+  printf("Acquire: %i\n", c);
   lock_acquire(&frame_allocation_lock);
+  printf("%i\n", c);
+  void * user_vaddr = page->vaddr;
+  printf("%i\n", c);
+  ASSERT(is_user_vaddr(user_vaddr));
+  printf("%i\n", c);
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
-  lock_release(&frame_allocation_lock);
+  printf("%i\n", c);
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
-
     frame_allocator_evict_page();
-    lock_acquire(&frame_allocation_lock);
     kernel_vaddr = palloc_get_page (PAL_USER | flags);
     ASSERT(kernel_vaddr)
-    lock_release(&frame_allocation_lock);
   }
-  lock_acquire(&frame_allocation_lock);
-
   size_t i;
-
-  /* Map all of the frames used to their page virtual addresses. */
-  for (i = 0; i < num_frames; ++i) {
-    void *page_user_vaddr = user_vaddr + i * PGSIZE;
-    void *page_kernel_vaddr = kernel_vaddr + i * PGSIZE;
-
-    ASSERT(is_user_vaddr(page_user_vaddr));
-    
-    if (!install_page(page_user_vaddr, page_kernel_vaddr, writable)) {
-      PANIC("Could not install user page %p", page_user_vaddr);
-    }
-
-    frame_map (page_kernel_vaddr, page_user_vaddr, writable);
+  printf("%i\n", c);
+  /* Map the frame used to it's virtual address. */
+  if (!install_page(user_vaddr, kernel_vaddr, writable)) {
+    PANIC("Could not install user page %p", user_vaddr);
   }
-
+  printf("%i\n", c);
+  frame_map (kernel_vaddr, page, writable);
+  printf("Release\n");
   lock_release(&frame_allocation_lock);
 
   return kernel_vaddr;
 }
 
-void
-frame_allocator_free_user_page(void *kernel_vaddr)
+void *
+frame_allocator_get_user_page_multiple(struct page* page,
+                     unsigned int num_frames,
+                     enum palloc_flags flags,
+                     bool writable)
 {
-  palloc_free_page (kernel_vaddr);
+  PANIC("Not Needed for Pintos Task 3 Implementation");
+}
 
-  lock_acquire (&frame_allocation_lock);
+void
+frame_allocator_free_user_page(struct page *page, bool locked)
+{
+  void* kernel_vaddr = page->vaddr;
+  palloc_free_page (kernel_vaddr);
+  if (!locked)
+    lock_acquire (&frame_allocation_lock);
 
   uint32_t *pd = thread_current ()->pagedir;
   struct frame lookup;
@@ -166,17 +155,18 @@ frame_allocator_free_user_page(void *kernel_vaddr)
   
   pagedir_clear_page (pd, f->page->vaddr);
   frame_unmap (kernel_vaddr);  
-
-  lock_release (&frame_allocation_lock);
+  if (!locked)
+    lock_release (&frame_allocation_lock);
 }
 
 static void *
 frame_allocator_evict_page(void) {
+
   struct frame * f = frame_allocator_choose_eviction_frame();
   // Save the page in some form, likely to swap
   frame_allocator_save_frame (f);
   // Free the page
-  frame_allocator_free_user_page(f->frame_addr);
+  frame_allocator_free_user_page(f->frame_addr, true);
 
   printf("Finished Eviction of frame: %X\n",f->page->vaddr);
 }

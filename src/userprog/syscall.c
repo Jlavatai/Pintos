@@ -417,10 +417,8 @@ mmap_handler (struct intr_frame *f)
                                                                  PGSIZE;
     mmap_info->mapid = mapping->mapid;
 
-    supplemental_insert_mmap_page_info (supplemental_page_table,
-                                        uaddr,
-                                        mmap_info);
-
+    struct page * p = supplemental_create_mmap_page_info (uaddr, mmap_info);
+    supplemental_insert_page_info(supplemental_page_table, p);
     bytes_into_file += PGSIZE;
     uaddr += PGSIZE;
   }

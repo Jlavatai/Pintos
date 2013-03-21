@@ -202,7 +202,7 @@ page_fault (struct intr_frame *f)
 
         struct file *file = filesys_info->file;
         size_t ofs = filesys_info->offset;
-        uint8_t *kpage = frame_allocator_get_user_page(vaddr, 0, false);
+        uint8_t *kpage = frame_allocator_get_user_page(page, 0, false);
         if(!read_executable_page(file, ofs, kpage, PGSIZE, 0))
             kill(f);
 
@@ -215,7 +215,7 @@ page_fault (struct intr_frame *f)
       case PAGE_ZERO:
       {
         // printf("Getting a new page of memory\n");
-        frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+        frame_allocator_get_user_page(page, PAL_ZERO, true);
         // printf("Call Succeeded\n");
         supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
 
@@ -226,7 +226,7 @@ page_fault (struct intr_frame *f)
       case PAGE_MEMORY_MAPPED:
       {
         struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
-        void *kpage = frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+        void *kpage = frame_allocator_get_user_page(page, PAL_ZERO, true);
 
         struct mmap_mapping lookup;
         lookup.mapid = mmap_info->mapid;
