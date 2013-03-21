@@ -133,7 +133,8 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
 {
   if (!is_locked)
     lock_acquire (&frame_allocation_lock);
-  //palloc_free_page (kernel_vaddr); Done by pagedir
+  
+  palloc_free_page (kernel_vaddr); //Done by pagedir
 
   uint32_t *pd = thread_current ()->pagedir;
   struct frame lookup;
@@ -149,7 +150,7 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   
   f->page->page_status &= ~PAGE_IN_MEMORY;
   // printf("Free page: %X\n", f->page->vaddr);
-  // pagedir_clear_page (pd, f->page->vaddr); // Will be deleted anyway
+  pagedir_clear_page (pd, f->page->vaddr); // Will be deleted anyway
   frame_unmap (kernel_vaddr);  
   free(f);
   if (!is_locked)
