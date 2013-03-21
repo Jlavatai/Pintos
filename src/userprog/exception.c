@@ -1,6 +1,7 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -271,5 +272,5 @@ page_fault (struct intr_frame *f)
 bool
 is_in_vstack(void *ptr, uint32_t *esp)
 {
-  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && ptr >= (esp - 32));
+  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && (uint32_t*)ptr >= (esp - 32));
 }
