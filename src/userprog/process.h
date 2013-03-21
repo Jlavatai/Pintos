@@ -5,7 +5,6 @@
 #include "filesys/file.h"
 
 typedef int pid_t;
-typedef int mapid_t;
 
 #define UNINITIALISED_EXIT_STATUS 0xdeadbeef
 #define EXCEPTION_EXIT_STATUS -1
@@ -23,14 +22,6 @@ struct proc_information {
     struct hash file_descriptor_table;  	/* Stores descriptors for files opened by the current process. */ 
     int next_fd;                        	/* Stores the next file descriptor for use. */
 };
-
-struct mmap_mapping {
-  struct hash_elem hash_elem;
-  mapid_t mapid;                          /* The memory map identifier. */
-  struct file *file;                      /* The file being mapped into memory. */
-  void *uaddr;                            /* The user virtual address that the file is mapped to. */
-};
-
 
 bool install_page (void *upage, void *kpage, bool writable);
 

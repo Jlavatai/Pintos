@@ -6,6 +6,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "vm/page.h"
+#include "vm/mmap.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
 
@@ -184,7 +185,7 @@ page_fault (struct intr_frame *f)
         stack_grow(thread_current(), fault_addr);
         return;
       }
-
+      printf("Not in Supplementary Page Table\n");
       goto page_fault;
     }
 
@@ -248,26 +249,26 @@ page_fault (struct intr_frame *f)
         return;
       }
       break;
-
-      case PAGE_SWAP:
+      
+      default:
       {
+        // printf("Begin Load Page\n");
         // Page is in swap.
         struct swap_entry *swap_info = (struct swap_entry *) page->aux;
-        // First Allocate a user page
         void * kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
+        // First Allocate a user page
         // Save it into that page of memory
         swap_load(swap_info, page, kernel_vaddr);
         // Free that page of swap
         swap_free(swap_info);
+        // Mark as no longer in swap
+        page->page_status &= ~PAGE_SWAP;
         // Mark as in memory
-        supplemental_mark_page_in_memory (&thread_current()->supplemental_page_table, page->vaddr);
+        page->page_status &= ~PAGE_IN_MEMORY;
+        // printf("Loaded Page: %X\n", page->vaddr);
         return;
       }
         break;
-
-      default:
-        printf("Unhandled Page fault\n");
-        goto page_fault;
     }
   }
   page_fault:

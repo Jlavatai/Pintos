@@ -199,7 +199,7 @@ static void frame_allocator_save_frame (struct frame* f) {
       PANIC("Frame Eviction: No Swap Memory left!");
     }
     // Set the page status to swap
-    f->page->page_status = PAGE_SWAP;
+    f->page->page_status |= PAGE_SWAP;
     // f->page->page_status = f->page->page_status & (PAGE_IN_MEMORY);
     f->page->writable = false;
     f->page->aux = s;
@@ -231,7 +231,7 @@ struct frame * frame_allocator_choose_eviction_frame(void) {
     if (pagedir_is_accessed(t->pagedir, f->frame_addr)) {
       pagedir_set_accessed(t->pagedir, f->frame_addr, false);
     } else {
-      if (++f->unused_count > least_used) {
+      if (++f->unused_count > least_used && f->page->writable) {
         eviction_candidate = f;
         least_used = f->unused_count;
       }
