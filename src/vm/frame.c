@@ -148,6 +148,8 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   if (!f)
     PANIC ("Could not load frame info from frame table");
   
+  f->page->page_status &= ~PAGE_IN_MEMORY;
+
   pagedir_clear_page (pd, f->page->vaddr);
   frame_unmap (kernel_vaddr);  
   if (!is_locked)

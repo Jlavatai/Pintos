@@ -85,6 +85,7 @@ void  swap_free(struct swap_entry * swap_location) {
 // Save a page to Swap
 void  swap_save(struct swap_entry * swap_location, void *physical_address) {
   lock_acquire(&swap_lock);
+  // printf("---Save Swap Location: %X\n", swap_location->block);
   ASSERT(swap_location->in_use);
   void *originPtr = physical_address;
   block_sector_t block_sector;
@@ -106,7 +107,7 @@ void  swap_save(struct swap_entry * swap_location, void *physical_address) {
  void *swap_load(struct swap_entry * swap_location, struct page *page, void *kernel_vaddr) {
   lock_acquire(&swap_lock);
   ASSERT(swap_location->in_use);
-
+  // printf("-----Load Swap Location: %X\n", swap_location->block);
   void *page_sector = kernel_vaddr;
   block_sector_t block_sector;
   for( block_sector = swap_location->block;
