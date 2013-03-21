@@ -52,7 +52,6 @@ bool supplemental_entry_exists (struct hash *supplemental_page_table,
 bool supplemental_is_page_writable (struct hash *supplemental_page_table, void *uaddr);
 void supplemental_remove_page_entry (struct hash *supplemental_page_table, void *uaddr); 
 
-void stack_grow (struct thread * t, void * fault_ptr);
 
 unsigned supplemental_page_table_hash (const struct hash_elem *e,
 									   void *aux);
@@ -60,7 +59,5 @@ bool supplemental_page_table_less (const struct hash_elem *a,
 							  	   const struct hash_elem *b,
 							  	   void *aux);
 void supplemental_page_table_destroy_func (struct hash_elem *e, void *aux);
-
-struct page * mmap_page_load(struct page * page);
 
 #endif /* vm/page.h */

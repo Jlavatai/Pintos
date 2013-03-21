@@ -6,6 +6,8 @@
 
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "userprog/pagedir.h"
 
 
 void frame_map(void * frame_addr, void *vaddr, bool writable);
@@ -15,8 +17,8 @@ static unsigned frame_hash(const struct hash_elem *e, void *aux);
 static bool frame_less (const struct hash_elem *a,
             const struct hash_elem *b,
             void *aux);
-static void *frame_allocator_evict_page();
-static struct frame *frame_allocator_choose_eviction_frame();
+static void *frame_allocator_evict_page(void);
+static struct frame *frame_allocator_choose_eviction_frame(void);
 static void frame_allocator_save_frame (struct frame*, struct swap_entry*);
 
 struct lock frame_table_lock;
@@ -170,7 +172,7 @@ frame_allocator_free_user_page(void *kernel_vaddr)
 }
 
 static void *
-frame_allocator_evict_page() {
+frame_allocator_evict_page(void) {
   struct frame * f = frame_allocator_choose_eviction_frame();
   // Allocate some swap memory for this frame
   struct swap_entry *s = swap_alloc();
@@ -184,7 +186,7 @@ static void frame_allocator_save_frame (struct frame* f, struct swap_entry* s) {
   PANIC("I've not been implemented yet. Save me to the supplemental page table if I don't already exist, then to swap, then free my frame, and don't forget to implement page fault handling for swap to load it back in again");
 }
 
-struct frame * frame_allocator_choose_eviction_frame() {
+struct frame * frame_allocator_choose_eviction_frame(void) {
   static struct hash_iterator i;
   static bool init = false;
   if (!init || !hash_next (&i))
