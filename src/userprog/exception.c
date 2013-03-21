@@ -190,8 +190,8 @@ page_fault (struct intr_frame *f)
 
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
-    printf("Page: %X ; page_status: "BYTETOBINARYPATTERN"\n"
-          , page->vaddr, BYTETOBINARY(page->page_status));
+    // printf("Page: %X ; page_status: "BYTETOBINARYPATTERN"\n"
+    //       , page->vaddr, BYTETOBINARY(page->page_status));
     ASSERT ((page->page_status & PAGE_IN_MEMORY) == 0);
     // printf("Page Status: %i\n", page->page_status);
     switch (page->page_status)
@@ -251,7 +251,7 @@ page_fault (struct intr_frame *f)
       
       default:
       {
-        printf("Begin Load Page\n");
+        // printf("Begin Load Page\n");
         // Page is in swap.
         struct swap_entry *swap_info = (struct swap_entry *) page->aux;
         void * kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
@@ -264,7 +264,7 @@ page_fault (struct intr_frame *f)
         page->page_status &= ~PAGE_SWAP;
         // Mark as in memory
         page->page_status &= ~PAGE_IN_MEMORY;
-        printf("Loaded Page: %X\n", page->vaddr);
+        // printf("Loaded Page: %X\n", page->vaddr);
         return;
       }
         break;
