@@ -224,7 +224,7 @@ page_fault (struct intr_frame *f)
       struct file *file = filesys_info->file;
       size_t ofs = filesys_info->offset;
       void *kpage = frame_allocator_get_user_page(page, 0, false);
-      if(!read_executable_page(file, ofs, kpage, PGSIZE, 0))
+      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0))
           kill(f);
       return;
     }
@@ -284,5 +284,5 @@ page_fault (struct intr_frame *f)
 bool
 is_in_vstack(void *ptr, uint32_t *esp)
 {
-  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && (uint32_t*)ptr >= (esp - 32));
+  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && ptr >= ((void*)esp - 4096));
 }

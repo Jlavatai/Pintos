@@ -219,10 +219,11 @@ read_handler (struct intr_frame *f)
   unsigned size = (unsigned)get_stack_argument (f, 2);
   validate_user_pointer (buffer);
   validate_user_pointer (buffer+size);
-
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
-  if (!supplemental_is_page_writable (supplemental_page_table, buffer)) 
+  if (!supplemental_is_page_writable (supplemental_page_table, buffer))  {
+      // print_page_info (supplemental_page_table);
       exit_syscall(-1);
+  }
 
 
   if (fd == 0) {
@@ -475,7 +476,8 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)page_info->aux;
 
       void *kaddr = pagedir_get_page (thread_current ()->pagedir, uaddr);
-      mmap_write_back_data (mapping, kaddr, mmap_info->offset, mmap_info->length);
+      if (pagedir_is_dirty (thread_current ()->pagedir, page_info->vaddr))
+        mmap_write_back_data (mapping, kaddr, mmap_info->offset, mmap_info->length);
 
       frame_allocator_free_user_page (kaddr, false);
     }
