@@ -176,20 +176,25 @@ static void frame_allocator_save_frame (struct frame* f) {
 
   ASSERT(f->page);
 
-  bool dirtyFlag = pagedir_is_dirty(t->pagedir, f->page->vaddr);
+  bool is_dirty = pagedir_is_dirty(t->pagedir, f->page->vaddr);
   // If the page is dirty, write it back to the
   // file it came from.
   // If the page is not dirty, then it is stack
   //   so write it to swap
 
-  if (dirtyFlag && f->page->page_status & PAGE_MEMORY_MAPPED)
+  enum page_status status = f->page->page_status;
+
+  if (!is_dirty)
+    return;
+
+  if (status & PAGE_MEMORY_MAPPED)
   {
     struct page_mmap_info *mmap_info = (struct page_mmap_info *)f->page->aux;
     struct mmap_mapping *m = mmap_get_mapping (&t->mmap_table, mmap_info->mapid);
     
     mmap_write_back_data (m, f->frame_addr, mmap_info->offset, mmap_info->length);
   }
-  else if (dirtyFlag) {
+  else if (!(status & PAGE_FILESYS)) {
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {
