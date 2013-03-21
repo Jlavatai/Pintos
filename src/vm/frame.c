@@ -10,6 +10,8 @@
 #include "userprog/pagedir.h"
 
 
+
+
 void frame_map(void * frame_addr, void *vaddr, bool writable);
 void frame_unmap(void *frame_addr);
 
@@ -115,21 +117,10 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
     // Evict and allocate a new page
 
     frame_allocator_evict_page();
-    printf("Evicted a Page");
     lock_acquire(&frame_allocation_lock);
     kernel_vaddr = palloc_get_page (PAL_USER | flags);
+    ASSERT(kernel_vaddr)
     lock_release(&frame_allocation_lock);
-    if (kernel_vaddr == NULL) {
-      frame_allocator_evict_page();
-      kernel_vaddr = palloc_get_page (PAL_USER | flags);
-      if (kernel_vaddr == NULL) {
-        frame_allocator_evict_page();
-        kernel_vaddr = palloc_get_page (PAL_USER | flags);
-        if (kernel_vaddr == NULL) {
-          PANIC("Sir. I've failed, and failed badly. I tried my best Sir.");
-        }
-      }
-    }
   }
   lock_acquire(&frame_allocation_lock);
 
@@ -187,7 +178,7 @@ frame_allocator_evict_page(void) {
   // Free the page
   frame_allocator_free_user_page(f->frame_addr);
 
-
+  printf("Finished Eviction of frame: %X\n",f->page->vaddr);
 }
 
 static void frame_allocator_save_frame (struct frame* f) {
@@ -224,8 +215,11 @@ static void frame_allocator_save_frame (struct frame* f) {
     if (!s) {
       PANIC("Frame Eviction: No Swap Memory left!");
     }
+        printf("Previous Page Status: "BYTETOBINARYPATTERN"\n", BYTETOBINARY(f->page->page_status));
     // Set the page status to swap
     f->page->page_status = PAGE_SWAP;
+    // f->page->page_status = f->page->page_status & (PAGE_IN_MEMORY);
+    printf("Page Status: "BYTETOBINARYPATTERN"\n", BYTETOBINARY(f->page->page_status));
     f->page->writable = false;
     f->page->aux = s;
     // Save the data into swap.
