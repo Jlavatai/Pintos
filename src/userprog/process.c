@@ -888,10 +888,11 @@ setup_stack (void **esp)
     bool success = false;
 
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
-    kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
-    struct thread* cur = thread_current();
+
     struct page *p = supplemental_create_zero_page_info (user_vaddr);
-    supplemental_insert_page_info(&cur->supplemental_page_table, p);
+    supplemental_insert_page_info(&thread_current()->supplemental_page_table, p);
+
+    kpage = frame_allocator_get_user_page(p, PAL_ZERO, true);
 
     if (kpage != NULL) 
     {
@@ -907,15 +908,17 @@ stack_grow (struct thread * t, void * fault_ptr)
     // Get the user page of fault_addr
     void * new_page_virtual = pg_round_down (fault_ptr);
     ASSERT(is_user_vaddr(fault_ptr));
+
+    // Allocate a new supplemental page table entry
+    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
+    supplemental_insert_page_info(&t->supplemental_page_table, p);
     // Allocate a new frame
-    void * page_ptr_frame = frame_allocator_get_user_page(new_page_virtual, PAL_ZERO, true);
+    void * page_ptr_frame = frame_allocator_get_user_page(p, PAL_ZERO, true);
     if (page_ptr_frame == NULL)
     {
         PANIC("Stack Growth Fault");
     }
 
-    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
-    supplemental_insert_page_info(&t->supplemental_page_table, p);
 
     supplemental_mark_page_in_memory (&t->supplemental_page_table, new_page_virtual);
 }
