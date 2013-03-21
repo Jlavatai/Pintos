@@ -17,7 +17,7 @@ static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
 // Utility function for testing if we need to grow stack
-bool is_in_vstack(void *ptr, uint32_t esp);
+bool is_in_vstack(void *ptr, uint32_t *esp);
 /* Registers handlers for interrupts that can be caused by user
    programs.
 
@@ -268,6 +268,8 @@ page_fault (struct intr_frame *f)
       exit_syscall(-1);  
 }
 
-bool is_in_vstack(void *ptr, uint32_t esp) {
+bool
+is_in_vstack(void *ptr, uint32_t *esp)
+{
   return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && ptr >= (esp - 32));
 }
