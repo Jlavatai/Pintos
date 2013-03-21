@@ -1,4 +1,5 @@
 *.aux
+*.synctex.gz
 *.cp
 *.dvi
 *.fn
