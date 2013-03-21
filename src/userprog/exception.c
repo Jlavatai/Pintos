@@ -190,8 +190,8 @@ page_fault (struct intr_frame *f)
 
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
-    printf("Thread: %i| Page: %X| page_status: "BYTETOBINARYPATTERN"\n"
-          , thread_current()->tid, page->vaddr, BYTETOBINARY(page->page_status));
+    // printf("Thread: %i| Page: %X| page_status: "BYTETOBINARYPATTERN"\n"
+    //       , thread_current()->tid, page->vaddr, BYTETOBINARY(page->page_status));
 
     enum page_status status = page->page_status;
 

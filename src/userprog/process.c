@@ -447,10 +447,8 @@ process_exit (void)
        page table to terminate cleanly. */
     hash_destroy (&cur->mmap_table,
                   mmap_table_destroy_func);
-    printf("Hash Destroy Start\n");
     hash_destroy (&cur->supplemental_page_table,
                   supplemental_page_table_destroy_func);
-    printf("Hash Destroy End\n");
   #endif
 
     // Close the executable file, if the file is still open somewhere, writes
@@ -888,7 +886,8 @@ setup_stack (void **esp)
 
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
-    struct page *p = supplemental_create_zero_page_info (user_vaddr);
+
+    struct page *p = supplemental_create_in_memory_page_info (user_vaddr, true);
     supplemental_insert_page_info(&thread_current()->supplemental_page_table, p);
 
     kpage = frame_allocator_get_user_page(p, PAL_ZERO, true);
@@ -898,6 +897,9 @@ setup_stack (void **esp)
       *esp = PHYS_BASE;
       success = true;
     }
+
+    p->page_status |= PAGE_IN_MEMORY;
+
     return success;
 } 
 
@@ -909,17 +911,16 @@ stack_grow (struct thread * t, void * fault_ptr)
     ASSERT(is_user_vaddr(fault_ptr));
 
     // Allocate a new supplemental page table entry
-    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
+    struct page *p = supplemental_create_in_memory_page_info (new_page_virtual, true);
     supplemental_insert_page_info(&t->supplemental_page_table, p);
+
     // Allocate a new frame
     void * page_ptr_frame = frame_allocator_get_user_page(p, PAL_ZERO, true);
     if (page_ptr_frame == NULL)
     {
         PANIC("Stack Growth Fault");
     }
-
-
-    supplemental_mark_page_in_memory (&t->supplemental_page_table, new_page_virtual);
+    p->page_status |= PAGE_IN_MEMORY;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
@@ -935,7 +936,6 @@ bool
 install_page (void *upage, void *kpage, bool writable)
 {
     struct thread *t = thread_current ();
-
     /* Verify that there's not already a page at that virtual
        address, then map our page there. */
     return (pagedir_get_page (t->pagedir, upage) == NULL
