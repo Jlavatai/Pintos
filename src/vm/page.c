@@ -11,6 +11,9 @@ static struct page *supplemental_get_page_info (struct hash *supplemental_page_t
                                                 void *vaddr);
 static void free_user_page(void* upage);
 
+static struct page* alloc_supplemental_page();
+static struct page* free_supplemental_page();
+
 unsigned
 supplemental_page_table_hash (const struct hash_elem *e, void *aux UNUSED)
 {
@@ -110,6 +113,19 @@ supplemental_insert_zero_page_info (struct hash *supplemental_page_table,
   page_info->page_status = PAGE_ZERO;
   page_info->aux = NULL;
   page_info->writable = true;
+
+  supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
+}
+
+void
+supplemental_insert_swap_page (struct hash *supplemental_page_table,
+                               void *vaddr,
+                               struct swap_entry *swap_page)
+{
+  struct page *page_info = malloc (sizeof (struct page));
+  page_info->page_status = PAGE_SWAP;
+  page_info->aux = (void*)swap_page;
+  page_info->writable = false;
 
   supplemental_insert_page_info (supplemental_page_table, vaddr, page_info);
 }

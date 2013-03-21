@@ -162,6 +162,7 @@ page_fault (struct intr_frame *f)
   // These are the cases we want to look at in detail. For everything else,
   // Goto the pagefault message
   if (not_present && fault_addr && is_user_vaddr(fault_addr)) {
+
     // /* To implement virtual memory, delete the rest of the function
     //    body, and replace it with code that brings in the page to
     //    which fault_addr refers. */
@@ -190,7 +191,7 @@ page_fault (struct intr_frame *f)
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
     ASSERT ((page->page_status & PAGE_IN_MEMORY) == 0);
-
+    // printf("Page Status: %i\n", page->page_status);
     switch (page->page_status)
     {
       case PAGE_FILESYS:
@@ -211,7 +212,9 @@ page_fault (struct intr_frame *f)
 
       case PAGE_ZERO:
       {
+        // printf("Getting a new page of memory\n");
         frame_allocator_get_user_page(vaddr, PAL_ZERO, true);
+        // printf("Call Succeeded\n");
         supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
 
         return;
@@ -252,7 +255,8 @@ page_fault (struct intr_frame *f)
       break;
 
       default:
-        break;
+        printf("Unhandled Page fault\n");
+        goto page_fault;
     }
   }
   page_fault:

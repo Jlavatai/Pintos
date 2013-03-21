@@ -19,7 +19,7 @@ static bool frame_less (const struct hash_elem *a,
             void *aux);
 static void *frame_allocator_evict_page(void);
 static struct frame *frame_allocator_choose_eviction_frame(void);
-static void frame_allocator_save_frame (struct frame*, struct swap_entry*);
+static void frame_allocator_save_frame (struct frame*);
 
 struct lock frame_table_lock;
 struct lock frame_allocation_lock;
@@ -52,9 +52,10 @@ void frame_map(void * frame_addr, void *vaddr, bool writable)
   {
     PANIC("Failed to malloc memory for struct frame");
   }
-
   new_fr->page = new_page;
   new_fr->frame_addr = frame_addr;
+  new_fr->owner_id = thread_current()->tid;
+  new_fr->unused_count = 0;
 
   lock_acquire (&frame_table_lock);
   hash_insert(&frame_table, &new_fr->hash_elem);
@@ -108,11 +109,12 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
   ASSERT(is_user_vaddr(user_vaddr));
 
   lock_acquire(&frame_allocation_lock);
-
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
+
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
     frame_allocator_evict_page();
+    printf("Evicted a Page");
     kernel_vaddr = palloc_get_page (PAL_USER | flags);
     if (kernel_vaddr == NULL) {
       frame_allocator_evict_page();
@@ -175,23 +177,85 @@ static void *
 frame_allocator_evict_page(void) {
   struct frame * f = frame_allocator_choose_eviction_frame();
   // Allocate some swap memory for this frame
-  struct swap_entry *s = swap_alloc();
-  if (!s) {
-    PANIC("Frame Eviction: No Swap Memory left!");
-  }
-  frame_allocator_save_frame (f, s);
+  frame_allocator_save_frame (f);
 }
 
-static void frame_allocator_save_frame (struct frame* f, struct swap_entry* s) {
-  PANIC("I've not been implemented yet. Save me to the supplemental page table if I don't already exist, then to swap, then free my frame, and don't forget to implement page fault handling for swap to load it back in again");
+static void frame_allocator_save_frame (struct frame* f) {
+  // Lookup owner id
+  tid_t thread_id = f->owner_id;
+  // Get the corresponding thread
+  struct thread* t = thread_lookup(thread_id);
+  if(!t)
+    PANIC("Corruption of frame table");
+
+  printf("Evicting Page: %X\n", f->page->vaddr); 
+  ASSERT(f->page);
+
+
+  bool dirtyFlag = pagedir_is_dirty(t->pagedir, f->page->vaddr);
+  // If the page is dirty, write it back to the
+  // file it came from.
+  // If the page is not dirty, then it is stack
+  //   so write it to swap
+
+  if (dirtyFlag &&
+      f->page->page_status == PAGE_MEMORY_MAPPED) {
+      // TODO: Uncomment when Alex's updated stuff.
+      // struct page_mmap_info * mmap_info = (struct page_mmap_info *)f->page->aux;
+
+      // file_seek (mmap_info->file, mmap_info->offset);
+
+      // file_write (mmap_info->file, 
+      //             f->page->vaddr,
+      //             mmap_info->length);
+  } else if (dirtyFlag) {
+    // Allocate some Swap memory
+    struct swap_entry *s = swap_alloc();
+    if (!s) {
+      PANIC("Frame Eviction: No Swap Memory left!");
+    }
+    // Set the page status to swap
+    f->page->page_status = PAGE_SWAP;
+    f->page->writable = false;
+    f->page->aux = s;
+    // Save the data into swap.
+    swap_save(s, (void*)f->frame_addr);
+  }
+  // Free the page
+  frame_allocator_free_user_page(f->page->vaddr);
+
 }
 
 struct frame * frame_allocator_choose_eviction_frame(void) {
-  static struct hash_iterator i;
-  static bool init = false;
-  if (!init || !hash_next (&i))
-    hash_first (&i, &frame_table);
+  struct hash_iterator i;
+  struct thread *t;
+  struct frame * eviction_candidate;
+  int32_t least_used = 0;
 
-  struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
-  return f;
+  // We aim to use pseudo LRU replacement.
+  // When we choose to evict, find the oldest page which hasn't
+  // been accessed since the last eviction. We do
+  // this by choosing the page which has the greatest 
+  // unused_count, which increments when it is unused in this 
+  // algorithm.
+  hash_first (&i, &frame_table);
+  // Iterate through the frame table.
+  while(hash_next (&i)) {
+    // Get the frame that it is equivalent to
+    struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
+    // Get the owning thread
+    t = thread_lookup(f->owner_id);
+    // If it is accessed, set is as not accessed and move on
+    if (pagedir_is_accessed(t->pagedir, f->frame_addr)) {
+      pagedir_set_accessed(t->pagedir, f->frame_addr, false);
+    } else {
+      if (++f->unused_count > least_used) {
+        eviction_candidate = f;
+        least_used = f->unused_count;
+      }
+    }
+  }
+  eviction_candidate->unused_count = 0;
+
+  return eviction_candidate;
 }

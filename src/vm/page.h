@@ -4,6 +4,7 @@
 #include <hash.h>
 #include "threads/thread.h"
 #include "lib/user/syscall.h"
+#include "vm/swap.h"
 
 enum page_status {
 	PAGE_UNDEFINED = 0,
@@ -44,6 +45,10 @@ void supplemental_insert_in_memory_page_info (struct hash *supplemental_page_tab
 void supplemental_insert_mmap_page_info (struct hash *supplemental_page_table,
 					   					 void *vaddr,
 					   					 struct page_mmap_info *mmap_info);
+void supplemental_insert_swap_page (struct hash *supplemental_page_table,
+                                    void *vaddr,
+                                    struct swap_entry *swap_page);
+
 
 void supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr);
 void supplemental_mark_page_not_in_memory (struct hash *supplemental_page_table, void *uaddr);
