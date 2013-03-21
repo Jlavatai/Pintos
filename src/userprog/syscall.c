@@ -488,7 +488,7 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
       file_write (mapping->file, kaddr, mmap_info->length);
       end_file_system_access ();
 
-      frame_allocator_free_user_page (kaddr);
+      frame_allocator_free_user_page (kaddr, false);
     }
 
     supplemental_remove_page_entry (supplemental_page_table, uaddr);

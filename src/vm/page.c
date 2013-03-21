@@ -84,7 +84,7 @@ supplemental_create_swap_page (void *vaddr,
   return page_info;
 }
 
-struct page*
+struct page*  
 supplemental_create_in_memory_page_info (void *vaddr, bool writable)
 {
   struct page *page_info = malloc (sizeof (struct page));

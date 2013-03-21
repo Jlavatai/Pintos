@@ -1,4 +1,3 @@
-
 #include "vm/swap.h"
 #include "vm/frame.h"
 
@@ -104,15 +103,11 @@ void  swap_save(struct swap_entry * swap_location, void *physical_address) {
 } 
 
 // Load a page from swap, and return it's physical address, or NULL if there are no more pages available.
-void *swap_load(struct swap_entry * swap_location, void *virtual_address) {
+ void *swap_load(struct swap_entry * swap_location, struct page *page, void *kernel_vaddr) {
   lock_acquire(&swap_lock);
   ASSERT(swap_location->in_use);
-  // First Allocate a user page
-  void *page_ptr = frame_allocator_get_user_page(virtual_address, 0, true);
-  if (!page_ptr) {
-    PANIC("Swap Load: Unable to allocate a user page");
-  }
-  void *page_sector = page_ptr;
+
+  void *page_sector = kernel_vaddr;
   block_sector_t block_sector;
   for( block_sector = swap_location->block;
        block_sector < swap_location->block + PAGE_NUM_SECTORS;
@@ -126,5 +121,5 @@ void *swap_load(struct swap_entry * swap_location, void *virtual_address) {
       page_sector +=  BLOCK_SECTOR_SIZE;
     }
   lock_release(&swap_lock);
-  return page_ptr;
+  return kernel_vaddr;
 } 

@@ -807,7 +807,7 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
 
   bool should_read_into_page = false;
   enum page_status status;
-
+  struct page* p;
   /* Three cases for loading a page from an executable. */
   if (page_read_bytes == PGSIZE) {
     should_read_into_page = false;
@@ -830,25 +830,26 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
       filesys_info->file = file;
       filesys_info->offset = offset;
 
-      struct page* p = supplemental_create_filesys_page_info (upage, filesys_info);
+      p = supplemental_create_filesys_page_info (upage, filesys_info);
       supplemental_insert_page_info(supplemental_page_table,p);
     }
       break;
 
     case PAGE_ZERO:
     {
-      struct page* p = supplemental_create_zero_page_info (upage);
+      p = supplemental_create_zero_page_info (upage);
       supplemental_insert_page_info(supplemental_page_table,p);
     }
       break;
 
     default:
+      PANIC("Unhandled Load Page Exception");
       break;
   }
 
   /* Allocate a frame for the page if need be. */
   if (should_read_into_page) {
-    uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+    uint8_t *kpage = frame_allocator_get_user_page(p, 0, true);
 
     if (!read_executable_page (file, offset, kpage, page_read_bytes, page_zero_bytes))
       return false;
@@ -888,10 +889,11 @@ setup_stack (void **esp)
     bool success = false;
 
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
-    kpage = frame_allocator_get_user_page(user_vaddr, PAL_ZERO, true);
-    struct thread* cur = thread_current();
+
     struct page *p = supplemental_create_zero_page_info (user_vaddr);
-    supplemental_insert_page_info(&cur->supplemental_page_table, p);
+    supplemental_insert_page_info(&thread_current()->supplemental_page_table, p);
+
+    kpage = frame_allocator_get_user_page(p, PAL_ZERO, true);
 
     if (kpage != NULL) 
     {
@@ -907,15 +909,17 @@ stack_grow (struct thread * t, void * fault_ptr)
     // Get the user page of fault_addr
     void * new_page_virtual = pg_round_down (fault_ptr);
     ASSERT(is_user_vaddr(fault_ptr));
+
+    // Allocate a new supplemental page table entry
+    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
+    supplemental_insert_page_info(&t->supplemental_page_table, p);
     // Allocate a new frame
-    void * page_ptr_frame = frame_allocator_get_user_page(new_page_virtual, PAL_ZERO, true);
+    void * page_ptr_frame = frame_allocator_get_user_page(p, PAL_ZERO, true);
     if (page_ptr_frame == NULL)
     {
         PANIC("Stack Growth Fault");
     }
 
-    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
-    supplemental_insert_page_info(&t->supplemental_page_table, p);
 
     supplemental_mark_page_in_memory (&t->supplemental_page_table, new_page_virtual);
 }

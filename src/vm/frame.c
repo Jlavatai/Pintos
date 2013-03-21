@@ -92,18 +92,13 @@ void *
 frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
                 bool writable)
 {
-  ASSERT(page);
-  static int c = 0;
-  c++;
-  printf("Acquire: %i\n", c);
   lock_acquire(&frame_allocation_lock);
-  printf("%i\n", c);
   void * user_vaddr = page->vaddr;
-  printf("%i\n", c);
+
   ASSERT(is_user_vaddr(user_vaddr));
-  printf("%i\n", c);
+
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
-  printf("%i\n", c);
+
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
     frame_allocator_evict_page();
@@ -111,14 +106,14 @@ frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
     ASSERT(kernel_vaddr)
   }
   size_t i;
-  printf("%i\n", c);
+
   /* Map the frame used to it's virtual address. */
   if (!install_page(user_vaddr, kernel_vaddr, writable)) {
     PANIC("Could not install user page %p", user_vaddr);
   }
-  printf("%i\n", c);
+
   frame_map (kernel_vaddr, page, writable);
-  printf("Release\n");
+
   lock_release(&frame_allocation_lock);
 
   return kernel_vaddr;
@@ -134,12 +129,12 @@ frame_allocator_get_user_page_multiple(struct page* page,
 }
 
 void
-frame_allocator_free_user_page(struct page *page, bool locked)
+frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
 {
-  void* kernel_vaddr = page->vaddr;
-  palloc_free_page (kernel_vaddr);
-  if (!locked)
+  if (!is_locked)
     lock_acquire (&frame_allocation_lock);
+
+  palloc_free_page (kernel_vaddr);
 
   uint32_t *pd = thread_current ()->pagedir;
   struct frame lookup;
@@ -155,7 +150,7 @@ frame_allocator_free_user_page(struct page *page, bool locked)
   
   pagedir_clear_page (pd, f->page->vaddr);
   frame_unmap (kernel_vaddr);  
-  if (!locked)
+  if (!is_locked)
     lock_release (&frame_allocation_lock);
 }
 
@@ -167,8 +162,6 @@ frame_allocator_evict_page(void) {
   frame_allocator_save_frame (f);
   // Free the page
   frame_allocator_free_user_page(f->frame_addr, true);
-
-  printf("Finished Eviction of frame: %X\n",f->page->vaddr);
 }
 
 static void frame_allocator_save_frame (struct frame* f) {
@@ -179,9 +172,7 @@ static void frame_allocator_save_frame (struct frame* f) {
   if(!t)
     PANIC("Corruption of frame table");
 
-  printf("Evicting Page: %X\n", f->page->vaddr); 
   ASSERT(f->page);
-
 
   bool dirtyFlag = pagedir_is_dirty(t->pagedir, f->page->vaddr);
   // If the page is dirty, write it back to the
@@ -205,11 +196,9 @@ static void frame_allocator_save_frame (struct frame* f) {
     if (!s) {
       PANIC("Frame Eviction: No Swap Memory left!");
     }
-        printf("Previous Page Status: "BYTETOBINARYPATTERN"\n", BYTETOBINARY(f->page->page_status));
     // Set the page status to swap
     f->page->page_status = PAGE_SWAP;
     // f->page->page_status = f->page->page_status & (PAGE_IN_MEMORY);
-    printf("Page Status: "BYTETOBINARYPATTERN"\n", BYTETOBINARY(f->page->page_status));
     f->page->writable = false;
     f->page->aux = s;
     // Save the data into swap.

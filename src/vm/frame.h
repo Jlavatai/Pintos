@@ -23,7 +23,7 @@ void *frame_allocator_get_user_page_multiple(struct page * page,
 											 unsigned int num_frames,
 											 enum palloc_flags flags,
 											 bool writable);
-void frame_allocator_free_user_page(struct page *page, bool locked);
+void frame_allocator_free_user_page(void *kernel_vaddr, bool locked);
 
 
 
