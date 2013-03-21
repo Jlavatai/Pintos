@@ -23,7 +23,7 @@ static struct page *
 supplemental_get_page_info (struct hash *supplemental_page_table, void *vaddr)
 {
   struct page p;
-  p.vaddr = vaddr;
+  p.vaddr = pg_round_down (vaddr);
 
   struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
   if (e == NULL)
@@ -93,25 +93,21 @@ free_user_page(void* upage)
 void
 supplemental_mark_page_in_memory (struct hash *supplemental_page_table, void *uaddr)
 {
-    struct page p;
-    p.vaddr = uaddr;
+    struct page *p = supplemental_get_page_info (supplemental_page_table, uaddr);
+    if (!p)
+      PANIC ("Can't mark page %p as in-memory, because it is not in use.", p);
 
-    struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
-    struct page *page = hash_entry (e, struct page, hash_elem);
-
-    page->page_status |= PAGE_IN_MEMORY;
+    p->page_status |= PAGE_IN_MEMORY;
 }
 
 void
 supplemental_mark_page_not_in_memory (struct hash *supplemental_page_table, void *uaddr)
 {
-    struct page p;
-    p.vaddr = uaddr;
+    struct page *p = supplemental_get_page_info (supplemental_page_table, uaddr);
+    if (!p)
+      PANIC ("Can't mark page %p as not-in-memory, because it is not in use.", p);
 
-    struct hash_elem *e = hash_find (supplemental_page_table, &p.hash_elem);
-    struct page *page = hash_entry (e, struct page, hash_elem);
-
-    page->page_status &= ~PAGE_IN_MEMORY;  
+    p->page_status &= ~PAGE_IN_MEMORY;  
 }
 
 bool 
@@ -119,15 +115,12 @@ supplemental_entry_exists (struct hash *supplemental_page_table,
                            void *uaddr,
                            struct page **entry)
 {
-  struct page p;
-  p.vaddr = pg_round_down(uaddr);
-
-  struct hash_elem *e = hash_find(supplemental_page_table, &p.hash_elem);
-  if (!e)
+  struct page *p = supplemental_get_page_info (supplemental_page_table, uaddr);
+  if (!p)
     return false;
 
   if (entry)
-    *entry = hash_entry (e, struct page, hash_elem);
+    *entry = p;
 
   return true;
 }
@@ -147,17 +140,13 @@ supplemental_remove_page_entry (struct hash *supplemental_page_table, void *uadd
 }
 
 bool 
-supplemental_is_page_writable (struct hash *supplemental_page_table, void *uaddr) {
-  struct page p;
-  p.vaddr = pg_round_down(uaddr);
+supplemental_is_page_writable (struct hash *supplemental_page_table, void *uaddr)
+{
+  struct page *p = supplemental_get_page_info (supplemental_page_table, uaddr);
+  if (!p)
+    PANIC ("Could not determine if page %p is writable, as it is not mapped.", p);
 
-  struct hash_elem *e = hash_find(supplemental_page_table, &p.hash_elem);
-  if (!e)
-    return false;
-
-  struct page *page = hash_entry(e, struct page, hash_elem);
-
-  return page->writable; 
+  return p->writable; 
 }
 
 unsigned
