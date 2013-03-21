@@ -92,18 +92,13 @@ void *
 frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
                 bool writable)
 {
-  ASSERT(page);
-  static int c = 0;
-  c++;
-  printf("Acquire: %i\n", c);
   lock_acquire(&frame_allocation_lock);
-  printf("%i\n", c);
   void * user_vaddr = page->vaddr;
-  printf("%i\n", c);
+
   ASSERT(is_user_vaddr(user_vaddr));
-  printf("%i\n", c);
+
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
-  printf("%i\n", c);
+
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
     frame_allocator_evict_page();
@@ -111,14 +106,14 @@ frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
     ASSERT(kernel_vaddr)
   }
   size_t i;
-  printf("%i\n", c);
+
   /* Map the frame used to it's virtual address. */
   if (!install_page(user_vaddr, kernel_vaddr, writable)) {
     PANIC("Could not install user page %p", user_vaddr);
   }
-  printf("%i\n", c);
+
   frame_map (kernel_vaddr, page, writable);
-  printf("Release\n");
+
   lock_release(&frame_allocation_lock);
 
   return kernel_vaddr;

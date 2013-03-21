@@ -807,7 +807,7 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
 
   bool should_read_into_page = false;
   enum page_status status;
-
+  struct page* p;
   /* Three cases for loading a page from an executable. */
   if (page_read_bytes == PGSIZE) {
     should_read_into_page = false;
@@ -830,25 +830,26 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
       filesys_info->file = file;
       filesys_info->offset = offset;
 
-      struct page* p = supplemental_create_filesys_page_info (upage, filesys_info);
+      p = supplemental_create_filesys_page_info (upage, filesys_info);
       supplemental_insert_page_info(supplemental_page_table,p);
     }
       break;
 
     case PAGE_ZERO:
     {
-      struct page* p = supplemental_create_zero_page_info (upage);
+      p = supplemental_create_zero_page_info (upage);
       supplemental_insert_page_info(supplemental_page_table,p);
     }
       break;
 
     default:
+      PANIC("Unhandled Load Page Exception");
       break;
   }
 
   /* Allocate a frame for the page if need be. */
   if (should_read_into_page) {
-    uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+    uint8_t *kpage = frame_allocator_get_user_page(p, 0, true);
 
     if (!read_executable_page (file, offset, kpage, page_read_bytes, page_zero_bytes))
       return false;
