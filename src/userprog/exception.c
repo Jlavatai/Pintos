@@ -248,10 +248,9 @@ page_fault (struct intr_frame *f)
         return;
       }
       break;
-      
+
       default:
       {
-        // printf("Begin Load Page\n");
         // Page is in swap.
         struct swap_entry *swap_info = (struct swap_entry *) page->aux;
         void * kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
@@ -264,7 +263,6 @@ page_fault (struct intr_frame *f)
         page->page_status &= ~PAGE_SWAP;
         // Mark as in memory
         page->page_status &= ~PAGE_IN_MEMORY;
-        // printf("Loaded Page: %X\n", page->vaddr);
         return;
       }
         break;

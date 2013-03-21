@@ -152,13 +152,13 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
 
   pagedir_clear_page (pd, f->page->vaddr);
   frame_unmap (kernel_vaddr);  
+  free(f);
   if (!is_locked)
     lock_release (&frame_allocation_lock);
 }
 
 static void *
 frame_allocator_evict_page(void) {
-
   struct frame * f = frame_allocator_choose_eviction_frame();
   // Save the page in some form, likely to swap
   frame_allocator_save_frame (f);
@@ -192,7 +192,7 @@ static void frame_allocator_save_frame (struct frame* f) {
       // file_write (mmap_info->file, 
       //             f->page->vaddr,
       //             mmap_info->length);
-  } else if (dirtyFlag) {
+  } else if (dirtyFlag || true) {
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {
@@ -200,11 +200,13 @@ static void frame_allocator_save_frame (struct frame* f) {
     }
     // Set the page status to swap
     f->page->page_status |= PAGE_SWAP;
-    // f->page->page_status = f->page->page_status & (PAGE_IN_MEMORY);
-    f->page->writable = false;
+    f->page->page_status |= ~(PAGE_IN_MEMORY);
     f->page->aux = s;
     // Save the data into swap.
     swap_save(s, (void*)f->frame_addr);
+  } else {
+    // Delete the page
+
   }
 }
 
@@ -237,6 +239,7 @@ struct frame * frame_allocator_choose_eviction_frame(void) {
       }
     }
   }
+  // printf("Eviction Unused count: %i\n", least_used);
   eviction_candidate->unused_count = 0;
 
   return eviction_candidate;
