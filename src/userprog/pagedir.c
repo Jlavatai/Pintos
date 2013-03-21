@@ -28,7 +28,6 @@ void
 pagedir_destroy (uint32_t *pd) 
 {
   uint32_t *pde;
-
   if (pd == NULL)
     return;
 
@@ -99,7 +98,6 @@ bool
 pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
 {
   uint32_t *pte;
-
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (pg_ofs (kpage) == 0);
   ASSERT (is_user_vaddr (upage));
@@ -125,7 +123,6 @@ void *
 pagedir_get_page (uint32_t *pd, const void *uaddr) 
 {
   uint32_t *pte;
-
   ASSERT (is_user_vaddr (uaddr));
   
   pte = lookup_page (pd, uaddr, false);
@@ -143,7 +140,6 @@ void
 pagedir_clear_page (uint32_t *pd, void *upage) 
 {
   uint32_t *pte;
-
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (is_user_vaddr (upage));
 

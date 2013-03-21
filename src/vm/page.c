@@ -102,9 +102,16 @@ supplemental_create_in_memory_page_info (void *vaddr, bool writable)
 static void 
 free_user_page(void* upage)
 {
-    struct thread *t = thread_current();
-    void* kpage = pagedir_get_page(&t->pagedir, upage);
-    frame_allocator_free_user_page(kpage, false);
+  static struct lock l;
+  static bool i = false;
+  if (!i){lock_init(&l);i=true;}
+  lock_acquire(&l);
+
+  struct thread *t = thread_current();
+  void* kpage = pagedir_get_page(t->pagedir, upage);
+
+  frame_allocator_free_user_page(kpage, false);
+  lock_release(&l);
 }
 
 void
@@ -189,21 +196,32 @@ void
 supplemental_page_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
 {
   struct page *page =  hash_entry (e, struct page, hash_elem);
+  // printf ("free\n");
 
-  switch(page->page_status)
-  {
-    case PAGE_FILESYS:
-      if (page->aux)
-        free(page->aux), page->aux = NULL;
-      break;
-    break;
-    case PAGE_MEMORY_MAPPED:
+  if (page->page_status & PAGE_FILESYS) {
+    // printf ("free filesys\n");
+
+    if (page->aux)
+      free(page->aux), page->aux = NULL;
+  }
+
+  if (page->page_status & PAGE_MEMORY_MAPPED) {
+    // printf ("free mem_mapped\n");
       if(page->aux)
         free (page->aux), page->aux = NULL;
-      break;
-    default:
-      break;
   }
+  if (page->page_status & PAGE_SWAP) {
+    // printf ("free swap\n");
+      if (page->aux) {
+        swap_free (page->aux);
+      }
+  }
+  if (page->page_status & PAGE_IN_MEMORY) {
+    // printf ("free page in memory: %X\n", page->vaddr);
+    if (page->vaddr) 
+      free_user_page   (page->vaddr);
+  }
+
 
   free (page);
 }
