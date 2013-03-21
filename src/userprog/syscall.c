@@ -440,14 +440,7 @@ void
 munmap_syscall (mapid_t mapid)
 {
   struct hash *mmap_table = &thread_current ()->mmap_table;
-  struct mmap_mapping lookup;
-  lookup.mapid = mapid;
-
-  struct hash_elem *e = hash_find (mmap_table, &lookup.hash_elem);
-  if (!e)
-    return;
-
-  struct mmap_mapping *mapping = hash_entry (e, struct mmap_mapping, hash_elem);
+  struct mmap_mapping *mapping = mmap_get_mapping (mmap_table, mapid);
   if (!mapping)
     return;
 
