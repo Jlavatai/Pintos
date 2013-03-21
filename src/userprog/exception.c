@@ -205,20 +205,13 @@ page_fault (struct intr_frame *f)
         uint8_t *kpage = frame_allocator_get_user_page(page, 0, false);
         if(!read_executable_page(file, ofs, kpage, PGSIZE, 0))
             kill(f);
-
-        supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
-
         return;
       }
       break;
 
       case PAGE_ZERO:
       {
-        // printf("Getting a new page of memory\n");
         frame_allocator_get_user_page(page, PAL_ZERO, true);
-        // printf("Call Succeeded\n");
-        supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
-
         return;
       }
       break;
