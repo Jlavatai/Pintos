@@ -20,6 +20,7 @@
 #include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/mmap.h"
 
 struct argument
 {
@@ -49,11 +50,6 @@ static bool esp_not_in_boundaries(void *esp);
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
 
-unsigned mmap_hash (const struct hash_elem *e, void *aux UNUSED);
-bool mmap_less (const struct hash_elem *a,
-                const struct hash_elem *b,
-                void *aux UNUSED);
-void mmap_table_destroy_func (struct hash_elem *e, void *aux);
 bool load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
                           size_t page_zero_bytes);
 
@@ -1015,33 +1011,4 @@ void
 end_file_system_access(void)
 {
   lock_release(&file_system_lock);
-}
-
-unsigned
-mmap_hash (const struct hash_elem *e, void *aux UNUSED)
-{
-  const struct mmap_mapping *mapping = hash_entry (e, struct mmap_mapping, hash_elem);
-  return hash_bytes (&mapping->mapid, sizeof (mapping->mapid));
-}
-
-bool
-mmap_less (const struct hash_elem *a,
-           const struct hash_elem *b,
-           void *aux UNUSED)
-{
-  const struct mmap_mapping *mapping_a = hash_entry (a, struct mmap_mapping, hash_elem);
-  const struct mmap_mapping *mapping_b = hash_entry (b, struct mmap_mapping, hash_elem);
-
-  return mapping_a->mapid < mapping_b->mapid;
-}
-
-void
-mmap_table_destroy_func (struct hash_elem *e, void *aux)
-{
-  struct mmap_mapping *mapping =  hash_entry (e,
-                                              struct mmap_mapping,
-                                              hash_elem);
-
-  ASSERT (mapping->file != NULL);
-  munmap_syscall_with_mapping (mapping, false);
 }
