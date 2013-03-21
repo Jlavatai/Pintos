@@ -1,0 +1,111 @@
+\documentclass[a4wide, 11pt]{article}
+\usepackage{a4, fullpage}
+\usepackage[margin=2.5cm]{geometry}
+\newcommand{\tx}{\texttt}
+
+\begin{document}
+\title{Pintos Task 3 : Virtual Memory}
+\author{Francesco Di Mauro, Thomas Rooney, Alex Rozanski}
+
+\maketitle
+
+\section{Page Table Management}
+\subsection{Data structures}
+\subsubsection{A1}
+Added to \tx{struct thread} in \tx{thread.h}:
+\begin{verbatim}
+struct hash supplemental_page_table;
+\end{verbatim}
+Hash table representing the supplemental page table.
+Added to new file \tx{page.h}:
+\begin{verbatim}
+enum page_status {
+   PAGE_UNDEFINED = 0,           /*default status*/
+   PAGE_FILESYS = 1 << 0,        /*page referring to a file*/
+   PAGE_SWAP  = 1 << 1,          /*page in the swap partition*/
+   PAGE_MEMORY_MAPPED  = 1 << 2, /*page representing a mem mapd file*/
+   PAGE_IN_MEMORY = 1 << 3,      /*page currently stored in memory*/
+   PAGE_ZERO = 1 << 4,           /*page of zero bytes*/
+};
+\end{verbatim}
+Enum used to represent the status of a page in the supplemental page table.
+
+\begin{verbatim}
+struct page_filesys_info {
+   struct file *file;
+   size_t offset;
+};
+\end{verbatim}
+If a page refers to a file in the file system, it will store info regarding the actual file in memory.
+
+
+\begin{verbatim}
+struct page {
+   struct hash_elem hash_elem;		/* Used to store the frame in the page table. */
+   void *vaddr;	    			/* The address of the page in user virtual memory. */
+   void *aux;						/* */
+   enum page_status page_status;   /* Used to store the page's current status. */
+   bool writable;					/* Stores if a page is writable or not */
+};
+\end{verbatim}
+Struct holding information about a page, stored in the supplemental page table.
+
+ 
+
+\subsection{Algorithms}
+\subsubsection{A2}
+
+\subsubsection{A3}
+
+\subsection{Synchronization}
+\subsubsection{A4}
+
+\subsection{Rationale}
+\subsubsection{A5}
+
+\section{Paging to and from disk}
+
+\subsection{Data structures}
+\subsubsection{B1}
+
+\subsection{Algorithms}
+\subsubsection{B2}
+
+\subsubsection{B3}
+
+\subsection{B4}
+
+\subsection{Synchronization}
+\subsubsection{B5}
+
+\subsubsection{B6}
+
+\subsubsection{B7}
+
+\subsubsection{B8}
+
+\subsection{Rationale}
+\subsubsection{B9}
+
+
+\section{Memory Mapped Files}
+\subsection{Data structures}
+\subsubsection{C1}
+\begin{verbatim}
+struct page_mmap_info {
+   mapid_t mapping;				/* The mmap() mapid. */
+   size_t offset;					/* The offset into the file. */
+   size_t length;					/* The number of bytes of the file stored in this page. */
+};
+\end{verbatim}
+If a page represents a file mapped in memory, this struct will hold information about the id of the mapping, offset in the file and length of the file.
+
+\subsection{Algorithms}
+\subsubsection{C2}
+
+\subsubsection{C3}
+
+\subsection{Rationale}
+\subsubsection{C4}
+
+\end{document}
