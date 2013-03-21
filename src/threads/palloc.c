@@ -62,27 +62,6 @@ palloc_init (size_t user_page_limit)
              user_pages, "user pool");
 }
 
-// void *
-// palloc_allocate_mult_frames(enum palloc_flags flags, size_t page_cnt)
-// {
-//   void *kernel_addr = palloc_get_multiple(flags, page_cnt);
-
-//   if(flags & PAL_USER) 
-//   {
-      
-//  // printf("-----The virtual address I have been allocated is %x\n", vaddr);
-
-//   struct frame *new_fr = NULL;
-//      new_fr = malloc(sizeof(struct frame));
-//      new_fr->frame_addr = kernel_addr;
-//      new_fr->page = vaddr;
-//      hash_insert(&frame_table, &new_fr->hash_elem);
-//   }
-
- 
-//      return vaddr;
-// }
-
 static struct pool*
 get_pool_for_flags (enum palloc_flags flags)
 {
