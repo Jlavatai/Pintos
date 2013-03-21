@@ -215,6 +215,10 @@ struct frame * frame_allocator_choose_eviction_frame(void) {
   struct thread *t;
   struct frame * eviction_candidate;
   int32_t least_used = 0;
+  bool dirty_candidate = false;
+  bool accessed_candidate = false;
+  bool dirty;
+  bool accessed;
 
   // We aim to use pseudo LRU replacement.
   // When we choose to evict, find the oldest page which hasn't
@@ -229,15 +233,23 @@ struct frame * frame_allocator_choose_eviction_frame(void) {
     struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
     // Get the owning thread
     t = thread_lookup(f->owner_id);
+    dirty = pagedir_is_dirty(t->pagedir, f->frame_addr);
+    accessed = pagedir_is_accessed(t->pagedir, f->frame_addr);
     // If it is accessed, set is as not accessed and move on
-    if (pagedir_is_accessed(t->pagedir, f->frame_addr)) {
-      pagedir_set_accessed(t->pagedir, f->frame_addr, false);
-    } else {
-      if (++f->unused_count > least_used && f->page->writable) {
-        eviction_candidate = f;
-        least_used = f->unused_count;
-      }
+    if (!accessed && accessed_candidate)
+      break;
+
+    if (!dirty && dirty_candidate)
+      break;
+
+    if (++f->unused_count > least_used && f->page->writable) {
+      eviction_candidate = f;
+      dirty_candidate = dirty;
+      accessed_candidate = accessed;  
+      least_used = f->unused_count;
     }
+    pagedir_set_accessed(t->pagedir, f->frame_addr, false);
+    pagedir_set_dirty   (t->pagedir, f->frame_addr, false);
   }
   // printf("Eviction Unused count: %i\n", least_used);
   eviction_candidate->unused_count = 0;

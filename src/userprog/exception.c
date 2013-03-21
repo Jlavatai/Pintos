@@ -185,7 +185,7 @@ page_fault (struct intr_frame *f)
         stack_grow(thread_current(), fault_addr);
         return;
       }
-      printf("Not in Supplementary Page Table\n");
+      // printf("Not in Supplementary Page Table\n");
       goto page_fault;
     }
 
