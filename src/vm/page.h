@@ -55,6 +55,7 @@ bool supplemental_is_page_writable (struct hash *supplemental_page_table, void *
 void supplemental_remove_page_entry (struct hash *supplemental_page_table, void *uaddr); 
 
 
+/* Supplemental page table hash functions */
 unsigned supplemental_page_table_hash (const struct hash_elem *e,
 									   void *aux);
 bool supplemental_page_table_less (const struct hash_elem *a,

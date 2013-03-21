@@ -54,6 +54,8 @@ bool mmap_less (const struct hash_elem *a,
                 const struct hash_elem *b,
                 void *aux UNUSED);
 void mmap_table_destroy_func (struct hash_elem *e, void *aux);
+bool load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
+                          size_t page_zero_bytes);
 
 void
 process_init (void)
@@ -589,15 +591,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
     if (t->pagedir == NULL)
         goto done;
 
-#ifdef VM
+    /* Initialise the process's supplemental page table. */
     hash_init (&t->supplemental_page_table,
                supplemental_page_table_hash,
                supplemental_page_table_less,
                NULL);
 
+    /* Initialise the mmap() info for the process. */
     hash_init (&t->mmap_table, mmap_hash, mmap_less, NULL);
     t->next_mmapid = MIN_MMAPID;
-#endif
 
     process_activate ();
 
@@ -772,10 +774,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     ASSERT (pg_ofs (upage) == 0);
     ASSERT (ofs % PGSIZE == 0);
 
-    file_seek (file, ofs);
-
     size_t page_index = 0;
-    struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+    off_t offset = ofs;
 
     while (read_bytes > 0 || zero_bytes > 0)
     {
@@ -785,61 +785,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-        bool should_read_into_page = false;
-        enum page_status status;
-
-        /* Three cases for loading a page from an executable. */
-        if (page_read_bytes == PGSIZE) {
-          should_read_into_page = false;
-          status = PAGE_FILESYS;
-        }
-        else if (page_zero_bytes == PGSIZE) {
-          should_read_into_page = false;
-          status = PAGE_ZERO;
-        }
-        else {
-          should_read_into_page = true;
-          status = PAGE_FILESYS;
-        }
-
-        /* Add information about the page to the supplemental page table. */
-        switch (status) {
-          case PAGE_FILESYS:
-          {
-            struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
-            filesys_info->file = file;
-            filesys_info->offset = page_index * PGSIZE;
-
-            supplemental_insert_filesys_page_info (supplemental_page_table,
-                                                   upage,
-                                                   filesys_info);
-          }
-          break;
-
-          case PAGE_ZERO:
-            supplemental_insert_zero_page_info (supplemental_page_table,
-                                                upage);
-          break;
-
-          default: break;
-        }
-
-        /* Allocate a frame for the page if need be. */
-        if (should_read_into_page) {
-          uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
-
-          if (!load_executable_page (file, ofs + page_index * PGSIZE,
-                                     kpage, page_read_bytes, page_zero_bytes))
-            return false;
-
-          /* Mark that we have allocated a frame for this page in memory. */
-          supplemental_mark_page_in_memory (supplemental_page_table, upage);
-        }
+        if (!load_executable_page (file, offset, upage, page_read_bytes, page_zero_bytes))
+          return false;
 
         /* Advance. */
         read_bytes -= page_read_bytes;
         zero_bytes -= page_zero_bytes;
         upage += PGSIZE;
+        offset += PGSIZE;
 
         ++page_index;
     }
@@ -847,16 +800,74 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 bool
-load_executable_page(struct file *file, size_t offset, void *kpage, size_t page_read_bytes,
+load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
+                     size_t page_zero_bytes)
+{
+  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
+  bool should_read_into_page = false;
+  enum page_status status;
+
+  /* Three cases for loading a page from an executable. */
+  if (page_read_bytes == PGSIZE) {
+    should_read_into_page = false;
+    status = PAGE_FILESYS;
+  }
+  else if (page_zero_bytes == PGSIZE) {
+    should_read_into_page = false;
+    status = PAGE_ZERO;
+  }
+  else {
+    should_read_into_page = true;
+    status = PAGE_FILESYS;
+  }
+
+  /* Add information about the page to the supplemental page table. */
+  switch (status) {
+    case PAGE_FILESYS:
+    {
+      struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
+      filesys_info->file = file;
+      filesys_info->offset = offset;
+
+      supplemental_insert_filesys_page_info (supplemental_page_table,
+                                             upage,
+                                             filesys_info);
+    }
+     break;
+
+    case PAGE_ZERO:
+      supplemental_insert_zero_page_info (supplemental_page_table,
+                                          upage);
+      break;
+
+    default:
+      break;
+  }
+
+  /* Allocate a frame for the page if need be. */
+  if (should_read_into_page) {
+    uint8_t *kpage = frame_allocator_get_user_page(upage, 0, true);
+
+    if (!read_executable_page (file, offset, kpage, page_read_bytes, page_zero_bytes))
+      return false;
+
+    /* Mark that we have allocated a frame for this page in memory. */
+    supplemental_mark_page_in_memory (supplemental_page_table, upage);
+  }
+
+  return true;
+}
+
+bool
+read_executable_page(struct file *file, size_t offset, void *kpage, size_t page_read_bytes,
                      size_t page_zero_bytes)
 {
   file_seek (file, offset);
 
   /* Load this page. */
   if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-  {
       return false;
-  }
 
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
