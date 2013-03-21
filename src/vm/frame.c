@@ -110,12 +110,15 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
 
   lock_acquire(&frame_allocation_lock);
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
-
+  lock_release(&frame_allocation_lock);
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
+
     frame_allocator_evict_page();
     printf("Evicted a Page");
+    lock_acquire(&frame_allocation_lock);
     kernel_vaddr = palloc_get_page (PAL_USER | flags);
+    lock_release(&frame_allocation_lock);
     if (kernel_vaddr == NULL) {
       frame_allocator_evict_page();
       kernel_vaddr = palloc_get_page (PAL_USER | flags);
@@ -128,6 +131,7 @@ frame_allocator_get_user_page_multiple(void *user_vaddr,
       }
     }
   }
+  lock_acquire(&frame_allocation_lock);
 
   size_t i;
 
@@ -178,8 +182,12 @@ frame_allocator_free_user_page(void *kernel_vaddr)
 static void *
 frame_allocator_evict_page(void) {
   struct frame * f = frame_allocator_choose_eviction_frame();
-  // Allocate some swap memory for this frame
+  // Save the page in some form, likely to swap
   frame_allocator_save_frame (f);
+  // Free the page
+  frame_allocator_free_user_page(f->frame_addr);
+
+
 }
 
 static void frame_allocator_save_frame (struct frame* f) {
@@ -223,9 +231,6 @@ static void frame_allocator_save_frame (struct frame* f) {
     // Save the data into swap.
     swap_save(s, (void*)f->frame_addr);
   }
-  // Free the page
-  frame_allocator_free_user_page(f->page->vaddr);
-
 }
 
 struct frame * frame_allocator_choose_eviction_frame(void) {
