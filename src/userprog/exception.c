@@ -191,7 +191,7 @@ page_fault (struct intr_frame *f)
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
     // printf("Page: %X ; page_status: "BYTETOBINARYPATTERN"\n"
-    //       , page->vaddr, BYTETOBINARY(page->page_status));
+    //       , page->vaddr, BYTETOBINARYPATTERNTOBINARY(page->page_status));
     ASSERT ((page->page_status & PAGE_IN_MEMORY) == 0);
     // printf("Page Status: %i\n", page->page_status);
     switch (page->page_status)

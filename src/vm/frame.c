@@ -129,12 +129,12 @@ frame_allocator_get_user_page_multiple(struct page* page,
 }
 
 void
-frame_allocator_free_user_page(struct page *page, bool is_locked)
+frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
 {
-  void* kernel_vaddr = page->vaddr;
-  palloc_free_page (kernel_vaddr);
   if (!is_locked)
     lock_acquire (&frame_allocation_lock);
+
+  palloc_free_page (kernel_vaddr);
 
   uint32_t *pd = thread_current ()->pagedir;
   struct frame lookup;
