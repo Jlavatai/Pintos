@@ -31,13 +31,14 @@ supplemental_get_page_info (struct hash *supplemental_page_table, void *vaddr)
 
 struct page*
 supplemental_create_filesys_page_info (void *vaddr,
-                                       struct page_filesys_info *filesys_info)
+                                       struct page_filesys_info *filesys_info,
+                                       bool writable)
 {
   struct page *page_info = malloc (sizeof (struct page));
   if (page_info) {
     page_info->page_status = PAGE_FILESYS;  
     page_info->aux = filesys_info;
-    page_info->writable = false;
+    page_info->writable = writable;
     page_info->vaddr = vaddr;
   }
   return page_info;
@@ -205,4 +206,32 @@ supplemental_page_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
   }
 
   free (page);
+}
+
+void print_page_info ()
+{
+  struct hash *supplemental_page_table = &thread_current()->supplemental_page_table;
+
+  struct hash_iterator i;
+  hash_first (&i, supplemental_page_table);
+
+  while (hash_next (&i))
+  {
+    struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+
+    char *type = NULL, *extras = NULL;
+    enum page_status status = p->page_status;
+    if (status & PAGE_FILESYS)
+      type = "filesys";
+    if (status & PAGE_MEMORY_MAPPED)
+      type = "memory-mapped";
+    if (status & PAGE_ZERO)
+      type = "zero";
+    if (status & PAGE_IN_MEMORY)
+      extras = "in memory";
+    if (status & PAGE_SWAP)
+      extras = "swap";
+
+    printf ("Vaddr: %p Type: %s Extras: %s\n", p->vaddr, type, extras);
+  }
 }
