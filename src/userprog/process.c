@@ -451,8 +451,8 @@ process_exit (void)
        page table to terminate cleanly. */
     hash_destroy (&cur->mmap_table,
                   mmap_table_destroy_func);
-    // hash_destroy (&cur->supplemental_page_table,
-    //               supplemental_page_table_destroy_func);
+    hash_destroy (&cur->supplemental_page_table,
+                  supplemental_page_table_destroy_func);
   #endif
 
     // Close the executable file, if the file is still open somewhere, writes
@@ -863,10 +863,14 @@ bool
 read_executable_page(struct file *file, size_t offset, void *kpage, size_t page_read_bytes,
                      size_t page_zero_bytes)
 {
+  start_file_system_access ();
   file_seek (file, offset);
 
   /* Load this page. */
-  if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+  int bytes_read = file_read (file, kpage, page_read_bytes);
+  end_file_system_access();
+
+  if (bytes_read != (int) page_read_bytes)
       return false;
 
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
