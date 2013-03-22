@@ -96,7 +96,7 @@ Before returning from the page fault handler, the page will me marked as present
 
 \subsubsection{A3}
 
-In our design, we do not need to get the flags for if a page is dirty or accessed but for in the page eviction algorithm. In the page eviction algorithm, we have access to the virtual addresses, and thus we have no need to store the dirty and accessed bits inside the frame table entry. Thus we avoid the issue entirely
+In our design, we do not need to access the flags for if a page is dirty or accessed except for in the page eviction algorithm. In the page eviction algorithm, we have access to the user virtual addresses so can look up the accessed/dirty bits in the page directory, and thus we have no need to store the dirty and accessed bits inside the frame table entry.
 
 \subsection{Synchronization}
 \subsubsection{A4}
