@@ -193,22 +193,19 @@ So, referring to the 5 conditions causing deadlocks in OSs, this is how they hav
 \end{itemize}
 
 
-
-
-
 \subsubsection{B6}
 
-FThis case is handled via the global frame table lock. When a process faults, we allocate a frame for the virtual address which faulted, and move the data stored in its previous location to this new physical address.
+This case is handled via the global frame allocation lock. When a process faults, we allocate a frame for the virtual address which faulted, and move the data stored in its previous location to this new physical address.
 
-During this allocation, we evict a page if necessary. Because the allocation is locked down such that it's an atomic operation, if thread Q is woken and immediately page fault's on the evicted address, before the allocation is finished, it will wait on the frame allocation lock. When the frame allocation is finished, frame Q can continue and potentially evict another page if needed.
+During this allocation, we evict a page if necessary. Because the allocation is locked down such that it's an atomic operation, if thread $Q$ is woken and immediately page fault's on the evicted address, before the allocation is finished, it will wait on the frame allocation lock. When the frame allocation is finished, frame $Q$ can continue and potentially evict another page if needed.
 
-There is also a lock for each supplemental page table. If a page is being accessed, this lock is acquired ensuring that any other accesses/writes are finished before an access is performed.
+There is also a lock for each thread's supplemental page table. If a page is being accessed, this lock is acquired ensuring that any other accesses/writes are finished before an access is performed.
 
 \subsubsection{B7}
 
-Any modification's to the frame table are locked globally to ensure atomicity. If process P requires a new page to handle a page fault, it will acquire this lock. Once it is acquired a second process Q can not modify the frame table in any way until it's completed, by the use of this global lock.
+Any modifications to the frame table are locked globally to ensure atomicity. If process $P$ requires a new frame (to handle a page fault), it will acquire this lock. Once it is acquired, a second process $Q$ can not modify the frame table in any way until it's completed, by the use of this global lock.
 
-Also, once a page is read in, it will have an unused\_count of 0. When we choose to evict a page, we choose the highest unused\_count, where unused\_count is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is unlikely (very) to be evicted any time soon.
+Also, once a page is read in, it will have an \tx{unused\_count} of 0. When we choose to evict a page, we choose the highest \tx{unused\_count}, where \tx{unused\_count} is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is (very) unlikely to be evicted any time soon.
 
 \subsubsection{B8}
 Paged out pages which need to be brought in memory need a special treatment when dealing with system calls, and, most importantly, the \tx{read} system call. This is because the actual action of reading into the a user specified buffer could cause a page fault which could not be properly handled. Consider the case where a thread tries to read from a buffer referring to a file, in a page referring to a file, which is not present in memory: in this case, the thread would be in the filesys critical region, and during page fault, it would try to acquire the lock again to correctly read data from the file. In order to avoid this problem, a different strategy has been implemented: The provided buffer is still validated before reading but, if it is going to page fault because the stack needs to grow to allow space for the data, the stack growth is carried out before the reading. This way, we avoid having to deal with the page fault that could potentially occur while reading.  
@@ -223,14 +220,13 @@ Our Design has:
 \item 1 Per Process lock for the Supplemental Page Table.
 \end{itemize}
 
-The lowest level of parallelism is to have one global lock for the entirety of the Virtual Memory Module. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.\\
-\\
-We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this for two reasons. We wanted to keep the design simple until all the functionality was correct, and the locking mechanisms were only one small portion of the designs.\\
-\\
-As an imrpovement, we believe that changing the locks to a per-resource system could be a fairly simple job.
-\\
-The design we chose has the trade-off between parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.\\
-\\ Premature optimisation is the root of all evil (especially so from what we've found in previous Pintos sections), but if the design is correct at the beginning, the post-functionally-correct optimisation is made simpler. We believe that we had a design that was parallelizable, and thus are happy with it.
+The lowest level of parallelism is to have one global lock for the entirety of the Virtual Memory Module. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.
+
+We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this for two reasons. We wanted to keep the design simple until all the functionality was correct, and the locking mechanisms were only one small portion of the designs.
+
+The design we chose makes a good tradeoff between high parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.
+
+We didn't want to prematurely optimise our code (the root of all evil), especially from what we've learnt from the previous Pintos tasks. We believe that we have a design that is parallelisable, and are happy with it.
 
 
 
