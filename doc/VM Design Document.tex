@@ -229,21 +229,19 @@ Paged out pages which need to be brought in memory need a special treatment when
 
 Our Design has:
 \begin{itemize}
-\item 1 Global lock for the Frame Table.
+\item 1 Global lock for modifications to the Frame Table \tx{struct}.
+\item 1 Global lock for the Frame Allocation/Free/Eviction.
 \item 1 Global lock for the Swap Table.
 \item 1 Per Process lock for the Supplemental Page Table.
 \end{itemize}
 
-The lowest level of parallelism is to have one global lock for the entirety of the Virtual Memory Module. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.\\
+The lowest level of parallelism is to have one global lock for the entirety of the \tx{VM} Module. We chose to not do this because it limits parallelism very significantly, and it is not sigificantly more complex for a per-module lock.\\
 \\
-We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this for two reasons. We wanted to keep the design simple until all the functionality was correct, and the locking mechanisms were only one small portion of the designs.\\
+We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this. We wanted to keep the design simple until all the functionality was correct.\\
 \\
-As an imrpovement, we believe that changing the locks to a per-resource system could be a fairly simple job.
+The design we chose has, what we consider to be, a good trade-off between high parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.\\
 \\
-The design we chose has the trade-off between parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.\\
-\\ Premature optimisation is the root of all evil (especially so from what we've found in previous Pintos sections), but if the design is correct at the beginning, the post-functionally-correct optimisation is made simpler. We believe that we had a design that was parallelizable, and thus are happy with it.
-
-
+We didn't want to prematurely optimise (root of all evil), especially so from what we've learnt in previous Pintos sections, but if the design is correct at the beginning, the post-functionally-correct optimisation is made simpler. We believe that we had a design that was parallelizable, and thus are happy with it.
 
 \section{Memory Mapped Files}
 \subsection{Data structures}
