@@ -200,6 +200,8 @@ page_fault (struct intr_frame *f)
     /* First check whether the page is in swap. */
     if (status & PAGE_SWAP)
     {
+      // printf("Swap Page\n");
+      lock_acquire(&pagefault_lock);
       // Page is in swap.
       struct swap_entry *swap_info = (struct swap_entry *) page->aux;
       void * kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
@@ -212,7 +214,7 @@ page_fault (struct intr_frame *f)
       page->page_status &= ~PAGE_SWAP;
       // Mark as in memory
       page->page_status |= PAGE_IN_MEMORY;
-
+      lock_release(&pagefault_lock);
       return;
     }
 
@@ -222,15 +224,19 @@ page_fault (struct intr_frame *f)
 
       struct file *file = filesys_info->file;
       size_t ofs = filesys_info->offset;
-      void *kpage = frame_allocator_get_user_page(page, 0, false);
-      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0))
-          kill(f);
+      void *kpage = frame_allocator_get_user_page(page, 0, page->writable);
+      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0)) {
+        kill(f);
+      } else {
+        page->page_status |= PAGE_IN_MEMORY;
+      }
       return;
     }
 
     if (status & PAGE_ZERO)
     {
       frame_allocator_get_user_page(page, PAL_ZERO, true);
+      page->page_status |= PAGE_IN_MEMORY;
       return;
     }
 

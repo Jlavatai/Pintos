@@ -53,7 +53,7 @@ void frame_map(void * frame_addr, struct page *page, bool writable)
   new_fr->unused_count = 0;
 
   lock_acquire (&frame_table_lock);
-  // printf("Inserting Frame: %X\n", page->vaddr);
+  // printf("Thread %i, Inserting Vaddr: %X and Physical: %X\n", thread_current()->tid, page->vaddr, frame_addr);
   hash_insert(&frame_table, &new_fr->hash_elem);
   lock_release (&frame_table_lock);
 }
@@ -93,8 +93,11 @@ void *
 frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
                 bool writable)
 {
+  int iE;
   lock_acquire(&frame_allocation_lock);
   void * user_vaddr = page->vaddr;
+
+  // printf("hash_size()=%i\n", hash_size(&frame_table));
 
   ASSERT(is_user_vaddr(user_vaddr));
 
@@ -102,6 +105,7 @@ frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
 
   if (kernel_vaddr == NULL) {
     // Evict and allocate a new page
+    // printf("Evict Page\n");
     frame_allocator_evict_page();
     kernel_vaddr = palloc_get_page (PAL_USER | flags);
     ASSERT(kernel_vaddr)
@@ -115,7 +119,7 @@ frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
   frame_map (kernel_vaddr, page, writable);
 
   lock_release(&frame_allocation_lock);
-
+  memset(kernel_vaddr, 0, PGSIZE);
   return kernel_vaddr;
 }
 
@@ -136,7 +140,6 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   
   palloc_free_page (kernel_vaddr); //Done by pagedir
 
-  uint32_t *pd = thread_current ()->pagedir;
   struct frame lookup;
   lookup.frame_addr = kernel_vaddr;
 
@@ -147,10 +150,19 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   struct frame *f = hash_entry (e, struct frame, hash_elem);
   if (!f)
     PANIC ("Could not load frame info from frame table");
-  
+
+
   f->page->page_status &= ~PAGE_IN_MEMORY;
+
+
+  tid_t thread_id = f->owner_id;
+  // Get the corresponding thread
+  struct thread* t = thread_lookup(thread_id);
+  if(!t)
+    PANIC("Corruption of frame table");
+
   // printf("Free page: %X\n", f->page->vaddr);
-  pagedir_clear_page (pd, f->page->vaddr); // Will be deleted anyway
+  pagedir_clear_page (t->pagedir, f->page->vaddr); // Will be deleted anyway
   frame_unmap (kernel_vaddr);  
   free(f);
   if (!is_locked)
@@ -192,12 +204,15 @@ static void frame_allocator_save_frame (struct frame* f) {
       
       mmap_write_back_data (m, f->frame_addr, mmap_info->offset, mmap_info->length);
     }
+  } else if ((f->page->page_status & PAGE_FILESYS)) {
+    return; // We'll load it back in in the next page fault
   } else if (!(f->page->page_status & PAGE_FILESYS)) {
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {
       PANIC("Frame Eviction: No Swap Memory left!");
     }
+    // printf("Swap Page!\n");
     // Set the page status to swap
     f->page->page_status |= PAGE_SWAP;
     f->page->page_status &= ~(PAGE_IN_MEMORY);
@@ -245,9 +260,10 @@ struct frame * frame_allocator_choose_eviction_frame(void) {
       dirty_candidate = dirty;
       accessed_candidate = accessed;  
       least_used = f->unused_count;
+    } else {
+      pagedir_set_accessed(t->pagedir, f->frame_addr, false);
+      pagedir_set_dirty   (t->pagedir, f->frame_addr, false);
     }
-    pagedir_set_accessed(t->pagedir, f->frame_addr, false);
-    pagedir_set_dirty   (t->pagedir, f->frame_addr, false);
   }
   // printf("Eviction Unused count: %i\n", least_used);
   eviction_candidate->unused_count = 0;
