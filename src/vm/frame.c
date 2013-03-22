@@ -156,6 +156,7 @@ static void *
 frame_allocator_evict_page(void)
 {
   struct frame * f = frame_allocator_choose_eviction_frame();
+
   frame_allocator_save_frame (f);
   frame_allocator_free_user_page(f->frame_addr, true);
 }
@@ -185,6 +186,8 @@ frame_allocator_save_frame (struct frame *f)
   } else if ((f->page->page_status & PAGE_FILESYS)) {
     return; // We'll load it back in in the next page fault
   } else if (!(f->page->page_status & PAGE_FILESYS)) {
+
+
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {
@@ -208,8 +211,8 @@ frame_allocator_choose_eviction_frame (void)
   struct thread *t;
   struct frame * eviction_candidate;
   int32_t least_used = 0;
-  bool dirty_candidate = false;
-  bool accessed_candidate = false;
+  bool dirty_candidate = true;
+  bool accessed_candidate = true;
   bool dirty;
   bool accessed;
 
@@ -230,13 +233,24 @@ frame_allocator_choose_eviction_frame (void)
     dirty = pagedir_is_dirty(t->pagedir, f->frame_addr);
     accessed = pagedir_is_accessed(t->pagedir, f->frame_addr);
     // If it is accessed, set is as not accessed and move on
-    if (!accessed && accessed_candidate)
-      break;
 
-    if (!dirty && dirty_candidate)
-      break;
+    if (accessed) {
+      if (!accessed_candidate) {
+        break;
+      }
+    }
+    else
+     f->unused_count++;
 
-    if (++f->unused_count > least_used && f->page->writable) {
+    if (dirty) {
+      if (!dirty_candidate) {
+        break;
+      }
+    }
+    else
+     f->unused_count++;
+
+    if (++f->unused_count > least_used && !(f->page->page_status & PAGE_FILESYS)) {
       eviction_candidate = f;
       dirty_candidate = dirty;
       accessed_candidate = accessed;  
@@ -246,7 +260,7 @@ frame_allocator_choose_eviction_frame (void)
       pagedir_set_dirty   (t->pagedir, f->frame_addr, false);
     }
   }
-  // printf("Eviction Unused count: %i\n", least_used);
+  // printf("Evict Frame: %i\n", least_used);
   eviction_candidate->unused_count = 0;
   lock_release (&frame_table_lock);
   return eviction_candidate;

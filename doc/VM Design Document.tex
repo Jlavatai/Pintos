@@ -137,7 +137,8 @@ static size_t swap_table_size;
 \subsection{Algorithms}
 \subsubsection{B2}
 The choice of a suitable frame to evict is implemented via a pseudo-Least Recently Used algorithm.\\
- When the pool of user frame is empty, more specifically when a call to \tx{palloc\_get\_page(PAL\_USER)} returns \tx{NULL}, the frame eviction algorithm kicks in. \\The algorithm will run through all the frames present in the frame table, checking their \tx{unused\_count} field. 
+
+We traverse the list of all the frames, maintaining four variables: the \tx{eviction\_candidate}; the \tx{least\_used} value of the eviction candidate, a \tx{dirty\_candidate} flag and a \tx{accessed\_candidate} flag
  
  
 
