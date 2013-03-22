@@ -181,8 +181,9 @@ The Frame Table and the Swap Table are global, hence we have global locks to con
 \\
 The supplemental page table is only accessed by the given process, but it is also referred to when we evict a page, because we need to update the references to where the evicted page is now located.\\
 \\
-Because of this, we chose an implementation where the supplemental page table has no locks, because when we only evict a page when we are recovering from a page fault, and need a new page of memory and there is a lack of frames available.
+Because of this, we wrote a lock into each thread to lock the supplemental page table on a per-process basis. Every time the supplemental page table or any of its elements, for a given thread, is accessed or modified, we acquire this lock, ensuring that we avoid synchronization issues.
 
+TODO: Blah on deadlock definition
 
 
 \subsubsection{B6}
