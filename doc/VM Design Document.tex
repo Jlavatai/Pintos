@@ -198,13 +198,28 @@ There is also a lock for each supplemental page table. If a page is being access
 
 Any modification's to the frame table are locked globally to ensure atomicity. If process P requires a new page to handle a page fault, it will acquire this lock. Once it is acquired a second process Q can not modify the frame table in any way until it's completed, by the use of this global lock.
 
-Also, once a page is read in, it will have an unused_count of 0. When we choose to evict a page, we choose the highest unused_count, where unused_count is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is unlikely (very) to be evicted any time soon.
+Also, once a page is read in, it will have an unused\_count of 0. When we choose to evict a page, we choose the highest unused\_count, where unused\_count is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is unlikely (very) to be evicted any time soon.
 
 \subsubsection{B8}
 Paged out pages which need to be brought in memory need a special treatment when dealing with system calls, and, most importantly, the \tx{read} system call. This is because the actual action of reading into the a user specified buffer could cause a page fault which could not be properly handled. In order to avoid this problem, a different strategy has been implemented: The provided buffer is still validated but, if it page faults because the stack needs to grow to allow space for the data, the stack growth is carried out before the reading. This way, we avoid having to deal with the page fault that could potentially occur while reading.  
 
 \subsection{Rationale}
 \subsubsection{B9}
+
+Our Design has:\\
+\hspace{5mm} 1 Global lock for the Frame Table.\\
+\hspace{5mm} 1 Global lock for the Swap Table.\\
+\hspace{5mm} 1 Per Process lock for the Supplemental Page Table.\\
+
+The lowest level of parallelism is to have one global lock for the frame table. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.\\
+\\
+We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this for two reasons. We wanted to keep the design simple until all the functionality was correct, and the locking mechanisms were only one small portion of the designs.\\
+\\
+We believe that we could change the locks to a per-resource system fairly simply, but there is a lack of time for this coursework given the vast amount of other coursework we have had this term.\\
+\\
+The design we chose has the trade-off between parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.\\
+\\ Premature Optimisation is the root of all evil (especially so from what we've found in previous Pintos sections), but if you design well the post-functionally-correct optimisation is made simpler. We believe that we had a design that was parallelizable, and thus are happy with it.
+
 
 
 \section{Memory Mapped Files}
