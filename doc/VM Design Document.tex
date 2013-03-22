@@ -77,7 +77,7 @@ Another important advantage of a hash table, compared to a linked  list, is that
 \subsection{Algorithms}
 \subsubsection{B2}
 The choice of a suitable frame to evict is implemented via a pseudo-Least Recently Used algorithm.\\
- When the pool of user frame is empty, more specifically when a call to \tx{palloc\_get\_page(PAL\_USER)} returns \tx{NULL}, the frame eviction algorithm kicks in. The algorithm will run through all the frames present in the frame table, checking their \tx{unused\_count} field. 
+ When the pool of user frame is empty, more specifically when a call to \tx{palloc\_get\_page(PAL\_USER)} returns \tx{NULL}, the frame eviction algorithm kicks in. \\The algorithm will run through all the frames present in the frame table, checking their \tx{unused\_count} field. 
  
  
 
