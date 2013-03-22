@@ -244,7 +244,6 @@ read_handler (struct intr_frame *f)
   }
 
   if (!supplemental_is_page_writable (supplemental_page_table, buffer))  {
-      // print_page_info (supplemental_page_table);
       exit_syscall(-1);
   }
   
