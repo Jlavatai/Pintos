@@ -375,20 +375,20 @@ mmap_handler (struct intr_frame *f)
 
   /* Trying to map stdin or stdout is disallowed. */
   if (addr == 0 || fd == 0 || fd == 1) {
-    f->eax = -1;
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
   /* Ensure that addr is page-aligned. */
-  if ((size_t)addr % PGSIZE != 0) {
-    f->eax = -1;
+  if (pg_ofs (addr) != 0) {
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
   /* Locate the file open with fd 'fd' */
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor == NULL) {
-    f->eax = -1;
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
@@ -401,7 +401,7 @@ mmap_handler (struct intr_frame *f)
   end_file_system_access ();
   
   if (length == 0) {
-    f->eax = -1;
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
@@ -415,7 +415,7 @@ mmap_handler (struct intr_frame *f)
   size_t i;
   for (i = 0; i < num_pages; ++i) {
     if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE, NULL)) {
-      f->eax = -1;
+      f->eax = MMAP_ERROR_MAPID;
       return;
     }
   }
@@ -458,12 +458,6 @@ munmap_handler (struct intr_frame *f)
 {
   mapid_t mapid = (mapid_t)get_stack_argument (f, 0);
 
-  munmap_syscall (mapid);
-}
-
-void
-munmap_syscall (mapid_t mapid)
-{
   struct hash *mmap_table = &thread_current ()->mmap_table;
   struct mmap_mapping *mapping = mmap_get_mapping (mmap_table, mapid);
   if (!mapping)

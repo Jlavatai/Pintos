@@ -5,6 +5,8 @@
 #include <debug.h>
 
 typedef int mapid_t;
+#define MMAP_MIN_MAPID 	0			  /* The lowest valid mmap id. */
+#define MMAP_ERROR_MAPID	-1			  /* Denotes a mmap error. */
 
 struct mmap_mapping {
   struct hash_elem hash_elem;

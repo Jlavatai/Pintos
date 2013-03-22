@@ -595,7 +595,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
     /* Initialise the mmap() info for the process. */
     hash_init (&t->mmap_table, mmap_hash, mmap_less, NULL);
-    t->next_mmapid = MIN_MMAPID;
+    t->next_mmapid = MMAP_MIN_MAPID;
 
     process_activate ();
 
