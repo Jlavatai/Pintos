@@ -147,10 +147,19 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   struct frame *f = hash_entry (e, struct frame, hash_elem);
   if (!f)
     PANIC ("Could not load frame info from frame table");
-  
+
+
   f->page->page_status &= ~PAGE_IN_MEMORY;
+
+
+  tid_t thread_id = f->owner_id;
+  // Get the corresponding thread
+  struct thread* t = thread_lookup(thread_id);
+  if(!t)
+    PANIC("Corruption of frame table");
+
   // printf("Free page: %X\n", f->page->vaddr);
-  pagedir_clear_page (pd, f->page->vaddr); // Will be deleted anyway
+  pagedir_clear_page (t->pagedir, f->page->vaddr); // Will be deleted anyway
   frame_unmap (kernel_vaddr);  
   free(f);
   if (!is_locked)
