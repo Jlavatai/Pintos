@@ -198,11 +198,12 @@ page_fault (struct intr_frame *f)
     stack_grow(thread_current(), fault_addr);
     return;
   }
+  
+  struct page *page = hash_entry (e, struct page, hash_elem);
+  enum page_status status = page->page_status;
 
   ASSERT ((status & PAGE_IN_MEMORY) == 0);
 
-  struct page *page = hash_entry (e, struct page, hash_elem);
-  enum page_status status = page->page_status;
 
   /* First check whether the page is in swap. */
   if (status & PAGE_SWAP) {
