@@ -458,12 +458,6 @@ munmap_handler (struct intr_frame *f)
 {
   mapid_t mapid = (mapid_t)get_stack_argument (f, 0);
 
-  munmap_syscall (mapid);
-}
-
-void
-munmap_syscall (mapid_t mapid)
-{
   struct hash *mmap_table = &thread_current ()->mmap_table;
   struct mmap_mapping *mapping = mmap_get_mapping (mmap_table, mapid);
   if (!mapping)
