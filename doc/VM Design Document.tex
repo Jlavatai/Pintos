@@ -111,6 +111,8 @@ If a page represents a file mapped in memory, this struct will hold information 
 
 \subsubsection{C3}
 
+The \tx{mmap()} system call is called with the user virtual address that the file should be mapped to in memory. In \tx{mmap\_handler()} in \tx{syscall.c} (which implements the behaviour for \tx{mmap()}) we first determine the number of pages that the memory-mapped file will span over, then we iterate over every page address for the memory-mapped file starting from the address the file should be mapped from. For each address, we check the supplemental page table for whether a page is already being used at this user virtual address. If a page entry exists in the supplemental page table for any of these page addresses, it denotes that the memory-mapped file would overwrite an existing memory segment, and so we return \tx{-1} to indicate that the memory-mapping failed.
+
 \subsection{Rationale}
 \subsubsection{C4}
 
