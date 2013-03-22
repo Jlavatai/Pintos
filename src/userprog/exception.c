@@ -232,7 +232,6 @@ page_fault (struct intr_frame *f)
       }
       return;
     }
-
     if (status & PAGE_ZERO)
     {
       frame_allocator_get_user_page(page, PAL_ZERO, true);
