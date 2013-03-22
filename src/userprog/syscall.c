@@ -225,6 +225,7 @@ read_handler (struct intr_frame *f)
 
   // Start at buffer, grow check pointers from buffer to size
   // Grow the stack if necessary.
+  lock_acquire(&thread_current()->supplemental_page_table_lock);
   for (buffer_page = pg_round_down(buffer); buffer_page <= buffer+size; buffer_page += PGSIZE){
     if (is_in_vstack(buffer_page, f->esp)) {
       struct page p;
@@ -235,6 +236,7 @@ read_handler (struct intr_frame *f)
       }
     }
   }
+  lock_release(&thread_current()->supplemental_page_table_lock);
 
   if (!supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer, NULL)
       ||  !supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer+size, NULL)) {
@@ -442,8 +444,10 @@ mmap_handler (struct intr_frame *f)
                                                                  PGSIZE;
     mmap_info->mapid = mapping->mapid;
 
+    lock_acquire(&cur->supplemental_page_table_lock);
     struct page * p = supplemental_create_mmap_page_info (uaddr, mmap_info);
     supplemental_insert_page_info(supplemental_page_table, p);
+    lock_release(&cur->supplemental_page_table_lock);
     bytes_into_file += PGSIZE;
     uaddr += PGSIZE;
   }

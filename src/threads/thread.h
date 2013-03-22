@@ -118,6 +118,7 @@ struct thread
 #endif
 
 #ifdef VM
+    struct lock supplemental_page_table_lock; /* Prevents race conditions for access of supplemental page table */              
     struct hash supplemental_page_table;
     struct hash mmap_table;
     int next_mmapid;
