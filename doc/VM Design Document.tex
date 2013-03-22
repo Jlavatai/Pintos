@@ -95,7 +95,8 @@ The additional work that \tx{frame\_allocator\_get\_user\_page()} carries out is
 Before returning from the page fault handler, the page will me marked as present in memory in the supplemental page table.
 
 \subsubsection{A3}
-In our page eviction algorithm, we prioritize eviction of non-dirty and non-accessed pages, and reset those bits on each call, whilst maintaining a counter which considers the number of time's it's been dirty or accessed while the frame is mapped to a given page. Thus when we don't need to coordinate these accessed and dirty bits, because when we consider them we always have the user virtual addresses present. Thus we avoid the issue entirely.
+
+In our design, we do not need to get the flags for if a page is dirty or accessed but for in the page eviction algorithm. In the page eviction algorithm, we have access to the virtual addresses, and thus we have no need to store the dirty and accessed bits inside the frame table entry. Thus we avoid the issue entirely
 
 \subsection{Synchronization}
 \subsubsection{A4}
