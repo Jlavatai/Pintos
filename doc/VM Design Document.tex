@@ -162,16 +162,16 @@ The end result of this algorithm, is that we evict the oldest, non-dirty and non
 
 \subsubsection{B3}
 
-When process P need's a new frame for eviction, in it's call for \tx{frame\_allocator\_free\_user\_page}, and it chooses a page from process Q, the page from process Q is looked at to decide where it should be placed when evicted, if anywhere.\\
-\\
+When process $P$ needs to evict a new frame in its call for \tx{frame\_allocator\_free\_user\_page()}, and it chooses a page from process $Q$, we look at the page from process $Q$ to decide where it should be placed when evicted, if anywhere.
+
 \begin{itemize}
-\item If the frame is a non-dirty filesystem frame, then it can just be free'd, and the supplemental page table updated to represent the fact that it is no longer in memory (via \tx{page\_status}) - when it page faults again, it will simply be loaded once more from it's original location.
-\item If the frame is a non-dirty memory-mapped frame, once again we just free it and declare it as no longer in memory (via \tx{page\_status}), so we can load it again where necessary.
-\item If the frame is dirty and non-stack, we write it back to it's original location, and declare it as no longer in memory via \tx{page\_status}. We then free the frame.
-\item Else we write the frame to swap, and declare it as been in swap so it can be loaded when there is a page fault. We then free the frame.
+\item If the frame is a non-dirty filesystem frame, then it can just be \tx{free()}'d, and the supplemental page table updated to represent the fact that it is no longer in memory (via the page's \tx{page\_status} member). When it page faults again, it will simply be loaded once more from its original location.
+\item If the frame is a non-dirty memory-mapped frame, once again we just free it and declare the corresponding page as no longer in memory (via the page's \tx{page\_status}), so we can load it again where necessary.
+\item If the frame is dirty and non-stack, we write it back to its original location, and declare it as no longer in memory via \tx{page\_status}. We then free the frame.
+\item Otherwise, we write the frame to swap, and declare it as in swap so it can be loaded when there is a page fault. We then free the frame.
 \end{itemize}
 
-After the frame has been free'd, process P can allocate the frame, and because the allocation function is atomic (via \tx{struct lock}) it is ensured that it will get the just-evicted frame of memory.
+After the frame has been \tx{free()}'d, process $P$ can allocate the frame, and because the allocation function is atomic (using a lock) it is ensured that it will get the just-evicted frame of memory.
 
 \subsection{B4}
 
