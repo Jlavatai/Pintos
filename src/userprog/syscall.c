@@ -224,7 +224,7 @@ read_handler (struct intr_frame *f)
   validate_user_pointer (buffer+size);
 
   // Start at buffer, grow check pointers from buffer to size
-  // memset buffer to 0. This will cause pagefault if need be.
+  // Grow the stack if necessary.
   for (buffer_page = pg_round_down(buffer); buffer_page <= buffer+size; buffer_page += PGSIZE){
     if (is_in_vstack(buffer_page, f->esp)) {
       struct page p;
