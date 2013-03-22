@@ -174,16 +174,15 @@ frame_allocator_save_frame (struct frame *f)
 
   bool dirty_flag = pagedir_is_dirty (t->pagedir, f->page->vaddr);
   enum page_status status = f->page->page_status;
-  if (!dirty_flag)
-    return;
+ 
 
-  if (status & PAGE_MEMORY_MAPPED)
+  if ((status & PAGE_MEMORY_MAPPED) && dirty_flag)
   {
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)f->page->aux;
       struct mmap_mapping *m = mmap_get_mapping (&t->mmap_table, mmap_info->mapid);
       
       mmap_write_back_data (m, f->frame_addr, mmap_info->offset, mmap_info->length);
-  } else if (!(f->page->page_status & PAGE_FILESYS)) {
+  } else if (!(f->page->page_status & PAGE_FILESYS)) {  
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {

@@ -893,7 +893,7 @@ setup_stack (void **esp)
 
 
     struct page *p = supplemental_create_in_memory_page_info (user_vaddr, true);
-    lock_acquire(&thread_current()->supplemental_page_table_lock);
+    lock_acquire(&thread_current()->supplemental_page_table_lock);  
     supplemental_insert_page_info(&thread_current()->supplemental_page_table, p);
     lock_release(&thread_current()->supplemental_page_table_lock);
 
