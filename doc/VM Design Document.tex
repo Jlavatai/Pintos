@@ -18,8 +18,9 @@
 Added to \tx{struct thread} in \tx{thread.h}:
 \begin{verbatim}
 struct hash supplemental_page_table;
+struct lock supplemental_page_table_lock;
 \end{verbatim}
-Hash table representing the supplemental page table. \\\\
+Hash table representing the supplemental page table, and lock used to make supplemental page table modifications atomical. \\\\
 Added to new file \tx{page.h}:
 \begin{verbatim}
 enum page_status {
@@ -142,9 +143,6 @@ The choice of a suitable frame to evict is implemented via a pseudo-Least Recent
 
 \subsubsection{B3}
 After having chosen a candidate frame for eviction, the function \tx{frame\_allocator\_save\_frame} is called: this function will decide whether to write back the changes made to a page on the file it came from, or else, save it to the swap partition. After this operation is carried out, the frame is removed from the owner's page table, and set as \tx{PAGE\_IN\_SWAP}, in the owner's supplemental page table. So the data belonging to Q which referred to the frame are correctly modified.
-\begin{itemize}
-\item Avoid writing to swap clean pages which refers to files (Don't know if tom is already doing that)
-\end{itemize}  
 In order to properly set up P's information on the new frame, the function \tx{palloc\_get\_page} will be called again. This might seem a very inefficient move, but it allows us to properly reset the information about the frame, since during eviction, it was also deleted from the bitmap representing the user's frame pool.\\
 The page is then installed in P's page directory,   
 
@@ -177,13 +175,13 @@ We also consider that the given pointer is greater than 32 bytes lower than esp.
 \subsection{Synchronization}
 \subsubsection{B5}
 
-The Frame Table and the Swap Table are global, hence we have global locks to control access to these two tables. These are invoked to ensure that every access and wriet of the frame and swap table are atomic.\\
+The Frame Table and the Swap Table are global, hence the presence of global locks to control and synchronise access. Since these resources are shared between all threads, it becomes critical to prevent different thread to interfere with operations regarding frame allocation and read and write operations concerning the swap partition.\\
 \\
 The supplemental page table is only accessed by the given process, but it is also referred to when we evict a page, because we need to update the references to where the evicted page is now located.\\
 \\
 Because of this, we wrote a lock into each thread to lock the supplemental page table on a per-process basis. Every time the supplemental page table or any of its elements, for a given thread, is accessed or modified, we acquire this lock, ensuring that we avoid synchronization issues.
 
-TODO: Blah on deadlock definition
+
 
 
 \subsubsection{B6}
