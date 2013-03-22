@@ -205,10 +205,12 @@ Paged out pages which need to be brought in memory need a special treatment when
 \subsection{Rationale}
 \subsubsection{B9}
 
-Our Design has:\\
-\hspace{5mm} 1 Global lock for the Frame Table.\\
-\hspace{5mm} 1 Global lock for the Swap Table.\\
-\hspace{5mm} 1 Per Process lock for the Supplemental Page Table.\\
+Our Design has:
+\begin{itemize}
+\item 1 Global lock for the Frame Table.
+\item 1 Global lock for the Swap Table.
+\item 1 Per Process lock for the Supplemental Page Table.
+\end{itemize}
 
 The lowest level of parallelism is to have one global lock for the frame table. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.\\
 \\
