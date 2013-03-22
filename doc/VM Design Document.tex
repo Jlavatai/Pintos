@@ -125,6 +125,29 @@ The page is then installed in P's page directory,
 
 \subsection{B4}
 
+To decide if a virtual address is invalid, or need's the stack to grow, we pass it through this function:
+\begin{verbatim}
+-- In exception.h
+/* Maximum Stack Size: 8 megabytes*/
+#define MAX_STACK_SIZE 8388608
+
+-- In exception.c
+bool
+is_in_vstack(void *ptr, uint32_t *esp)
+{
+  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE
+           && (uint32_t*)ptr >= (esp - 32));
+}
+\end{verbatim}
+
+We consider a pointer to be in the ``virtual stack'', when it is between the bottom of the stack and the top. This is done by first checking if the difference between \tx{PHYS\_BASE} and the pointer's page directory, is less (or equal to) the maximum stack.\\
+\\
+We also consider that the given pointer is greater than 32 bytes lower than esp. This is because the furthest page fault from esp which requires page growth, is that which is caused by the assembly \tx{PUSHA} instruction. This can be seen in the test \tx{pt-grow-pusha}
+
+\begin{verbatim}
+     "pushal;"                   /* Push 32 bytes on stack at once. */
+\end{verbatim}
+
 \subsection{Synchronization}
 \subsubsection{B5}
 
