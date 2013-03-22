@@ -236,7 +236,8 @@ frame_allocator_choose_eviction_frame (void)
 
     if (accessed) {
       if (!accessed_candidate) {
-        break;
+        f->unused_count = 0;
+        goto eviction_finish_member;
       }
     }
     else
@@ -244,7 +245,8 @@ frame_allocator_choose_eviction_frame (void)
 
     if (dirty) {
       if (!dirty_candidate) {
-        break;
+        f->unused_count = 0;
+        goto eviction_finish_member;
       }
     }
     else
@@ -256,6 +258,7 @@ frame_allocator_choose_eviction_frame (void)
       accessed_candidate = accessed;  
       least_used = f->unused_count;
     } else {
+    eviction_finish_member:
       pagedir_set_accessed(t->pagedir, f->frame_addr, false);
       pagedir_set_dirty   (t->pagedir, f->frame_addr, false);
     }
