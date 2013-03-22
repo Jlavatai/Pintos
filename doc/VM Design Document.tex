@@ -191,14 +191,36 @@ Paged out pages which need to be brought in memory need a special treatment when
 \section{Memory Mapped Files}
 \subsection{Data structures}
 \subsubsection{C1}
+Added to \tx{page.h}:
+
+This struct stores information about a page-worth of data for a memory-mapped file, and is associated with a memory-mapped page in the supplemental page table.
 \begin{verbatim}
 struct page_mmap_info {
-   mapid_t mapping;				/* The mmap() mapid. */
-   size_t offset;					/* The offset into the file. */
-   size_t length;					/* The number of bytes of the file stored in this page. */
+    mapid_t mapid;                  /* The mmap() mapid. */
+    size_t offset;                  /* The offset into the file. */
+    size_t length;                  /* The number of bytes of the file stored
+                                       in this page. */
 };
 \end{verbatim}
-If a page represents a file mapped in memory, this struct will hold information about the id of the mapping, offset in the file and length of the file.
+
+Added to \tx{mmap.h}:
+\begin{verbatim}
+typedef int mapid_t;
+#define MMAP_MIN_MAPID       0      /* The lowest valid mmap id. */
+#define MMAP_ERROR_MAPID     -1     /* Denotes a mmap error. */
+\end{verbatim}
+
+This struct stores information about each memory mapped file in the process's memory-map table.
+\begin{verbatim}
+struct mmap_mapping
+{
+    struct hash_elem hash_elem;     /* Used to store the struct in the hash table. */
+    mapid_t mapid;                  /* The memory map identifier. */
+    struct file *file;              /* The file being mapped into memory. */
+    void *uaddr;                    /* The user virtual address that the
+                                       file is mapped from. */
+};
+\end{verbatim}
 
 \subsection{Algorithms}
 \subsubsection{C2}
