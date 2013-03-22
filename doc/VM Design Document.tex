@@ -192,9 +192,13 @@ For this case, we handle it with the global frame table lock. When a process fau
 
 During this allocation, we evict a page if necessary. Because the allocation is locked down such that it's an atomic operation, if thread Q is woken and immediately page fault's on the evicted address, before the allocation is finished, it will wait on the frame allocation lock. When the frame allocation is finished, frame Q can continue and potentially evict another page if needed.
 
-By ensuring 
+There is also a lock for each supplemental page table. If a page is being accessed, this lock is acquired ensuring that any other accesses/writes are finished before an access is performed.
 
 \subsubsection{B7}
+
+Any modification's to the frame table are locked globally to ensure atomicity. If process P requires a new page to handle a page fault, it will acquire this lock. Once it is acquired a second process Q can not modify the frame table in any way until it's completed, by the use of this global lock.
+
+Also, once a page is read in, it will have an unused_count of 0. When we choose to evict a page, we choose the highest unused_count, where unused_count is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is unlikely (very) to be evicted any time soon.
 
 \subsubsection{B8}
 Paged out pages which need to be brought in memory need a special treatment when dealing with system calls, and, most importantly, the \tx{read} system call. This is because the actual action of reading into the a user specified buffer could cause a page fault which could not be properly handled. In order to avoid this problem, a different strategy has been implemented: The provided buffer is still validated but, if it page faults because the stack needs to grow to allow space for the data, the stack growth is carried out before the reading. This way, we avoid having to deal with the page fault that could potentially occur while reading.  
