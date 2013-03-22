@@ -203,8 +203,8 @@ So, referring to the 5 conditions causing deadlocks in OSs, this is how they hav
 \begin{itemize}
 \item \textbf{Mutual exclusion} : there is no resource associated to a specific rocess, and all of them are either global or accessible from outer processes.
 \item \textbf{Hold and Wait} : The various locks can be accessed only in the same order, so there are no cases where a process could acquire a lock while waiting for another to be released.
-\item \textbf{No preemption} : preeption in not allowed in Pintos, but however, our solution was designed such that the lock will be held until the end of the execution of the code in the critical section and no further. If a process terminate with an error, however, we insure that all the locks the were being held are correctly released.
-\item \textbf{Circular waiting}: there is no such situation in our design.
+\item \textbf{No pre-emption} : Pintos locks do not implement pre-emption. This is because we are writing a kernel, and a failure in a critical section cannot be recovered from, because the state of the kernel would be uncertain. Since we lock at the beginning and end of all critical sections, and carefully designed the synchronisation, we should not get into such problems.
+\item \textbf{Circular waiting}: There is no such situation in our design.
 \end{itemize}
 
 \subsubsection{B6}
