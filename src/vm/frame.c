@@ -47,7 +47,6 @@ void frame_map(void *frame_addr, struct page *page, bool writable)
   new_fr->unused_count = 0;
 
   lock_acquire (&frame_table_lock);
-
   hash_insert(&frame_table, &new_fr->hash_elem);
   lock_release (&frame_table_lock);
 }
