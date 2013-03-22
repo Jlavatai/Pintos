@@ -199,7 +199,7 @@ Paged out pages which need to be brought in memory need a special treatment when
 \section{Memory Mapped Files}
 \subsection{Data structures}
 \subsubsection{C1}
-Added to \tx{page.h}:
+Added to new file \tx{page.h}:
 
 This struct stores information about a page-worth of data for a memory-mapped file, and is associated with a memory-mapped page in the supplemental page table.
 \begin{verbatim}
@@ -211,7 +211,7 @@ struct page_mmap_info {
 };
 \end{verbatim}
 
-Added to \tx{mmap.h}:
+Added to new file \tx{mmap.h}:
 \begin{verbatim}
 typedef int mapid_t;
 #define MMAP_MIN_MAPID       0      /* The lowest valid mmap id. */
