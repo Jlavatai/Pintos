@@ -828,14 +828,18 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
       filesys_info->length = page_read_bytes;
 
       p = supplemental_create_filesys_page_info (upage, filesys_info, writable);
+      lock_acquire(&thread_current()->supplemental_page_table_lock);
       supplemental_insert_page_info(supplemental_page_table,p);
+      lock_release(&thread_current()->supplemental_page_table_lock);
     }
       break;
 
     case PAGE_ZERO:
     {
       p = supplemental_create_zero_page_info (upage);
+      lock_acquire(&thread_current()->supplemental_page_table_lock);
       supplemental_insert_page_info(supplemental_page_table,p);
+      lock_release(&thread_current()->supplemental_page_table_lock);
     }
       break;
 
@@ -889,7 +893,9 @@ setup_stack (void **esp)
 
 
     struct page *p = supplemental_create_in_memory_page_info (user_vaddr, true);
+    lock_acquire(&thread_current()->supplemental_page_table_lock);
     supplemental_insert_page_info(&thread_current()->supplemental_page_table, p);
+    lock_release(&thread_current()->supplemental_page_table_lock);
 
     kpage = frame_allocator_get_user_page(p, PAL_ZERO, true);
 

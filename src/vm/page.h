@@ -46,6 +46,7 @@ struct page {
     void *aux;                      /* */
     enum page_status page_status;   /* Used to store the page's current status. */
     bool writable;                  /* Stores if a page is writable or not */
+    struct lock lock;               /* Prevents race conditions. */
 };
 
 struct page* supplemental_create_filesys_page_info (void *vaddr,

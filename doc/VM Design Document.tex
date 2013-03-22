@@ -177,6 +177,14 @@ We also consider that the given pointer is greater than 32 bytes lower than esp.
 \subsection{Synchronization}
 \subsubsection{B5}
 
+The Frame Table and the Swap Table are global, hence we have global locks to control access to these two tables. These are invoked to ensure that every access and wriet of the frame and swap table are atomic.\\
+\\
+The supplemental page table is only accessed by the given process, but it is also referred to when we evict a page, because we need to update the references to where the evicted page is now located.\\
+\\
+Because of this, we chose an implementation where the supplemental page table has no locks, because when we only evict a page when we are recovering from a page fault, and need a new page of memory and there is a lack of frames available.
+
+
+
 \subsubsection{B6}
 
 \subsubsection{B7}

@@ -178,7 +178,10 @@ page_fault (struct intr_frame *f)
   struct page p;
   p.vaddr = vaddr;
 
+  lock_acquire(&t->supplemental_page_table_lock);
+
   struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
+
 
   /* If no entry exists in the supplemental page table, check whether the stack
      needs to grow. */
@@ -190,7 +193,7 @@ page_fault (struct intr_frame *f)
       exit_syscall (-1);
 
     stack_grow(thread_current(), fault_addr);
-    return;
+    goto page_fault_return;
   }
 
   struct page *page = hash_entry (e, struct page, hash_elem);
@@ -204,7 +207,7 @@ page_fault (struct intr_frame *f)
     if (!page_fault_from_swap (page))
       kill (f);
 
-    return;
+    goto page_fault_return;
   }
 
 
@@ -214,7 +217,7 @@ page_fault (struct intr_frame *f)
     if (!page_fault_from_filesys (page))
       kill (f);
 
-    return;
+    goto page_fault_return;
   }
 
   if (status & PAGE_ZERO)
@@ -222,7 +225,7 @@ page_fault (struct intr_frame *f)
     if (!page_fault_zero (page))
       kill (f);
 
-    return;
+    goto page_fault_return;
   }
 
   if (status & PAGE_MEMORY_MAPPED)
@@ -230,8 +233,11 @@ page_fault (struct intr_frame *f)
     if (!page_fault_memory_mapped (page))
       kill (f);
 
-    return;
+    goto page_fault_return;
   }
+page_fault_return: 
+  lock_release(&t->supplemental_page_table_lock);
+  return;
 }
 
 static bool
