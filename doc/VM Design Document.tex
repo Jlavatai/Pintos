@@ -188,6 +188,12 @@ TODO: Blah on deadlock definition
 
 \subsubsection{B6}
 
+For this case, we handle it with the global frame table lock. When a process faults, we allocate a frame for the virtual address, and move the memory from it's previous location to this physical address.
+
+During this allocation, we evict a page if necessary. Because the allocation is locked down such that it's an atomic operation, if thread Q is woken and immediately page fault's on the evicted address, before the allocation is finished, it will wait on the frame allocation lock. When the frame allocation is finished, frame Q can continue and potentially evict another page if needed.
+
+By ensuring 
+
 \subsubsection{B7}
 
 \subsubsection{B8}
