@@ -224,7 +224,7 @@ page_fault (struct intr_frame *f)
 
       struct file *file = filesys_info->file;
       size_t ofs = filesys_info->offset;
-      void *kpage = frame_allocator_get_user_page(page, 0, false);
+      void *kpage = frame_allocator_get_user_page(page, 0, page->writable);
       if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0)) {
         kill(f);
       } else {
