@@ -138,7 +138,11 @@ static size_t swap_table_size;
 \subsubsection{B2}
 The choice of a suitable frame to evict is implemented via a pseudo-Least Recently Used algorithm.\\
 
-We traverse the list of all the frames, maintaining four variables: the \tx{eviction\_candidate}; the \tx{least\_used} value of the eviction candidate, a \tx{dirty\_candidate} flag and a \tx{accessed\_candidate} flag
+We traverse the list of all the frames, maintaining four variables: the \tx{eviction\_candidate}; the \tx{least\_used} value of the eviction candidate, a \tx{dirty\_candidate} flag and a \tx{accessed\_candidate} flag.
+
+As we traverse the list of frames, we check if the page is accessed, or dirty. If it's $<$dirty or accessed$>$, and we have a candidate that isn't $<$dirty or accessed$>$, we don't consider it as a candidate, and reset it's accessed and dirty bits.
+
+If it's still a candidate, we then increment the \tx{unused\_count} variable, and compare it against the candidate's \tx{unused\_count} value. If it is greater, i.e. it's been unused for longer, then that becomes the candidate.
  
  
 
