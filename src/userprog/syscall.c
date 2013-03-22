@@ -217,13 +217,35 @@ read_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   void *buffer = (void *)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
+  void *buffer_page;
+  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
   validate_user_pointer (buffer);
   validate_user_pointer (buffer+size);
 
-  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
-  if (!supplemental_is_page_writable (supplemental_page_table, buffer)) 
-      exit_syscall(-1);
+  // Start at buffer, grow check pointers from buffer to size
+  // memset buffer to 0. This will cause pagefault if need be.
+  for (buffer_page = pg_round_down(buffer); buffer_page <= buffer+size; buffer_page += PGSIZE){
+    if (is_in_vstack(buffer_page, f->esp)) {
+      struct page p;
+      p.vaddr = buffer_page;    
+      struct hash_elem *e = hash_find (&thread_current()->supplemental_page_table, &p.hash_elem);
+      if (!e) {
+        stack_grow(thread_current(), buffer_page);
+      }
+    }
+  }
 
+  if (!supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer, NULL)
+      ||  !supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer+size, NULL)) {
+    exit_syscall(-1);
+  }
+
+  if (!supplemental_is_page_writable (supplemental_page_table, buffer))  {
+      // print_page_info (supplemental_page_table);
+      exit_syscall(-1);
+  }
+  
 
   if (fd == 0) {
     uint8_t value = input_getc();
@@ -261,11 +283,14 @@ write_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   const void *buffer = (const void*)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-  validate_user_pointer (buffer + (size - 1));
+  validate_user_pointer (buffer + size);
   validate_user_pointer (buffer);
+  if (!supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer, NULL)
+      ||  !supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer+size, NULL)) {
+    exit_syscall(-1);
+  }
 
-  // TODO: Copy pasta, abstract this
-  // Lookup buffer in the supplemental page table
+  // Ensure that they're in the supplementary page table too.
 
   if (fd == 1) {
     putbuf (buffer, size);
@@ -350,20 +375,20 @@ mmap_handler (struct intr_frame *f)
 
   /* Trying to map stdin or stdout is disallowed. */
   if (addr == 0 || fd == 0 || fd == 1) {
-    f->eax = -1;
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
   /* Ensure that addr is page-aligned. */
-  if ((size_t)addr % PGSIZE != 0) {
-    f->eax = -1;
+  if (pg_ofs (addr) != 0) {
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
   /* Locate the file open with fd 'fd' */
   struct file_descriptor *descriptor = process_get_file_descriptor_struct (fd);
   if (descriptor == NULL) {
-    f->eax = -1;
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
@@ -376,7 +401,7 @@ mmap_handler (struct intr_frame *f)
   end_file_system_access ();
   
   if (length == 0) {
-    f->eax = -1;
+    f->eax = MMAP_ERROR_MAPID;
     return;
   }
 
@@ -390,7 +415,7 @@ mmap_handler (struct intr_frame *f)
   size_t i;
   for (i = 0; i < num_pages; ++i) {
     if (supplemental_entry_exists (supplemental_page_table, addr + i * PGSIZE, NULL)) {
-      f->eax = -1;
+      f->eax = MMAP_ERROR_MAPID;
       return;
     }
   }
@@ -433,12 +458,6 @@ munmap_handler (struct intr_frame *f)
 {
   mapid_t mapid = (mapid_t)get_stack_argument (f, 0);
 
-  munmap_syscall (mapid);
-}
-
-void
-munmap_syscall (mapid_t mapid)
-{
   struct hash *mmap_table = &thread_current ()->mmap_table;
   struct mmap_mapping *mapping = mmap_get_mapping (mmap_table, mapid);
   if (!mapping)
@@ -475,7 +494,8 @@ munmap_syscall_with_mapping (struct mmap_mapping *mapping, bool should_delete)
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)page_info->aux;
 
       void *kaddr = pagedir_get_page (thread_current ()->pagedir, uaddr);
-      mmap_write_back_data (mapping, kaddr, mmap_info->offset, mmap_info->length);
+      if (pagedir_is_dirty (thread_current ()->pagedir, page_info->vaddr))
+        mmap_write_back_data (mapping, kaddr, mmap_info->offset, mmap_info->length);
 
       frame_allocator_free_user_page (kaddr, false);
     }
@@ -506,7 +526,6 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || !supplemental_entry_exists (&thread_current ()->supplemental_page_table, pointer, NULL)
       )
   {
     // Check pointer is not in supplementary page table

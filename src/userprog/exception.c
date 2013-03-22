@@ -159,10 +159,10 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-
   // These are the cases we want to look at in detail. For everything else,
   // Goto the pagefault message
   if (not_present && fault_addr && is_user_vaddr(fault_addr)) {
+
 
     // /* To implement virtual memory, delete the rest of the function
     //    body, and replace it with code that brings in the page to
@@ -176,7 +176,6 @@ page_fault (struct intr_frame *f)
     lock_acquire(&pagefault_lock);
     struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
     lock_release(&pagefault_lock);
-    
     // If we don't have a supplementary page table entry
     if (!e) {
       // Check if stack needs to grow
@@ -190,8 +189,8 @@ page_fault (struct intr_frame *f)
 
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
-    // printf("Page: %X ; page_status: "BYTETOBINARYPATTERN"\n"
-    //       , page->vaddr, BYTETOBINARY(page->page_status));
+    // printf("Thread: %i| Page: %X| page_status: "BYTETOBINARYPATTERN"\n"
+    //       , thread_current()->tid, page->vaddr, BYTETOBINARY(page->page_status));
 
     enum page_status status = page->page_status;
 
@@ -224,7 +223,7 @@ page_fault (struct intr_frame *f)
       struct file *file = filesys_info->file;
       size_t ofs = filesys_info->offset;
       void *kpage = frame_allocator_get_user_page(page, 0, false);
-      if(!read_executable_page(file, ofs, kpage, PGSIZE, 0))
+      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0))
           kill(f);
       return;
     }

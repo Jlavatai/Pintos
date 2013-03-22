@@ -51,7 +51,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int sum_fileopen(struct thread * t, struct file * f);
 
 bool load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
-                          size_t page_zero_bytes);
+                          size_t page_zero_bytes, bool writable);
 
 void
 process_init (void)
@@ -595,7 +595,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
     /* Initialise the mmap() info for the process. */
     hash_init (&t->mmap_table, mmap_hash, mmap_less, NULL);
-    t->next_mmapid = MIN_MMAPID;
+    t->next_mmapid = MMAP_MIN_MAPID;
 
     process_activate ();
 
@@ -781,7 +781,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-        if (!load_executable_page (file, offset, upage, page_read_bytes, page_zero_bytes))
+        if (!load_executable_page (file, offset, upage, page_read_bytes, page_zero_bytes, writable))
           return false;
 
         /* Advance. */
@@ -797,7 +797,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 bool
 load_executable_page(struct file *file, off_t offset, void *upage, size_t page_read_bytes,
-                     size_t page_zero_bytes)
+                     size_t page_zero_bytes, bool writable)
 {
   struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
 
@@ -825,8 +825,9 @@ load_executable_page(struct file *file, off_t offset, void *upage, size_t page_r
       struct page_filesys_info *filesys_info = malloc(sizeof (struct page_filesys_info));
       filesys_info->file = file;
       filesys_info->offset = offset;
+      filesys_info->length = page_read_bytes;
 
-      p = supplemental_create_filesys_page_info (upage, filesys_info);
+      p = supplemental_create_filesys_page_info (upage, filesys_info, writable);
       supplemental_insert_page_info(supplemental_page_table,p);
     }
       break;
@@ -886,7 +887,8 @@ setup_stack (void **esp)
 
     void *user_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
 
-    struct page *p = supplemental_create_zero_page_info (user_vaddr);
+
+    struct page *p = supplemental_create_in_memory_page_info (user_vaddr, true);
     supplemental_insert_page_info(&thread_current()->supplemental_page_table, p);
 
     kpage = frame_allocator_get_user_page(p, PAL_ZERO, true);
@@ -896,6 +898,9 @@ setup_stack (void **esp)
       *esp = PHYS_BASE;
       success = true;
     }
+
+    p->page_status |= PAGE_IN_MEMORY;
+
     return success;
 } 
 
@@ -907,17 +912,16 @@ stack_grow (struct thread * t, void * fault_ptr)
     ASSERT(is_user_vaddr(fault_ptr));
 
     // Allocate a new supplemental page table entry
-    struct page *p = supplemental_create_zero_page_info (new_page_virtual);
+    struct page *p = supplemental_create_in_memory_page_info (new_page_virtual, true);
     supplemental_insert_page_info(&t->supplemental_page_table, p);
+
     // Allocate a new frame
     void * page_ptr_frame = frame_allocator_get_user_page(p, PAL_ZERO, true);
     if (page_ptr_frame == NULL)
     {
         PANIC("Stack Growth Fault");
     }
-
-
-    supplemental_mark_page_in_memory (&t->supplemental_page_table, new_page_virtual);
+    p->page_status |= PAGE_IN_MEMORY;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
@@ -933,7 +937,6 @@ bool
 install_page (void *upage, void *kpage, bool writable)
 {
     struct thread *t = thread_current ();
-
     /* Verify that there's not already a page at that virtual
        address, then map our page there. */
     return (pagedir_get_page (t->pagedir, upage) == NULL

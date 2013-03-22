@@ -31,6 +31,7 @@ enum page_status {
 struct page_filesys_info {
     struct file *file;
     size_t offset;
+    size_t length;
 };
 
 struct page_mmap_info {
@@ -48,7 +49,8 @@ struct page {
 };
 
 struct page* supplemental_create_filesys_page_info (void *vaddr,
-                                                    struct page_filesys_info *filesys_info);
+                                                    struct page_filesys_info *filesys_info,
+                                                    bool writable);
 struct page* supplemental_create_zero_page_info (void *vaddr);
 struct page* supplemental_create_in_memory_page_info (void *vaddr,
                                                       bool writable);
@@ -81,4 +83,5 @@ bool supplemental_page_table_less (const struct hash_elem *a,
                                    void *aux);
 void supplemental_page_table_destroy_func (struct hash_elem *e, void *aux);
 
+void print_page_info ();
 #endif /* vm/page.h */
