@@ -5,15 +5,25 @@
 #include "threads/synch.h" // For locks
 #include "threads/vaddr.h" // For PGSIZE
 
-#define PAGE_NUM_SECTORS PGSIZE / BLOCK_SECTOR_SIZE // each read and write call returns a sector.
+/* The number of sectors in a page. */
+#define PAGE_NUM_SECTORS PGSIZE / BLOCK_SECTOR_SIZE 
 
-static struct block *swap_block; // Swap Block Pointer
-static size_t swap_size;         // Size of the Swap Block in bytes
-static size_t max_pages;         // Number of pages that will fit into the SWAP block
+/* Swap Block Pointer - points to the block dedicated to swap on the filesystem */
+static struct block *swap_block; 
 
-static struct lock swap_lock;        // Global lock to stop concurrent access. TODO lock per page.
+/* Size of the Swap Block in bytes */
+static size_t swap_size;
 
+/* Number of pages that will fit into the Swap block */
+static size_t max_pages;         
+
+/* Global lock to stop concurrent access of the swap table. */
+static struct lock swap_lock;        
+
+/* The Swap Table Array */
 static struct swap_entry *swap_table;
+
+/* The Size of the Swap Table in bytes */
 static size_t swap_table_size;
 
 

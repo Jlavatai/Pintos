@@ -74,6 +74,39 @@ Another important advantage of a hash table, compared to a linked  list, is that
 \subsection{Data structures}
 \subsubsection{B1}
 
+\begin{verbatim}
+
+-- In Swap.h
+/* Stores if a block is in use or not, and the location of that block */
+struct swap_entry {
+   block_sector_t block;
+   bool in_use;
+};
+
+-- In Swap.c
+/* The number of sectors in a page. */
+#define PAGE_NUM_SECTORS PGSIZE / BLOCK_SECTOR_SIZE 
+
+/* Swap Block Pointer - points to the block dedicated to swap on the filesystem */
+static struct block *swap_block; 
+
+/* Size of the Swap Block in bytes */
+static size_t swap_size;
+
+/* Number of pages that will fit into the Swap block */
+static size_t max_pages;         
+
+/* Global lock to stop concurrent access of the swap table. */
+static struct lock swap_lock;        
+
+/* The Swap Table Array */
+static struct swap_entry *swap_table;
+
+/* The Size of the Swap Table in bytes */
+static size_t swap_table_size;
+\end{verbatim}
+
+
 \subsection{Algorithms}
 \subsubsection{B2}
 The choice of a suitable frame to evict is implemented via a pseudo-Least Recently Used algorithm.\\
