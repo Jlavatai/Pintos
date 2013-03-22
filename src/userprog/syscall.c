@@ -217,14 +217,35 @@ read_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   void *buffer = (void *)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
+  void *buffer_page;
+  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
   validate_user_pointer (buffer);
   validate_user_pointer (buffer+size);
-  struct hash *supplemental_page_table = &thread_current ()->supplemental_page_table;
+
+  // Start at buffer, grow check pointers from buffer to size
+  // memset buffer to 0. This will cause pagefault if need be.
+  for (buffer_page = pg_round_down(buffer); buffer_page <= buffer+size; buffer_page += PGSIZE){
+    if (is_in_vstack(buffer_page, f->esp)) {
+      struct page p;
+      p.vaddr = buffer_page;    
+      struct hash_elem *e = hash_find (&thread_current()->supplemental_page_table, &p.hash_elem);
+      if (!e) {
+        stack_grow(thread_current(), buffer_page);
+      }
+    }
+  }
+
+  if (!supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer, NULL)
+      ||  !supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer+size, NULL)) {
+    exit_syscall(-1);
+  }
+
   if (!supplemental_is_page_writable (supplemental_page_table, buffer))  {
       // print_page_info (supplemental_page_table);
       exit_syscall(-1);
   }
-
+  
 
   if (fd == 0) {
     uint8_t value = input_getc();
@@ -262,11 +283,14 @@ write_handler (struct intr_frame *f)
   int fd = (int)get_stack_argument (f, 0);
   const void *buffer = (const void*)get_stack_argument (f, 1);
   unsigned size = (unsigned)get_stack_argument (f, 2);
-  validate_user_pointer (buffer + (size - 1));
+  validate_user_pointer (buffer + size);
   validate_user_pointer (buffer);
+  if (!supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer, NULL)
+      ||  !supplemental_entry_exists (&thread_current ()->supplemental_page_table, buffer+size, NULL)) {
+    exit_syscall(-1);
+  }
 
-  // TODO: Copy pasta, abstract this
-  // Lookup buffer in the supplemental page table
+  // Ensure that they're in the supplementary page table too.
 
   if (fd == 1) {
     putbuf (buffer, size);
@@ -508,7 +532,6 @@ validate_user_pointer (const void *pointer)
   /* Terminate cleanly if the address is invalid. */
 	if (pointer == NULL
       || !is_user_vaddr (pointer)
-      || !supplemental_entry_exists (&thread_current ()->supplemental_page_table, pointer, NULL)
       )
   {
     // Check pointer is not in supplementary page table

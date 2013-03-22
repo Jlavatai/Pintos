@@ -167,6 +167,8 @@ frame_allocator_evict_page(void) {
 }
 
 static void frame_allocator_save_frame (struct frame* f) {
+  
+
   // Lookup owner id
   tid_t thread_id = f->owner_id;
   // Get the corresponding thread
@@ -182,17 +184,15 @@ static void frame_allocator_save_frame (struct frame* f) {
   // If the page is not dirty, then it is stack
   //   so write it to swap
 
-  if (dirtyFlag &&
-      f->page->page_status == PAGE_MEMORY_MAPPED) {
-      // TODO: Uncomment when Alex's updated stuff.
-      // struct page_mmap_info * mmap_info = (struct page_mmap_info *)f->page->aux;
-
-      // file_seek (mmap_info->file, mmap_info->offset);
-
-      // file_write (mmap_info->file, 
-      //             f->page->vaddr,
-      //             mmap_info->length);
-  } else if (dirtyFlag || true) {
+  if (f->page->page_status & PAGE_MEMORY_MAPPED)
+  {
+    if (dirtyFlag) {
+      struct page_mmap_info *mmap_info = (struct page_mmap_info *)f->page->aux;
+      struct mmap_mapping *m = mmap_get_mapping (&t->mmap_table, mmap_info->mapid);
+      
+      mmap_write_back_data (m, f->frame_addr, mmap_info->offset, mmap_info->length);
+    }
+  } else if (!(f->page->page_status & PAGE_FILESYS)) {
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {
@@ -204,9 +204,7 @@ static void frame_allocator_save_frame (struct frame* f) {
     f->page->aux = s;
     // Save the data into swap.
     swap_save(s, (void*)f->frame_addr);
-  } else {
-    // Delete the page
-  }
+  } 
 }
 
 struct frame * frame_allocator_choose_eviction_frame(void) {
