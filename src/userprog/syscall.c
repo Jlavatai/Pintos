@@ -380,7 +380,7 @@ mmap_handler (struct intr_frame *f)
   }
 
   /* Ensure that addr is page-aligned. */
-  if (pg_ofs (addr) != 0)
+  if (pg_ofs (addr) != 0) {
     f->eax = MMAP_ERROR_MAPID;
     return;
   }
