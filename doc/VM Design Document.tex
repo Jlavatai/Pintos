@@ -281,11 +281,13 @@ The page faulting process for a memory-mapped file page is similar to that for a
 
 \subsubsection{C3}
 
-The \tx{mmap()} system call is called with the user virtual address that the file should be mapped from in memory. In \tx{mmap\_handler()} in \tx{syscall.c} (which implements the behaviour for \tx{mmap()}) we first determine the number of pages that the memory-mapped file will span over. Since every page used by the user program has a corresponding entry in the supplemental page table, we iterate over every page address for the memory-mapped file starting from the address the file should be mapped from. For each address, we check the supplemental page table for whether a page is already being used at this user virtual address. If a page entry exists in the supplemental page table for any of these page addresses, it denotes that the memory-mapped file would overwrite an existing memory segment, and so we return \tx{-1} to indicate that the memory-mapping failed.
+The \tx{mmap()} system call is called with the user virtual address that the file should be mapped from in memory. In \tx{mmap\_handler()} in \tx{syscall.c} (which implements the behaviour for \tx{mmap()}) we first determine the number of pages that the memory-mapped file will span over. Since every page used by the user program has a corresponding entry in the supplemental page table, we iterate over every starting page address for the memory-mapped file starting from the address the file should be mapped from.
+
+For each of these addresses, we check the supplemental page table for whether a page is already in use at this user virtual address. If a page entry exists in the supplemental page table for any of these addresses, it denotes that the memory-mapped file would overwrite an existing memory segment, and so we return \tx{-1} to indicate that the memory-mapping failed.
 
 \subsection{Rationale}
 \subsubsection{C4}
 
-We do not share much of the code for the two situations, because even though their implementations are both shared in that they demand-page their data from disk and write their data back to disk, we have abstracted how we handle memory-mapped file pages and executable pages in different ways, such that it wouldn't make sense to share much of their implementation. Trying to mould both to use the same system would just add complexity to the code, whilst not gaining much: the code to read and write data to the filesystem consists of only a few filesystem calls.
+We do not share much of the code for the two situations, because even though their implementations are both shared in that they demand-page their data from disk and write their data back to disk on eviction, we have abstracted how we handle memory-mapped file pages and executable pages in different ways, such that it wouldn't make sense to share much of their implementation. Trying to mould both to use the same system would just add complexity to the code, whilst not gaining much: the code to read and write data to the filesystem consists of only a few filesystem calls.
 
 \end{document}
