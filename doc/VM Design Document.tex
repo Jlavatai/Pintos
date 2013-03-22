@@ -279,6 +279,6 @@ The \tx{mmap()} system call is called with the user virtual address that the fil
 \subsection{Rationale}
 \subsubsection{C4}
 
-We do not share much of the code for the two situations, because even though their implementations are both shared in that they demand-page their data from disk and write their data back to disk, we have abstracted how we handle different types of data in the supplemental page table, such that it wouldn't make sense to share much of their implementation.
+We do not share much of the code for the two situations, because even though their implementations are both shared in that they demand-page their data from disk and write their data back to disk, we have abstracted how we handle memory-mapped file pages and executable pages in different ways, such that it wouldn't make sense to share much of their implementation. Trying to mould both to use the same system would just add complexity to the code, whilst not gaining much: the code to read and write data to the filesystem consists of only a few filesystem calls.
 
 \end{document}
