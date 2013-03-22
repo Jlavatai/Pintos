@@ -134,15 +134,17 @@ static size_t swap_table_size;
 
 \subsection{Algorithms}
 \subsubsection{B2}
-The choice of a suitable frame to evict is implemented via a pseudo-Least Recently Used algorithm.\\
+The choice of a suitable frame to evict is implemented via a Least Recently Used based algorithm.\\
 
-We traverse the list of all the frames, maintaining four variables: the \tx{eviction\_candidate}; the \tx{least\_used} value of the eviction candidate, a \tx{dirty\_candidate} flag and a \tx{accessed\_candidate} flag.
+\begin{itemize}
+\item We traverse the list of all the frames, maintaining four variables: the \tx{eviction\_candidate}; the \tx{least\_used} value of the eviction candidate, a \tx{dirty\_candidate} flag and a \tx{accessed\_candidate} flag.
 
-As we traverse the list of frames, we check if the page is accessed, or dirty. If it's $<$dirty or accessed$>$, and we have a candidate that isn't $<$dirty or accessed$>$, we don't consider it as a candidate, and reset it's accessed and dirty bits.
+\item As we traverse the list of frames, we check if the page is accessed, or dirty. If so, and we have a candidate that is not $<$dirty or accessed$>$, we don't consider it as a candidate. This is due to a non-dirty candidate not requring a write to the file system, it can simply be free'd.
 
-If it's still a candidate, we then increment the \tx{unused\_count} variable, and compare it against the candidate's \tx{unused\_count} value. If it is greater, i.e. it's been unused for longer, then that becomes the candidate.
+\item If it's still a candidate, we then increment the \tx{unused\_count} variable, and compare it against the candidate's \tx{unused\_count} value. If it is greater, i.e. it's been unused for longer, then that becomes the candidate.
+\end{itemize}
 
-The end result of this algorithm, is that we take the oldest candidate that hasn't been written to or accessed recently.
+The end result of this algorithm, is that we evict the oldest, non-dirty and non-accessed page. If there are none, we instead evict the oldest non-accessed and dirty or non-dirty and accessed page. If there are yet none of them, we evict the oldest page.
 
 \subsubsection{B3}
 After having chosen a candidate frame for eviction, the function \tx{frame\_allocator\_save\_frame} is called: this function will decide whether to write back the changes made to a page on the file it came from, or else, save it to the swap partition. After this operation is carried out, the frame is removed from the owner's page table, and set as \tx{PAGE\_IN\_SWAP}, in the owner's supplemental page table. So the data belonging to Q which referred to the frame are correctly modified.
@@ -191,10 +193,6 @@ So, referring to the 5 conditions causing deadlocks in OSs, this is how they hav
 \item \textbf{No preemption} : preeption in not allowed in Pintos, but however, our solution was designed such that the lock will be held until the end of the execution of the code in the critical section and no further. If a process terminate with an error, however, we insure that all the locks the were being held are correctly released.
 \item \textbf{Circular waiting}: there is no such situation in our design.
 \end{itemize}
-
-
-
-
 
 \subsubsection{B6}
 

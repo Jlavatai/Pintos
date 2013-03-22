@@ -174,20 +174,16 @@ frame_allocator_save_frame (struct frame *f)
 
   bool dirty_flag = pagedir_is_dirty (t->pagedir, f->page->vaddr);
   enum page_status status = f->page->page_status;
+  if (!dirty_flag)
+    return;
 
   if (status & PAGE_MEMORY_MAPPED)
   {
-    if (dirty_flag) {
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)f->page->aux;
       struct mmap_mapping *m = mmap_get_mapping (&t->mmap_table, mmap_info->mapid);
       
       mmap_write_back_data (m, f->frame_addr, mmap_info->offset, mmap_info->length);
-    }
-  } else if ((f->page->page_status & PAGE_FILESYS)) {
-    return; // We'll load it back in in the next page fault
   } else if (!(f->page->page_status & PAGE_FILESYS)) {
-
-
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();
     if (!s) {
@@ -237,7 +233,7 @@ frame_allocator_choose_eviction_frame (void)
     if (accessed) {
       if (!accessed_candidate) {
         f->unused_count = 0;
-        goto eviction_finish_member;
+        break;
       }
     }
     else
@@ -246,7 +242,7 @@ frame_allocator_choose_eviction_frame (void)
     if (dirty) {
       if (!dirty_candidate) {
         f->unused_count = 0;
-        goto eviction_finish_member;
+        break;
       }
     }
     else
@@ -257,13 +253,9 @@ frame_allocator_choose_eviction_frame (void)
       dirty_candidate = dirty;
       accessed_candidate = accessed;  
       least_used = f->unused_count;
-    } else {
-    eviction_finish_member:
-      pagedir_set_accessed(t->pagedir, f->frame_addr, false);
-      pagedir_set_dirty   (t->pagedir, f->frame_addr, false);
     }
   }
-  // printf("Evict Frame: %i\n", least_used);
+
   eviction_candidate->unused_count = 0;
   lock_release (&frame_table_lock);
   return eviction_candidate;
