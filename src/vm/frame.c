@@ -53,7 +53,7 @@ void frame_map(void * frame_addr, struct page *page, bool writable)
   new_fr->unused_count = 0;
 
   lock_acquire (&frame_table_lock);
-  // printf("Inserting Frame: %X\n", page->vaddr);
+  printf("Thread %i, Inserting Vaddr: %X and Physical: %X\n", thread_current()->tid, page->vaddr, frame_addr);
   hash_insert(&frame_table, &new_fr->hash_elem);
   lock_release (&frame_table_lock);
 }
@@ -136,7 +136,6 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   
   palloc_free_page (kernel_vaddr); //Done by pagedir
 
-  uint32_t *pd = thread_current ()->pagedir;
   struct frame lookup;
   lookup.frame_addr = kernel_vaddr;
 

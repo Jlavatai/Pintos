@@ -189,8 +189,8 @@ page_fault (struct intr_frame *f)
 
     // Supplementary Page Table pointer    
     struct page *page = hash_entry (e, struct page, hash_elem);
-    // printf("Thread: %i| Page: %X| page_status: "BYTETOBINARYPATTERN"\n"
-    //       , thread_current()->tid, page->vaddr, BYTETOBINARY(page->page_status));
+    printf("Thread: %i| Page: %X| page_status: "BYTETOBINARYPATTERN"\n"
+          , thread_current()->tid, page->vaddr, BYTETOBINARY(page->page_status));
 
     enum page_status status = page->page_status;
 
@@ -200,6 +200,8 @@ page_fault (struct intr_frame *f)
     /* First check whether the page is in swap. */
     if (status & PAGE_SWAP)
     {
+
+      lock_acquire(&pagefault_lock);
       // Page is in swap.
       struct swap_entry *swap_info = (struct swap_entry *) page->aux;
       void * kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
@@ -212,25 +214,34 @@ page_fault (struct intr_frame *f)
       page->page_status &= ~PAGE_SWAP;
       // Mark as in memory
       page->page_status |= PAGE_IN_MEMORY;
-
+      lock_release(&pagefault_lock);
       return;
     }
 
     if (status & PAGE_FILESYS)
     {
+      lock_acquire(&pagefault_lock);
+      printf("FileSys Load: Thread: %i!\n", thread_current()->tid); 
       struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
 
       struct file *file = filesys_info->file;
       size_t ofs = filesys_info->offset;
       void *kpage = frame_allocator_get_user_page(page, 0, false);
-      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0))
-          kill(f);
+      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0)) {
+        printf("Failed to Load from Filesys\n"); 
+        kill(f);
+      } else {
+        printf("Load Completed Correctly\n");
+        page->page_status |= PAGE_IN_MEMORY;
+      }
+      lock_release(&pagefault_lock);
       return;
     }
 
     if (status & PAGE_ZERO)
     {
       frame_allocator_get_user_page(page, PAL_ZERO, true);
+      page->page_status |= PAGE_IN_MEMORY;
       return;
     }
 
