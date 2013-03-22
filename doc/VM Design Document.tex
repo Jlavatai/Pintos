@@ -182,8 +182,8 @@ is_in_vstack(void *ptr, uint32_t *esp)
 }
 \end{verbatim}
 
-We consider a pointer to be in the ``virtual stack'', when it is between the bottom of the stack and the top. This is done by first checking if the difference between \tx{PHYS\_BASE} and the pointer's page directory, is less than (or equal to) the maximum stack size.\\
-\\
+We consider a pointer to be in the ``virtual stack'', when it is between the bottom of the stack and the bottom minus the maximum stack size (8MB). This is done by first checking if the difference between \tx{PHYS\_BASE} and the pointer's page directory, is less than (or equal to) this maximum stack size.
+
 We also consider that the given pointer is greater than 32 bytes lower than esp. This is because the furthest page fault from esp which requires page growth, is that which is caused by the assembly \tx{PUSHA} instruction. This can be seen in the test \tx{pt-grow-pusha}
 
 \begin{verbatim}
@@ -193,33 +193,33 @@ We also consider that the given pointer is greater than 32 bytes lower than esp.
 \subsection{Synchronization}
 \subsubsection{B5}
 
-The Frame Table and the Swap Table are global, hence the presence of global locks to control and synchronise access. Since these resources are shared between all threads, it becomes critical to prevent different thread to interfere with operations regarding frame allocation and read and write operations concerning the swap partition.\\
-\\
-Implementing synchronised access for the supplemental page table requred more thought. The supplemental page table is only accessed by the given process, mainly when loading the executable, where the \tx{struct page} are added and the \tx{page\_status} field is set, and in the page fault handler when the page in marked as in memory. However it is also referred to when a frame belonging to a process is evicted, because the references to where the evicted frame is now located needs to be updated.\\
-\\
-Because of this, a lock was added into each thread to lock the supplemental page table on a per-process basis. Every time the supplemental page table or any of its elements, for a given thread, is accessed or modified, we acquire this lock, ensuring that we avoid synchronisation issues.
-\\
-So, referring to the 5 conditions causing deadlocks in OSs, this is how they have been treated:
+The Frame Table and the Swap Table are global data structures, which is why we use global locks to control and synchronise access. Since these resources are shared between all threads, it becomes critical to prevent different thread to interfere with operations regarding frame allocation and read and write operations concerning the swap partition.
+
+Implementing synchronised access for the supplemental page table required more thought. The supplemental page table is only accessed by the given process, mainly when loading the executable, where the \tx{struct page} are added and the \tx{page\_status} field is set, and in the page fault handler when the page in marked as in memory. However it is also referred to when a frame belonging to a process is evicted, because the references to where the evicted frame is now located needs to be updated.
+
+Because of this, a lock was added to each thread to lock the supplemental page table on a per-process basis. Every time the supplemental page table or any of its elements, for a given thread, is accessed or modified, we acquire this lock, ensuring that we avoid synchronisation issues, for example half-written data.
+
+In relation to the 5 conditions causing deadlocks, here is how we have managed them:
 \begin{itemize}
-\item \textbf{Mutual exclusion} : there is no resource associated to a specific rocess, and all of them are either global or accessible from outer processes.
-\item \textbf{Hold and Wait} : The various locks can be accessed only in the same order, so there are no cases where a process could acquire a lock while waiting for another to be released.
+\item \textbf{Mutual exclusion} : there is no resource exclusively associated to a specific process, and all of them are either global or accessible from outer processes.
+\item \textbf{Hold and Wait} : The various locks can be accessed only in our carefully designed order, where there are no cases where a process could acquire a lock while waiting for another to be released.
 \item \textbf{No pre-emption} : Pintos locks do not implement pre-emption. This is because we are writing a kernel, and a failure in a critical section cannot be recovered from, because the state of the kernel would be uncertain. Since we lock at the beginning and end of all critical sections, and carefully designed the synchronisation, we should not get into such problems.
 \item \textbf{Circular waiting}: There is no such situation in our design.
 \end{itemize}
 
 \subsubsection{B6}
 
-FThis case is handled via the global frame table lock. When a process faults, we allocate a frame for the virtual address which faulted, and move the data stored in its previous location to this new physical address.
+This case is handled via the global frame allocation lock. When a process faults, we allocate a frame for the virtual address which faulted, and move the data stored in its previous location to this new physical address.
 
-During this allocation, we evict a page if necessary. Because the allocation is locked down such that it's an atomic operation, if thread Q is woken and immediately page fault's on the evicted address, before the allocation is finished, it will wait on the frame allocation lock. When the frame allocation is finished, frame Q can continue and potentially evict another page if needed.
+During this allocation, we evict a page if necessary. Because the allocation is locked down such that it's an atomic operation, if thread $Q$ is woken and immediately page fault's on the evicted address, before the allocation is finished, it will wait on the frame allocation lock. When the frame allocation is finished, frame $Q$ can continue and potentially evict another page if needed.
 
-There is also a lock for each supplemental page table. If a page is being accessed, this lock is acquired ensuring that any other accesses/writes are finished before an access is performed.
+There is also a lock for each thread's supplemental page table. If a page is being accessed, this lock is acquired ensuring that any other accesses/writes are finished before an access is performed.
 
 \subsubsection{B7}
 
-Any modification's to the frame table are locked globally to ensure atomicity. If process P requires a new page to handle a page fault, it will acquire this lock. Once it is acquired a second process Q can not modify the frame table in any way until it's completed, by the use of this global lock.
+Any modifications to the frame table are locked globally to ensure atomicity. If process $P$ requires a new frame (to handle a page fault), it will acquire this lock. Once it is acquired, a second process $Q$ can not modify the frame table in any way until it's completed, by the use of this global lock.
 
-Also, once a page is read in, it will have an unused\_count of 0. When we choose to evict a page, we choose the highest unused\_count, where unused\_count is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is unlikely (very) to be evicted any time soon.
+Also, once a page is read in, it will have an \tx{unused\_count} of 0. When we choose to evict a page, we choose the highest \tx{unused\_count}, where \tx{unused\_count} is both affected by age and how often it is accessed and written to. Thus if a page is recently read in, it is (very) unlikely to be evicted any time soon.
 
 \subsubsection{B8}
 Paged out pages which need to be brought in memory need a special treatment when dealing with system calls, and, most importantly, the \tx{read} system call. This is because the actual action of reading into the a user specified buffer could cause a page fault which could not be properly handled. Consider the case where a thread tries to read from a buffer referring to a file, in a page referring to a file, which is not present in memory: in this case, the thread would be in the filesys critical region, and during page fault, it would try to acquire the lock again to correctly read data from the file. In order to avoid this problem, a different strategy has been implemented: The provided buffer is still validated before reading but, if it is going to page fault because the stack needs to grow to allow space for the data, the stack growth is carried out before the reading. This way, we avoid having to deal with the page fault that could potentially occur while reading.  
@@ -235,13 +235,13 @@ Our Design has:
 \item 1 Per Process lock for the Supplemental Page Table.
 \end{itemize}
 
-The lowest level of parallelism is to have one global lock for the entirety of the \tx{VM} Module. We chose to not do this because it limits parallelism very significantly, and it is not sigificantly more complex for a per-module lock.\\
-\\
-We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this. We wanted to keep the design simple until all the functionality was correct.\\
-\\
-The design we chose has, what we consider to be, a good trade-off between high parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.\\
-\\
-We didn't want to prematurely optimise (root of all evil), especially so from what we've learnt in previous Pintos sections, but if the design is correct at the beginning, the post-functionally-correct optimisation is made simpler. We believe that we had a design that was parallelizable, and thus are happy with it.
+The lowest level of parallelism is to have one global lock for the entirety of the \tx{VM} Module. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.
+
+We originally intended to have a seperate lock for each frame table entry and swap table entry. However we decided against doing this for two reasons. We wanted to keep the design simple until all the functionality was correct, and the locking mechanisms were only one small portion of the designs.
+
+The design we chose makes a good tradeoff between high parallelism and the amount of time available for the task. We believed, as a team, that getting a functional design was of much more value then a highly parallel, flawed design. It is easier to work from a base standard of behaviour to a faster implementation of that same behaviour, than it is to implement the more optimal version first.
+
+We didn't want to prematurely optimise our code (the root of all evil), especially from what we've learnt from the previous Pintos tasks. We believe that we have a design that is parallelisable, and are happy with it.
 
 \section{Memory Mapped Files}
 \subsection{Data structures}
