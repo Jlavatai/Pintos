@@ -10,13 +10,14 @@
 \maketitle
 
 \section{Page Table Management}
-\subsection{Data structures}
-\subsubsection{A1}
+\subsection{Data structures - A1}
+\subsubsection{Data referring to the Supplemental Page Table}
+
 Added to \tx{struct thread} in \tx{thread.h}:
 \begin{verbatim}
 struct hash supplemental_page_table;
 \end{verbatim}
-Hash table representing the supplemental page table.
+Hash table representing the supplemental page table. \\\\
 Added to new file \tx{page.h}:
 \begin{verbatim}
 enum page_status {
@@ -36,19 +37,39 @@ struct page_filesys_info {
    size_t offset;
 };
 \end{verbatim}
-If a page refers to a file in the file system, it will store info regarding the actual file in memory.
+If a page refers to a file in the file system, this struct will store information regarding the actual file in memory.
 
 
 \begin{verbatim}
 struct page {
-   struct hash_elem hash_elem;		/* Used to store the frame in the page table. */
-   void *vaddr;	    			/* The address of the page in user virtual memory. */
-   void *aux;						/* */
-   enum page_status page_status;   /* Used to store the page's current status. */
-   bool writable;					/* Stores if a page is writable or not */
+   struct hash_elem hash_elem;   	/* Used to store the frame in the page table. */
+   void *vaddr;                   /* The address of the page in user virtual memory. */
+   void *aux;	               					    /* A pointer to auxiliary data */
+   enum page_status page_status;  /* Used to store the page's current status. */
+   bool writable;					                /* Stores if a page is writable or not */
 };
 \end{verbatim}
-Struct holding information about a page, stored in the supplemental page table.
+Struct holding information about a page stored in the supplemental page table.
+
+\subsubsection{Data referring to the Frame Table}
+
+Added to the new file \tx{frame.h}:
+\begin{verbatim}
+struct hash frame\_table;
+\end{verbatim}
+System wide hash table representing the Frame Table.
+
+\begin{verbatim}
+struct frame {
+   struct hash_elem hash_elem;		   /* Used to store the frame in the frame table. */
+   int32_t frame_addr;				           /* The address of the frame in memory.*/
+   struct page *page;				            /* Stores the page mapped into this frame*/
+   tid_t owner_id;						               /* Stores the tid of the owning thread*/
+   int32_t unused_count;          /*Represents how many times the frame was not evicted*/
+};
+\end{verbatim}
+
+
 
  
 
@@ -100,6 +121,7 @@ The page is then installed in P's page directory,
 \subsubsection{B7}
 
 \subsubsection{B8}
+Paged out pages which need to be brought in memory need a special treatment when dealing with system calls, and, most importantly, the \tx{read} system call. This is because the actual action of reading into the a user specified buffer could cause a page fault which could not be properly handled. In order to avoid this problem, a different strategy has been implemented: The provided buffer is still validated but, if it page faults because the stack needs to grow to allow space for the data, the stack growth is carried out before the reading. This way, we avoid having to deal with the page fault that could potentially occur while reading.  
 
 \subsection{Rationale}
 \subsubsection{B9}

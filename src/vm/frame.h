@@ -12,8 +12,8 @@ struct frame {
 	struct hash_elem hash_elem;		/* Used to store the frame in the frame table. */
 	int32_t frame_addr;				/* The address of the frame in memory.         */
 	struct page *page;				/* Stores the page mapped into this frame      */
-	tid_t owner_id;						/* Stores the tid of the owning thread    */
-	int32_t unused_count;
+	tid_t owner_id;					/* Stores the tid of the owning thread    */
+	int32_t unused_count;			/*Represents how many times the frame was not evicted*/
 };
 
 void frame_table_init(void);
