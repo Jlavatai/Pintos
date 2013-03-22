@@ -143,8 +143,8 @@ We traverse the list of all the frames, maintaining four variables: the \tx{evic
 As we traverse the list of frames, we check if the page is accessed, or dirty. If it's $<$dirty or accessed$>$, and we have a candidate that isn't $<$dirty or accessed$>$, we don't consider it as a candidate, and reset it's accessed and dirty bits.
 
 If it's still a candidate, we then increment the \tx{unused\_count} variable, and compare it against the candidate's \tx{unused\_count} value. If it is greater, i.e. it's been unused for longer, then that becomes the candidate.
- 
- 
+
+The end result of this algorithm, is that we take the oldest candidate that hasn't been written to or accessed recently.
 
 \subsubsection{B3}
 After having chosen a candidate frame for eviction, the function \tx{frame\_allocator\_save\_frame} is called: this function will decide whether to write back the changes made to a page on the file it came from, or else, save it to the swap partition. After this operation is carried out, the frame is removed from the owner's page table, and set as \tx{PAGE\_IN\_SWAP}, in the owner's supplemental page table. So the data belonging to Q which referred to the frame are correctly modified.
@@ -271,8 +271,6 @@ The information about each page that is added to the supplemental page table is 
 We then set the \tx{aux} member of the \tx{struct page} to point to this new \tx{struct page\_mmap\_info}, and the \tx{page\_status} to be \tx{PAGE\_MEMORY\_MAPPED} to denote that this is a page for a memory-mapped file.
 
 The page faulting process for a memory-mapped file page is similar to that for an executable page in that we load data from the filesystem into the frame allocated for the page of memory. However, when we load in a page-worth of memory-mapped file, we have to look up the memory mapping in the thread's memory map table (the \tx{mmap\_table} member of \tx{struct thread}). From this, we can get the \tx{struct file} pointer for the file that has been mapped into the user virtual address space, and then read the chunk of data from disk. This is different to how we deal with executable pages, as each \tx{struct page}'s \tx{aux} member points to a \tx{struct page\_filesys\_info} which contains the underlying \tx{struct file} pointer directly. Since we want to be able to access the memory-map info via the memory map ID for each memory-mapped page, we only store this ID and not the \tx{struct file} pointer directly in \tx{struct page\_mmap\_info}. Storing the file pointer in each \tx{struct page\_mmap\_info} as well as in the \tx{struct mmap\_mapping} would be unnecessary duplication and could lead to more bugs because of data inconsistency (if the file pointer wasn't set in one struct, for instance).
-
-Eviction for pages used for memory-mapped files works fairly similarly compared to pages storing parts of an executable in that on eviction, we write dirty pages back to disk. However, the abstraction for memory-mapped files is a bit different to that for regular executable pages, since it is shared between eviction and calls to \tx{munmap()}.
 
 \subsubsection{C3}
 
