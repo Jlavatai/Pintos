@@ -95,16 +95,19 @@ Another important advantage of a hash table, compared to a linked  list, is that
 \subsection{Data structures}
 \subsubsection{B1}
 
+Added to new file \tx{swap.h}:
 \begin{verbatim}
 
--- In Swap.h
 /* Stores if a block is in use or not, and the location of that block */
 struct swap_entry {
    block_sector_t block;
    bool in_use;
 };
+\end{verbatim}
 
--- In Swap.c
+Added to new file \tx{swap.c}:
+\begin{verbatim}
+
 /* The number of sectors in a page. */
 #define PAGE_NUM_SECTORS PGSIZE / BLOCK_SECTOR_SIZE 
 
