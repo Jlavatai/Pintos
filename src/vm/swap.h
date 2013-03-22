@@ -4,6 +4,8 @@
 #include "devices/block.h"
 #include "vm/page.h"
 
+
+/* Stores if a block is in use or not, and the location of that block */
 struct swap_entry {
 	block_sector_t block;
 	bool in_use;

@@ -204,6 +204,8 @@ static void frame_allocator_save_frame (struct frame* f) {
       
       mmap_write_back_data (m, f->frame_addr, mmap_info->offset, mmap_info->length);
     }
+  } else if ((f->page->page_status & PAGE_FILESYS)) {
+    return; // We'll load it back in in the next page fault
   } else if (!(f->page->page_status & PAGE_FILESYS)) {
     // Allocate some Swap memory
     struct swap_entry *s = swap_alloc();

@@ -71,8 +71,6 @@ struct frame {
 
 
 
- 
-
 \subsection{Algorithms}
 \subsubsection{A2}
 The location of a frame is handled mainly via the supplemental page table.
@@ -80,6 +78,8 @@ When an executable is loaded, the new function \tx{load\_executable\_page} is ca
 Upon page fault, the supplemental page table is consulted: if an entry is not present, the OS decides whether it is a memory access that requires a stack growth, otherwise the memory access is invalid. But if an entry is found, then, at first, the function \tx{frame\_allocator\_get\_user\_page} is called. This function will, in turn, call \tx{palloc\_get\_page}, which will retrieve a frame from the user pool, add a page table entry for this page - frame mapping in the page table, and return the page's address. The additional work that \tx{frame\_allocator\_get\_user\_page} carries out is to create a \tx{struct frame}, recording the address of the allocated frame, the address of the page  mapped, the \tx{tid\_t} of the thread owning the frame, and then adding this struct to the frame table. The frame will then be filled with the correct information: it will be zeroed, or the content of a file in the file system will be copied \\
 Before returning from the page fault handler, the page will me marked as present in memory in the supplemental page table.
 \subsubsection{A3}
+
+In our pseudo LRU page eviction algorithm, we prioritize eviction of non-dirty and non-accessed pages, and reset those bits on each call, whilst maintaining a counter which considers the number of time's it's been dirty or accessed while the frame is mapped to a given page. Thus when we don't need to coordinate these accessed and dirty bits, because when we consider them we always have the user virtual addresses present. Thus we avoid the issue entirely.
 
 \subsection{Synchronization}
 \subsubsection{A4}
@@ -94,6 +94,39 @@ Another important advantage of a hash table, compared to a linked  list, is that
 
 \subsection{Data structures}
 \subsubsection{B1}
+
+\begin{verbatim}
+
+-- In Swap.h
+/* Stores if a block is in use or not, and the location of that block */
+struct swap_entry {
+   block_sector_t block;
+   bool in_use;
+};
+
+-- In Swap.c
+/* The number of sectors in a page. */
+#define PAGE_NUM_SECTORS PGSIZE / BLOCK_SECTOR_SIZE 
+
+/* Swap Block Pointer - points to the block dedicated to swap on the filesystem */
+static struct block *swap_block; 
+
+/* Size of the Swap Block in bytes */
+static size_t swap_size;
+
+/* Number of pages that will fit into the Swap block */
+static size_t max_pages;         
+
+/* Global lock to stop concurrent access of the swap table. */
+static struct lock swap_lock;        
+
+/* The Swap Table Array */
+static struct swap_entry *swap_table;
+
+/* The Size of the Swap Table in bytes */
+static size_t swap_table_size;
+\end{verbatim}
+
 
 \subsection{Algorithms}
 \subsubsection{B2}
@@ -112,6 +145,29 @@ The page is then installed in P's page directory,
 
 
 \subsection{B4}
+
+To decide if a virtual address is invalid, or need's the stack to grow, we pass it through this function:
+\begin{verbatim}
+-- In exception.h
+/* Maximum Stack Size: 8 megabytes*/
+#define MAX_STACK_SIZE 8388608
+
+-- In exception.c
+bool
+is_in_vstack(void *ptr, uint32_t *esp)
+{
+  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE
+           && (uint32_t*)ptr >= (esp - 32));
+}
+\end{verbatim}
+
+We consider a pointer to be in the ``virtual stack'', when it is between the bottom of the stack and the top. This is done by first checking if the difference between \tx{PHYS\_BASE} and the pointer's page directory, is less (or equal to) the maximum stack.\\
+\\
+We also consider that the given pointer is greater than 32 bytes lower than esp. This is because the furthest page fault from esp which requires page growth, is that which is caused by the assembly \tx{PUSHA} instruction. This can be seen in the test \tx{pt-grow-pusha}
+
+\begin{verbatim}
+     "pushal;"                   /* Push 32 bytes on stack at once. */
+\end{verbatim}
 
 \subsection{Synchronization}
 \subsubsection{B5}
@@ -142,11 +198,21 @@ If a page represents a file mapped in memory, this struct will hold information 
 \subsection{Algorithms}
 \subsubsection{C2}
 
+When a file is memory-mapped, we determine how many pages worth of memory are used by the file, then for every page we add an entry to the supplemental page table (starting from the user virtual address that the file is to be mapped from).
+
+The information about each page that is added to the supplemental page table is stored in a \tx{struct page}. For each a memory-mapped page that we add to the supplemental page table, we allocate a \tx{page\_mmap\_info} struct which contains members for the mapid (which is the value returned by \tx{mmap()}), the offset into the file that's been memory mapped for the current page, and the length of memory-mapped file from the offset that this page contains (this will likely be \tx{PGSIZE} but will be less for the last page of the memory-mapped file if the file is not a multiple of \tx{PGSIZE}).
+
+We then set the \tx{aux} member of the \tx{struct page} to point to this new \tx{struct page\_mmap\_info}, and the \tx{page\_status} to be \tx{PAGE\_MEMORY\_MAPPED} to denote that this is a page for a memory-mapped file.
+
+The page faulting process for a memory-mapped file page is similar to that for an executable page in that we load data from the filesystem into the frame allocated for the page of memory. However, when we load in a page-worth of memory-mapped file, we have to look up the memory mapping in the thread's memory map table (the \tx{mmap\_table} member of \tx{struct thread}). From this, we can get the \tx{struct file} pointer for the file that has been mapped into the user virtual address space, and then read the chunk of data from disk. This is different to how we deal with executable pages, as each \tx{struct page}'s \tx{aux} member points to a \tx{struct page\_filesys\_info} which contains the underlying \tx{struct file} pointer directly. Since we want to be able to access the memory-map info via the mmap id for each memory-mapped page, we only store the mmap id and not the \tx{struct file} pointer directly. We can look up the \tx{struct file} from the entry in the \tx{mmap\_table} and get the file pointer from here. Storing the file pointer in each \tx{struct page\_mmap\_info} would be unnecessary duplication and could lead to data inconsistency.
+
 \subsubsection{C3}
 
 The \tx{mmap()} system call is called with the user virtual address that the file should be mapped to in memory. In \tx{mmap\_handler()} in \tx{syscall.c} (which implements the behaviour for \tx{mmap()}) we first determine the number of pages that the memory-mapped file will span over, then we iterate over every page address for the memory-mapped file starting from the address the file should be mapped from. For each address, we check the supplemental page table for whether a page is already being used at this user virtual address. If a page entry exists in the supplemental page table for any of these page addresses, it denotes that the memory-mapped file would overwrite an existing memory segment, and so we return \tx{-1} to indicate that the memory-mapping failed.
 
 \subsection{Rationale}
 \subsubsection{C4}
+
+We do not share much of the code for the two situations, because even though their implementations are both shared in that they demand-page their data from disk and write their data back to disk, we have abstracted how we handle different types of data in the supplemental page table, such that it wouldn't make sense to share much of their implementation.
 
 \end{document}
