@@ -9,18 +9,15 @@
 #include "threads/malloc.h"
 #include "userprog/pagedir.h"
 
+void frame_map (void *frame_addr, struct page *page, bool writable);
+void frame_unmap (void *frame_addr);
 
-
-
-void frame_map(void * frame_addr, struct page *page, bool writable);
-void frame_unmap(void *frame_addr);
-
-static unsigned frame_hash(const struct hash_elem *e, void *aux);
+static unsigned frame_hash (const struct hash_elem *e, void *aux);
 static bool frame_less (const struct hash_elem *a,
-            const struct hash_elem *b,
-            void *aux);
-static void *frame_allocator_evict_page(void);
-static struct frame *frame_allocator_choose_eviction_frame(void);
+                        const struct hash_elem *b,
+                        void *aux);
+static void *frame_allocator_evict_page (void);
+static struct frame *frame_allocator_choose_eviction_frame (void);
 static void frame_allocator_save_frame (struct frame*);
 
 struct lock frame_table_lock;
@@ -32,20 +29,17 @@ frame_table_init(void)
 {
   hash_init (&frame_table, frame_hash, frame_less, NULL);
   lock_init (&frame_table_lock);
-  lock_init (&frame_allocation_lock); // Must prevent multiple pages allocating at the same time to avoid eviction problems
+
+  /* We must prevent multiple pages allocating at the same time to avoid eviction problems. */
+  lock_init (&frame_allocation_lock);
 }
 
-void frame_map(void * frame_addr, struct page *page, bool writable)
+void frame_map(void *frame_addr, struct page *page, bool writable)
 { 
-  // Set page to be in memory
-  page->page_status |= PAGE_IN_MEMORY;
-
   struct frame *new_fr = NULL;
   new_fr = malloc (sizeof(struct frame));
-  if(new_fr == NULL) 
-  {
+  if(!new_fr) 
     PANIC("Failed to malloc memory for struct frame");
-  }
 
   new_fr->page = page;
   new_fr->frame_addr = frame_addr;
@@ -53,7 +47,7 @@ void frame_map(void * frame_addr, struct page *page, bool writable)
   new_fr->unused_count = 0;
 
   lock_acquire (&frame_table_lock);
-  // printf("Thread %i, Inserting Vaddr: %X and Physical: %X\n", thread_current()->tid, page->vaddr, frame_addr);
+
   hash_insert(&frame_table, &new_fr->hash_elem);
   lock_release (&frame_table_lock);
 }
@@ -91,26 +85,24 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 /* Getting user frames */
 void *
 frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
-                bool writable)
+                              bool writable)
 {
   int iE;
   lock_acquire(&frame_allocation_lock);
   void * user_vaddr = page->vaddr;
 
-  // printf("hash_size()=%i\n", hash_size(&frame_table));
-
   ASSERT(is_user_vaddr(user_vaddr));
 
   void *kernel_vaddr = palloc_get_page (PAL_USER | flags);
 
-  if (kernel_vaddr == NULL) {
-    // Evict and allocate a new page
-    // printf("Evict Page\n");
+  if (!kernel_vaddr) {
     frame_allocator_evict_page();
     kernel_vaddr = palloc_get_page (PAL_USER | flags);
     ASSERT(kernel_vaddr)
   }
+
   size_t i;
+
   /* Map the frame used to it's virtual address. */
   if (!install_page(user_vaddr, kernel_vaddr, writable)) {
     PANIC("Could not install user page %p", user_vaddr);
@@ -119,17 +111,10 @@ frame_allocator_get_user_page(struct page* page, enum palloc_flags flags,
   frame_map (kernel_vaddr, page, writable);
 
   lock_release(&frame_allocation_lock);
-  memset(kernel_vaddr, 0, PGSIZE);
-  return kernel_vaddr;
-}
 
-void *
-frame_allocator_get_user_page_multiple(struct page* page,
-                     unsigned int num_frames,
-                     enum palloc_flags flags,
-                     bool writable)
-{
-  PANIC("Not Needed for Pintos Task 3 Implementation");
+  memset(kernel_vaddr, 0, PGSIZE);
+
+  return kernel_vaddr;
 }
 
 void
@@ -138,7 +123,7 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
   if (!is_locked)
     lock_acquire (&frame_allocation_lock);
   
-  palloc_free_page (kernel_vaddr); //Done by pagedir
+  palloc_free_page (kernel_vaddr);
 
   struct frame lookup;
   lookup.frame_addr = kernel_vaddr;
@@ -154,51 +139,44 @@ frame_allocator_free_user_page(void* kernel_vaddr, bool is_locked)
 
   f->page->page_status &= ~PAGE_IN_MEMORY;
 
-
   tid_t thread_id = f->owner_id;
-  // Get the corresponding thread
   struct thread* t = thread_lookup(thread_id);
   if(!t)
     PANIC("Corruption of frame table");
 
-  // printf("Free page: %X\n", f->page->vaddr);
-  pagedir_clear_page (t->pagedir, f->page->vaddr); // Will be deleted anyway
+  pagedir_clear_page (t->pagedir, f->page->vaddr);
   frame_unmap (kernel_vaddr);  
   free(f);
+
   if (!is_locked)
     lock_release (&frame_allocation_lock);
 }
 
 static void *
-frame_allocator_evict_page(void) {
+frame_allocator_evict_page(void)
+{
   struct frame * f = frame_allocator_choose_eviction_frame();
-  // Save the page in some form, likely to swap
   frame_allocator_save_frame (f);
-  // Free the page
   frame_allocator_free_user_page(f->frame_addr, true);
 }
 
-static void frame_allocator_save_frame (struct frame* f) {
-  
-
-  // Lookup owner id
+static void
+frame_allocator_save_frame (struct frame *f)
+{
+  /* Get the owner thread. */
   tid_t thread_id = f->owner_id;
-  // Get the corresponding thread
-  struct thread* t = thread_lookup(thread_id);
+  struct thread* t = thread_lookup (thread_id);
   if(!t)
     PANIC("Corruption of frame table");
 
   ASSERT(f->page);
 
-  bool dirtyFlag = pagedir_is_dirty(t->pagedir, f->page->vaddr);
-  // If the page is dirty, write it back to the
-  // file it came from.
-  // If the page is not dirty, then it is stack
-  //   so write it to swap
+  bool dirty_flag = pagedir_is_dirty (t->pagedir, f->page->vaddr);
+  enum page_status status = f->page->page_status;
 
-  if (f->page->page_status & PAGE_MEMORY_MAPPED)
+  if (status & PAGE_MEMORY_MAPPED)
   {
-    if (dirtyFlag) {
+    if (dirty_flag) {
       struct page_mmap_info *mmap_info = (struct page_mmap_info *)f->page->aux;
       struct mmap_mapping *m = mmap_get_mapping (&t->mmap_table, mmap_info->mapid);
       
@@ -212,17 +190,20 @@ static void frame_allocator_save_frame (struct frame* f) {
     if (!s) {
       PANIC("Frame Eviction: No Swap Memory left!");
     }
-    // printf("Swap Page!\n");
-    // Set the page status to swap
+
+    /* Set the page status to swap. */
     f->page->page_status |= PAGE_SWAP;
     f->page->page_status &= ~(PAGE_IN_MEMORY);
     f->page->aux = s;
-    // Save the data into swap.
+
+    /* Save the data into the swap slot. */
     swap_save(s, (void*)f->frame_addr);
   } 
 }
 
-struct frame * frame_allocator_choose_eviction_frame(void) {
+struct frame *
+frame_allocator_choose_eviction_frame (void)
+{
   struct hash_iterator i;
   struct thread *t;
   struct frame * eviction_candidate;

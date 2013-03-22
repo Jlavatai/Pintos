@@ -13,8 +13,6 @@
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
-struct lock pagefault_lock;
-
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
@@ -50,8 +48,6 @@ bool is_in_vstack(void *ptr, uint32_t *esp);
 void
 exception_init (void) 
 {
-  lock_init(&pagefault_lock);
-
   /* These exceptions can be raised explicitly by a user program,
      e.g. via the INT, INT3, INTO, and BOUND instructions.  Thus,
      we set DPL==3, meaning that user programs are allowed to
@@ -181,10 +177,10 @@ page_fault (struct intr_frame *f)
   struct thread *t = thread_current ();
   struct page p;
   p.vaddr = vaddr;
+
   lock_acquire(&t->supplemental_page_table_lock);
-  lock_acquire(&pagefault_lock);
+
   struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
-  lock_release(&pagefault_lock);
 
 
   /* If no entry exists in the supplemental page table, check whether the stack
@@ -199,11 +195,11 @@ page_fault (struct intr_frame *f)
     stack_grow(thread_current(), fault_addr);
     goto page_fault_return;
   }
-  
+
   struct page *page = hash_entry (e, struct page, hash_elem);
   enum page_status status = page->page_status;
 
-  ASSERT ((status & PAGE_IN_MEMORY) == 0);
+  // ASSERT ((status & PAGE_IN_MEMORY) == 0);
 
 
   /* First check whether the page is in swap. */
@@ -247,8 +243,6 @@ page_fault_return:
 static bool
 page_fault_from_swap (struct page *page)
 {
-  lock_acquire(&pagefault_lock);
-
   struct swap_entry *swap_info = (struct swap_entry *) page->aux;
   void *kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
 
@@ -261,8 +255,6 @@ page_fault_from_swap (struct page *page)
   /* Mark the page as no longer in swap, and in memory. */
   page->page_status &= ~PAGE_SWAP;
   page->page_status |= PAGE_IN_MEMORY;
-
-  lock_release(&pagefault_lock);
 
   return true;
 }
@@ -298,28 +290,28 @@ page_fault_zero (struct page *page)
 static bool
 page_fault_memory_mapped (struct page *page)
 {
-  struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
+  struct page_mmap_info *mmap_info = (struct page_mmap_info *)page->aux;
   void *kpage = frame_allocator_get_user_page(page, PAL_ZERO, true);
 
-  struct mmap_mapping lookup;
-  lookup.mapid = mmap_info->mapid;
-
-  struct thread *t = thread_current ();
-  struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
-  if (!e) {
+  /* Get the memory-map info from the process's mmap table. */
+  struct mmap_mapping *m = mmap_get_mapping (&thread_current ()->mmap_table,
+                                             mmap_info->mapid);
+  if (!m) {
     frame_allocator_free_user_page(kpage);
     exit_syscall (-1);
   }
 
-  struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
   struct file *file = m->file;
   size_t ofs = mmap_info->offset;
   size_t length = mmap_info->length;
 
+  /* Read the data into the page. */
+  start_file_system_access ();
   file_seek (file, ofs);
-  memset (kpage, 0, PGSIZE);
+  int bytes_read = file_read (file, kpage, length);
+  end_file_system_access ();
 
-  if (file_read (file, kpage, length) != length) {
+  if (bytes_read != length) {
     frame_allocator_free_user_page(kpage);
     exit_syscall (-1);
   }

@@ -5,14 +5,16 @@
 #include <debug.h>
 
 typedef int mapid_t;
-#define MMAP_MIN_MAPID 	0			  /* The lowest valid mmap id. */
-#define MMAP_ERROR_MAPID	-1			  /* Denotes a mmap error. */
+#define MMAP_MIN_MAPID 		0			/* The lowest valid mmap id. */
+#define MMAP_ERROR_MAPID	-1			/* Denotes a mmap error. */
 
-struct mmap_mapping {
+struct mmap_mapping
+{
   struct hash_elem hash_elem;
-  mapid_t mapid;                          /* The memory map identifier. */
-  struct file *file;                      /* The file being mapped into memory. */
-  void *uaddr;                            /* The user virtual address that the file is mapped to. */
+  mapid_t mapid;						/* The memory map identifier. */
+  struct file *file;					/* The file being mapped into memory. */
+  void *uaddr;							/* The user virtual address that the
+  										   file is mapped from. */
 };
 
 struct mmap_mapping *mmap_get_mapping (struct hash *mmap_table, mapid_t mapid);
