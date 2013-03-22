@@ -159,10 +159,10 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-
   // These are the cases we want to look at in detail. For everything else,
   // Goto the pagefault message
   if (not_present && fault_addr && is_user_vaddr(fault_addr)) {
+
 
     // /* To implement virtual memory, delete the rest of the function
     //    body, and replace it with code that brings in the page to
@@ -176,7 +176,6 @@ page_fault (struct intr_frame *f)
     lock_acquire(&pagefault_lock);
     struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
     lock_release(&pagefault_lock);
-    
     // If we don't have a supplementary page table entry
     if (!e) {
       // Check if stack needs to grow
@@ -284,5 +283,5 @@ page_fault (struct intr_frame *f)
 bool
 is_in_vstack(void *ptr, uint32_t *esp)
 {
-  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && ptr >= ((void*)esp - 4096));
+  return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && (uint32_t*)ptr >= (esp - 32));
 }
