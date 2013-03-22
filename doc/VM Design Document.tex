@@ -182,8 +182,8 @@ is_in_vstack(void *ptr, uint32_t *esp)
 }
 \end{verbatim}
 
-We consider a pointer to be in the ``virtual stack'', when it is between the bottom of the stack and the top. This is done by first checking if the difference between \tx{PHYS\_BASE} and the pointer's page directory, is less than (or equal to) the maximum stack size.\\
-\\
+We consider a pointer to be in the ``virtual stack'', when it is between the bottom of the stack and the bottom minus the maximum stack size (8MB). This is done by first checking if the difference between \tx{PHYS\_BASE} and the pointer's page directory, is less than (or equal to) this maximum stack size.
+
 We also consider that the given pointer is greater than 32 bytes lower than esp. This is because the furthest page fault from esp which requires page growth, is that which is caused by the assembly \tx{PUSHA} instruction. This can be seen in the test \tx{pt-grow-pusha}
 
 \begin{verbatim}
@@ -193,16 +193,16 @@ We also consider that the given pointer is greater than 32 bytes lower than esp.
 \subsection{Synchronization}
 \subsubsection{B5}
 
-The Frame Table and the Swap Table are global, hence the presence of global locks to control and synchronise access. Since these resources are shared between all threads, it becomes critical to prevent different thread to interfere with operations regarding frame allocation and read and write operations concerning the swap partition.\\
-\\
-Implementing synchronised access for the supplemental page table requred more thought. The supplemental page table is only accessed by the given process, mainly when loading the executable, where the \tx{struct page} are added and the \tx{page\_status} field is set, and in the page fault handler when the page in marked as in memory. However it is also referred to when a frame belonging to a process is evicted, because the references to where the evicted frame is now located needs to be updated.\\
-\\
-Because of this, a lock was added into each thread to lock the supplemental page table on a per-process basis. Every time the supplemental page table or any of its elements, for a given thread, is accessed or modified, we acquire this lock, ensuring that we avoid synchronisation issues.
-\\
-So, referring to the 5 conditions causing deadlocks in OSs, this is how they have been treated:
+The Frame Table and the Swap Table are global data structures, which is why we use global locks to control and synchronise access. Since these resources are shared between all threads, it becomes critical to prevent different thread to interfere with operations regarding frame allocation and read and write operations concerning the swap partition.
+
+Implementing synchronised access for the supplemental page table required more thought. The supplemental page table is only accessed by the given process, mainly when loading the executable, where the \tx{struct page} are added and the \tx{page\_status} field is set, and in the page fault handler when the page in marked as in memory. However it is also referred to when a frame belonging to a process is evicted, because the references to where the evicted frame is now located needs to be updated.
+
+Because of this, a lock was added to each thread to lock the supplemental page table on a per-process basis. Every time the supplemental page table or any of its elements, for a given thread, is accessed or modified, we acquire this lock, ensuring that we avoid synchronisation issues, for example half-written data.
+
+In relation to the 5 conditions causing deadlocks, here is how we have managed them:
 \begin{itemize}
-\item \textbf{Mutual exclusion} : there is no resource associated to a specific rocess, and all of them are either global or accessible from outer processes.
-\item \textbf{Hold and Wait} : The various locks can be accessed only in the same order, so there are no cases where a process could acquire a lock while waiting for another to be released.
+\item \textbf{Mutual exclusion} : there is no resource exclusively associated to a specific process, and all of them are either global or accessible from outer processes.
+\item \textbf{Hold and Wait} : The various locks can be accessed only in our carefully designed order, where there are no cases where a process could acquire a lock while waiting for another to be released.
 \item \textbf{No preemption} : preeption in not allowed in Pintos, but however, our solution was designed such that the lock will be held until the end of the execution of the code in the critical section and no further. If a process terminate with an error, however, we insure that all the locks the were being held are correctly released.
 \item \textbf{Circular waiting}: there is no such situation in our design.
 \end{itemize}
