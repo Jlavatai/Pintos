@@ -20,18 +20,18 @@
 // end preprocessor defs
 
 enum page_status {
-    PAGE_UNDEFINED = 0,
-    PAGE_FILESYS = 1 << 0,
-    PAGE_SWAP  = 1 << 1,
-    PAGE_MEMORY_MAPPED  = 1 << 2,
-    PAGE_IN_MEMORY = 1 << 3,
-    PAGE_ZERO = 1 << 4,
+    PAGE_UNDEFINED = 0,             /* The default page status. */
+    PAGE_FILESYS = 1 << 0,          /* Indicates a page containing data from an executable. */
+    PAGE_SWAP  = 1 << 1,            /* Indicates a page stored in swap. */
+    PAGE_MEMORY_MAPPED  = 1 << 2,   /* Indicates a page storing data for a memory-mapped file. */
+    PAGE_IN_MEMORY = 1 << 3,        /* Indicates a page which is currently stored in memory. */
+    PAGE_ZERO = 1 << 4,             /* Indicates a page initialised to zero. */
 };
 
 struct page_filesys_info {
-    struct file *file;
-    size_t offset;
-    size_t length;
+    struct file *file;              /* The file pointer for the file the data is loaded from. */
+    size_t offset;                  /* The file offset for the data in this page. */ 
+    size_t length;                  /* The number of bytes from the file stored in this page. */
 };
 
 struct page_mmap_info {
