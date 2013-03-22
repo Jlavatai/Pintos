@@ -18,8 +18,20 @@ struct lock pagefault_lock;
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
-// Utility function for testing if we need to grow stack
+static bool page_fault_from_swap (struct page *page);
+static bool page_fault_from_filesys (struct page *page);
+static bool page_fault_zero (struct page *page);
+static bool page_fault_memory_mapped (struct page *page);
+
+static void print_page_fault (void *fault_addr,
+                              bool not_present,
+                              bool write,
+                              bool user);
+
 bool is_in_vstack(void *ptr, uint32_t *esp);
+
+
+
 /* Registers handlers for interrupts that can be caused by user
    programs.
 
@@ -161,132 +173,171 @@ page_fault (struct intr_frame *f)
 
   // These are the cases we want to look at in detail. For everything else,
   // Goto the pagefault message
-  if (not_present && fault_addr && is_user_vaddr(fault_addr)) {
+  if (!not_present || !fault_addr || !is_user_vaddr(fault_addr))
+    exit_syscall (-1);
 
+  void *vaddr = pg_round_down (fault_addr);
 
-    // /* To implement virtual memory, delete the rest of the function
-    //    body, and replace it with code that brings in the page to
-    //    which fault_addr refers. */
-    void *vaddr = pg_round_down(fault_addr);
+  struct thread *t = thread_current ();
+  struct page p;
+  p.vaddr = vaddr;
 
-    struct thread *t = thread_current ();
-    struct page p;
-    p.vaddr = vaddr;
+  lock_acquire(&pagefault_lock);
+  struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
+  lock_release(&pagefault_lock);
 
-    lock_acquire(&pagefault_lock);
-    struct hash_elem *e = hash_find (&t->supplemental_page_table, &p.hash_elem);
-    lock_release(&pagefault_lock);
-    // If we don't have a supplementary page table entry
-    if (!e) {
-      // Check if stack needs to grow
-      ASSERT(is_user_vaddr(fault_addr));
-      if (is_in_vstack(fault_addr, f->esp)) {
-        stack_grow(thread_current(), fault_addr);
-        return;
-      }
-      goto page_fault;
-    }
+  /* If no entry exists in the supplemental page table, check whether the stack
+     needs to grow. */
+  if (!e)
+  {
+    ASSERT(is_user_vaddr(fault_addr));
 
-    // Supplementary Page Table pointer    
-    struct page *page = hash_entry (e, struct page, hash_elem);
-    // printf("Thread: %i| Page: %X| page_status: "BYTETOBINARYPATTERN"\n"
-    //       , thread_current()->tid, page->vaddr, BYTETOBINARY(page->page_status));
+    if (!is_in_vstack(fault_addr, f->esp))
+      exit_syscall (-1);
 
-    enum page_status status = page->page_status;
-
-    ASSERT ((status & PAGE_IN_MEMORY) == 0);
-    // printf("Page Status: %i\n", page->page_status);
-
-    /* First check whether the page is in swap. */
-    if (status & PAGE_SWAP)
-    {
-      // printf("Swap Page\n");
-      lock_acquire(&pagefault_lock);
-      // Page is in swap.
-      struct swap_entry *swap_info = (struct swap_entry *) page->aux;
-      void * kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
-      // First Allocate a user page
-      // Save it into that page of memory
-      swap_load(swap_info, page, kernel_vaddr);
-      // Free that page of swap
-      swap_free(swap_info);
-      // Mark as no longer in swap
-      page->page_status &= ~PAGE_SWAP;
-      // Mark as in memory
-      page->page_status |= PAGE_IN_MEMORY;
-      lock_release(&pagefault_lock);
-      return;
-    }
-
-    if (status & PAGE_FILESYS)
-    {
-      struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
-
-      struct file *file = filesys_info->file;
-      size_t ofs = filesys_info->offset;
-      void *kpage = frame_allocator_get_user_page(page, 0, page->writable);
-      if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0)) {
-        kill(f);
-      } else {
-        page->page_status |= PAGE_IN_MEMORY;
-      }
-      return;
-    }
-    if (status & PAGE_ZERO)
-    {
-      frame_allocator_get_user_page(page, PAL_ZERO, true);
-      page->page_status |= PAGE_IN_MEMORY;
-      return;
-    }
-
-    if (status & PAGE_MEMORY_MAPPED)
-    {
-      struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
-      void *kpage = frame_allocator_get_user_page(page, PAL_ZERO, true);
-
-      struct mmap_mapping lookup;
-      lookup.mapid = mmap_info->mapid;
-
-      struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
-      if (!e) {
-        frame_allocator_free_user_page(kpage);
-        goto page_fault;
-      }
-
-      struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
-      struct file *file = m->file;
-      size_t ofs = mmap_info->offset;
-      size_t length = mmap_info->length;
-
-      file_seek (file, ofs);
-      memset (kpage, 0, PGSIZE);
-
-      if (file_read (file, kpage, length) != length) {
-        frame_allocator_free_user_page(kpage);
-        goto page_fault;
-      }
-
-      supplemental_mark_page_in_memory (&t->supplemental_page_table, vaddr);
-
-      return;
-    }
+    stack_grow(thread_current(), fault_addr);
+    return;
   }
-  page_fault:
-    /* Count page faults. */
-      page_fault_cnt++;
 
-      // printf ("Page fault at %p: %s error %s page in %s context.\n",
-      //         fault_addr,  
-      //         not_present ? "not present" : "rights violation",
-      //         write ? "writing" : "reading",
-      //         user ? "user" : "kernel");
+  ASSERT ((status & PAGE_IN_MEMORY) == 0);
+
+  struct page *page = hash_entry (e, struct page, hash_elem);
+  enum page_status status = page->page_status;
+
+  /* First check whether the page is in swap. */
+  if (status & PAGE_SWAP) {
+    if (!page_fault_from_swap (page))
+      kill (f);
+
+    return;
+  }
 
 
-      exit_syscall(-1);  
+  /* Otherwise, check the various types of page. */
+
+  if (status & PAGE_FILESYS) {
+    if (!page_fault_from_filesys (page))
+      kill (f);
+
+    return;
+  }
+
+  if (status & PAGE_ZERO)
+  {
+    if (!page_fault_zero (page))
+      kill (f);
+
+    return;
+  }
+
+  if (status & PAGE_MEMORY_MAPPED)
+  {
+    if (!page_fault_memory_mapped (page))
+      kill (f);
+
+    return;
+  }
 }
 
+static bool
+page_fault_from_swap (struct page *page)
+{
+  lock_acquire(&pagefault_lock);
+
+  struct swap_entry *swap_info = (struct swap_entry *) page->aux;
+  void *kernel_vaddr = frame_allocator_get_user_page(page, 0, true);
+
+  /* Load the page from swap. */
+  swap_load(swap_info, page, kernel_vaddr);
+
+  /* Free the swap slot. */
+  swap_free(swap_info);
+
+  /* Mark the page as no longer in swap, and in memory. */
+  page->page_status &= ~PAGE_SWAP;
+  page->page_status |= PAGE_IN_MEMORY;
+
+  lock_release(&pagefault_lock);
+
+  return true;
+}
+
+static bool
+page_fault_from_filesys (struct page *page)
+{
+  struct page_filesys_info *filesys_info = (struct page_filesys_info *) page->aux;
+  struct file *file = filesys_info->file;
+  size_t ofs = filesys_info->offset;
+
+  void *kpage = frame_allocator_get_user_page(page, 0, page->writable);
+  if(!read_executable_page(file, ofs, kpage, filesys_info->length, 0))
+    return false;
+
+  /* Mark the page as being in memory. */
+  page->page_status |= PAGE_IN_MEMORY;
+
+  return true;
+}
+
+static bool
+page_fault_zero (struct page *page)
+{
+  frame_allocator_get_user_page(page, PAL_ZERO, true);
+
+  /* Mark the page as being in memory. */
+  page->page_status |= PAGE_IN_MEMORY;
+
+  return true;
+}
+
+static bool
+page_fault_memory_mapped (struct page *page)
+{
+  struct page_mmap_info *mmap_info = (struct page_mmap_info *) page->aux;
+  void *kpage = frame_allocator_get_user_page(page, PAL_ZERO, true);
+
+  struct mmap_mapping lookup;
+  lookup.mapid = mmap_info->mapid;
+
+  struct thread *t = thread_current ();
+  struct hash_elem *e = hash_find (&t->mmap_table, &lookup.hash_elem);
+  if (!e) {
+    frame_allocator_free_user_page(kpage);
+    exit_syscall (-1);
+  }
+
+  struct mmap_mapping *m = hash_entry (e, struct mmap_mapping, hash_elem);
+  struct file *file = m->file;
+  size_t ofs = mmap_info->offset;
+  size_t length = mmap_info->length;
+
+  file_seek (file, ofs);
+  memset (kpage, 0, PGSIZE);
+
+  if (file_read (file, kpage, length) != length) {
+    frame_allocator_free_user_page(kpage);
+    exit_syscall (-1);
+  }
+
+  page->page_status |= PAGE_IN_MEMORY;
+
+  return true;
+}
+
+/* Utility function for testing if we need to grow stack. */
 bool
 is_in_vstack(void *ptr, uint32_t *esp)
 {
   return  ((PHYS_BASE - pg_round_down (ptr)) <= MAX_STACK_SIZE && (uint32_t*)ptr >= (esp - 32));
+}
+
+/* Debugging aid. */
+static void
+print_page_fault (void *fault_addr, bool not_present, bool write, bool user)
+{
+  printf ("Page fault at %p: %s error %s page in %s context.\n",
+          fault_addr,  
+          not_present ? "not present" : "rights violation",
+          write ? "writing" : "reading",
+          user ? "user" : "kernel");
 }
