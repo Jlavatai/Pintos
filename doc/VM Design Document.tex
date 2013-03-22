@@ -211,10 +211,12 @@ Paged out pages which need to be brought in memory need a special treatment when
 \subsection{Rationale}
 \subsubsection{B9}
 
-Our Design has:\\
-\hspace{5mm} 1 Global lock for the Frame Table.\\
-\hspace{5mm} 1 Global lock for the Swap Table.\\
-\hspace{5mm} 1 Per Process lock for the Supplemental Page Table.\\
+Our Design has:
+\begin{itemize}
+\item 1 Global lock for the Frame Table.
+\item 1 Global lock for the Swap Table.
+\item 1 Per Process lock for the Supplemental Page Table.
+\end{itemize}
 
 The lowest level of parallelism is to have one global lock for the entirety of the Virtual Memory Module. We chose to not do this because it limits parallelism very significantly, and it does not require significantly greater complexity for a per-module lock.\\
 \\
@@ -271,6 +273,8 @@ The information about each page that is added to the supplemental page table is 
 We then set the \tx{aux} member of the \tx{struct page} to point to this new \tx{struct page\_mmap\_info}, and the \tx{page\_status} to be \tx{PAGE\_MEMORY\_MAPPED} to denote that this is a page for a memory-mapped file.
 
 The page faulting process for a memory-mapped file page is similar to that for an executable page in that we load data from the filesystem into the frame allocated for the page of memory. However, when we load in a page-worth of memory-mapped file, we have to look up the memory mapping in the thread's memory map table (the \tx{mmap\_table} member of \tx{struct thread}). From this, we can get the \tx{struct file} pointer for the file that has been mapped into the user virtual address space, and then read the chunk of data from disk. This is different to how we deal with executable pages, as each \tx{struct page}'s \tx{aux} member points to a \tx{struct page\_filesys\_info} which contains the underlying \tx{struct file} pointer directly. Since we want to be able to access the memory-map info via the memory map ID for each memory-mapped page, we only store this ID and not the \tx{struct file} pointer directly in \tx{struct page\_mmap\_info}. Storing the file pointer in each \tx{struct page\_mmap\_info} as well as in the \tx{struct mmap\_mapping} would be unnecessary duplication and could lead to more bugs because of data inconsistency (if the file pointer wasn't set in one struct, for instance).
+
+Eviction for pages used for memory-mapped files works fairly similarly compared to pages storing parts of an executable in that on eviction, we write dirty pages back to disk. However, the abstraction for memory-mapped files is a bit different to that for regular executable pages, since it is shared between eviction and calls to \tx{munmap()}.
 
 \subsubsection{C3}
 
