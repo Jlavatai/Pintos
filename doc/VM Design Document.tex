@@ -120,11 +120,21 @@ If a page represents a file mapped in memory, this struct will hold information 
 \subsection{Algorithms}
 \subsubsection{C2}
 
+When a file is memory-mapped, we determine how many pages worth of memory are used by the file, then for every page we add an entry to the supplemental page table (starting from the user virtual address that the file is to be mapped from).
+
+The information about each page that is added to the supplemental page table is stored in a \tx{struct page}. For each a memory-mapped page that we add to the supplemental page table, we allocate a \tx{page\_mmap\_info} struct which contains members for the mapid (which is the value returned by \tx{mmap()}), the offset into the file that's been memory mapped for the current page, and the length of memory-mapped file from the offset that this page contains (this will likely be \tx{PGSIZE} but will be less for the last page of the memory-mapped file if the file is not a multiple of \tx{PGSIZE}).
+
+We then set the \tx{aux} member of the \tx{struct page} to point to this new \tx{struct page\_mmap\_info}, and the \tx{page\_status} to be \tx{PAGE\_MEMORY\_MAPPED} to denote that this is a page for a memory-mapped file.
+
+The page faulting process for a memory-mapped file page is similar to that for an executable page in that we load data from the filesystem into the frame allocated for the page of memory. However, when we load in a page-worth of memory-mapped file, we have to look up the memory mapping in the thread's memory map table (the \tx{mmap\_table} member of \tx{struct thread}). From this, we can get the \tx{struct file} pointer for the file that has been mapped into the user virtual address space, and then read the chunk of data from disk. This is different to how we deal with executable pages, as each \tx{struct page}'s \tx{aux} member points to a \tx{struct page\_filesys\_info} which contains the underlying \tx{struct file} pointer directly. Since we want to be able to access the memory-map info via the mmap id for each memory-mapped page, we only store the mmap id and not the \tx{struct file} pointer directly. We can look up the \tx{struct file} from the entry in the \tx{mmap\_table} and get the file pointer from here. Storing the file pointer in each \tx{struct page\_mmap\_info} would be unnecessary duplication and could lead to data inconsistency.
+
 \subsubsection{C3}
 
 The \tx{mmap()} system call is called with the user virtual address that the file should be mapped to in memory. In \tx{mmap\_handler()} in \tx{syscall.c} (which implements the behaviour for \tx{mmap()}) we first determine the number of pages that the memory-mapped file will span over, then we iterate over every page address for the memory-mapped file starting from the address the file should be mapped from. For each address, we check the supplemental page table for whether a page is already being used at this user virtual address. If a page entry exists in the supplemental page table for any of these page addresses, it denotes that the memory-mapped file would overwrite an existing memory segment, and so we return \tx{-1} to indicate that the memory-mapping failed.
 
 \subsection{Rationale}
 \subsubsection{C4}
+
+We do not share much of the code for the two situations, because even though their implementations are both shared in that they demand-page their data from disk and write their data back to disk, we have abstracted how we handle different types of data in the supplemental page table, such that it wouldn't make sense to share much of their implementation.
 
 \end{document}
